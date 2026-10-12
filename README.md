@@ -47,7 +47,7 @@ Open http://localhost:3000 and switch the language to العربية to see the 
 
 ```
 apps/
-  api/            Express API — config, http (security, errors, logging), auth, health, modules/*
+  api/            NestJS API — bootstrap, auth (policy guard, permissions), http, health, modules/*
   web/            Next.js App Router — i18n (en/ar), proxy (CSP), app/*, components/*, e2e/
 packages/
   config/         Shared ESLint and Vitest config (100% thresholds)

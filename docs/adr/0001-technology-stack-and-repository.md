@@ -1,6 +1,6 @@
 # ADR-001: Technology stack and repository structure
 
-- **Status:** Proposed — pending Sirius IT confirmation of hosting, identity provider and infrastructure (BRD assumption A6, SOW §9.1)
+- **Status:** Proposed (API framework superseded by [ADR-005](0005-nestjs-api-and-access-policy.md): NestJS) — pending Sirius IT confirmation of hosting, identity provider and infrastructure (BRD assumption A6, SOW §9.1)
 - **Date:** 2026-10-06
 - **Deciders:** Infinia delivery team (Lead Full Stack Developer); Sirius IT for hosting and IdP
 - **Requirements:** NFR-SEC-01, NFR-PRIV-01, NFR-PERF-01, NFR-SCALE-01, NFR-AVAIL-01, NFR-BRW-01, NFR-INT-01

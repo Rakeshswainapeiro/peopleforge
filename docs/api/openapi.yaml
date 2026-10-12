@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Sirius HR Portal API
-  version: 0.1.0
+  version: 0.2.0
   description: >
     Phase 1 API (BRD SIRIUS-HR-BRD-001). All /api/v1 routes require authentication; until the
     identity provider is configured (assumption A6) every /api/v1 request returns 401.
@@ -43,13 +43,21 @@ paths:
   /api/v1/me:
     get:
       tags: [identity]
-      summary: Current caller's identity and data scope (R1-01, R2-12)
+      summary: Current caller's identity, data scope and effective permissions (R1-01, R2-12)
       responses:
         '200':
-          description: Authenticated principal
+          description: Authenticated principal with permissions derived from its roles
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/Principal' }
+              schema:
+                allOf:
+                  - { $ref: '#/components/schemas/Principal' }
+                  - type: object
+                    required: [permissions]
+                    properties:
+                      permissions:
+                        type: array
+                        items: { type: string, example: 'increment_request:decide' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '429': { $ref: '#/components/responses/RateLimited' }
 security:

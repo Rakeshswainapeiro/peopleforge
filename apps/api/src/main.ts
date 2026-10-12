@@ -1,11 +1,12 @@
+import 'reflect-metadata';
 import { createLogger } from '@sirius-hr/utils';
-import { createApp } from './app.js';
-import { unconfiguredSessionResolver } from './auth/authenticate.js';
-import { ConfigError, loadEnv } from './config/env.js';
+import { unconfiguredSessionResolver } from './auth/session.js';
+import { createApp } from './bootstrap/create-app.js';
+import { ConfigError, loadEnv, type Env } from './config/env.js';
 import { createShutdown } from './lifecycle/shutdown.js';
 
-function start(): void {
-  let env;
+async function start(): Promise<void> {
+  let env: Env;
   try {
     env = loadEnv(process.env);
   } catch (error: unknown) {
@@ -18,7 +19,7 @@ function start(): void {
   const logger = createLogger({ service: 'api', level: env.LOG_LEVEL });
   let isShuttingDown = (): boolean => false;
 
-  const app = createApp({
+  const app = await createApp({
     env,
     logger,
     sessionResolver: unconfiguredSessionResolver,
@@ -26,16 +27,27 @@ function start(): void {
     isShuttingDown: () => isShuttingDown(),
   });
 
-  const server = app.listen(env.PORT, () => {
-    logger.info({ port: env.PORT, appEnv: env.APP_ENV }, 'API listening');
-  });
+  await app.listen(env.PORT);
+  const server = app.getHttpServer();
   // Keep-alive must outlive the load balancer's idle timeout to avoid 502s on reused sockets.
   server.keepAliveTimeout = 65_000;
   server.headersTimeout = 66_000;
   server.requestTimeout = 30_000;
+  logger.info({ port: env.PORT, appEnv: env.APP_ENV }, 'API listening');
 
   const lifecycle = createShutdown({
-    server,
+    server: {
+      close: (callback) => {
+        app.close().then(
+          () => {
+            callback();
+          },
+          (error: unknown) => {
+            callback(error instanceof Error ? error : new Error('Close failed'));
+          },
+        );
+      },
+    },
     logger,
     timeoutMs: env.SHUTDOWN_TIMEOUT_MS,
     exit: (code) => process.exit(code),
@@ -50,4 +62,4 @@ function start(): void {
   });
 }
 
-start();
+void start();

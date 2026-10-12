@@ -1,4 +1,5 @@
-import type { NextFunction, Request, Response } from 'express';
+import { type ArgumentsHost, Catch, type ExceptionFilter, HttpException } from '@nestjs/common';
+import type { Response } from 'express';
 import type { Logger } from 'pino';
 import { ZodError } from 'zod';
 import {
@@ -7,7 +8,7 @@ import {
   type ErrorCode,
   type ErrorDetail,
 } from '@sirius-hr/shared-types';
-import { DomainError, NotFoundError } from '../errors/domain-errors.js';
+import { DomainError } from '../errors/domain-errors.js';
 import { getRequestId } from './locals.js';
 
 interface Mapped {
@@ -37,6 +38,26 @@ function mapBodyParserError(error: unknown): Mapped | undefined {
   }
 }
 
+/** Nest's own HTTP exceptions (e.g. 404 for unknown routes) mapped to our codes. */
+function mapHttpException(error: HttpException): Mapped {
+  switch (error.getStatus()) {
+    case 404: // Not Found
+      return { status: 404, code: 'NOT_FOUND' };
+    case 405: // Method Not Allowed
+      return { status: 404, code: 'NOT_FOUND' };
+    case 429: // Too Many Requests
+      return { status: 429, code: 'RATE_LIMITED' };
+    case 401: // Unauthorized
+      return { status: 401, code: 'UNAUTHENTICATED' };
+    case 403: // Forbidden
+      return { status: 403, code: 'FORBIDDEN' };
+    case 400: // Bad Request
+      return { status: 400, code: 'VALIDATION_FAILED' };
+    default:
+      return { status: 500, code: 'INTERNAL_ERROR' };
+  }
+}
+
 export function mapError(error: unknown): Mapped {
   if (error instanceof DomainError) {
     return {
@@ -52,24 +73,27 @@ export function mapError(error: unknown): Mapped {
       details: error.issues.map((issue) => ({ path: issue.path.join('.'), code: issue.code })),
     };
   }
+  if (error instanceof HttpException) {
+    return mapHttpException(error);
+  }
   return mapBodyParserError(error) ?? { status: 500, code: 'INTERNAL_ERROR' };
 }
 
-export function notFoundHandler(_req: Request, _res: Response, next: NextFunction): void {
-  next(new NotFoundError('Route not found'));
-}
-
 /**
- * Single place where errors become HTTP responses: consistent shape, no stack traces or
- * internal messages to clients, and unexpected errors logged with the request ID.
+ * The single place errors become HTTP responses: one shape, stable codes and message keys,
+ * no stack traces or internal messages, and unexpected errors logged with the request ID.
  */
-export function createErrorHandler(logger: Logger) {
-  return (error: unknown, _req: Request, res: Response, _next: NextFunction): void => {
+@Catch()
+export class ApiExceptionFilter implements ExceptionFilter {
+  constructor(private readonly logger: Logger) {}
+
+  catch(error: unknown, host: ArgumentsHost): void {
+    const res = host.switchToHttp().getResponse<Response>();
     const mapped = mapError(error);
     const requestId = getRequestId(res);
 
     if (mapped.status >= 500) {
-      logger.error({ err: error, requestId }, 'Unhandled error');
+      this.logger.error({ err: error, requestId }, 'Unhandled error');
     }
 
     const body: ApiError = {
@@ -81,5 +105,5 @@ export function createErrorHandler(logger: Logger) {
       },
     };
     res.status(mapped.status).json(body);
-  };
+  }
 }

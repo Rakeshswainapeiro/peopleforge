@@ -1,0 +1,14 @@
+/**
+ * Injection tokens. Every dependency is injected explicitly with @Inject(TOKEN) instead of by
+ * constructor type, so dependency injection never relies on emitted type metadata (which
+ * type-only imports and some test transforms silently drop).
+ */
+export const ENV = Symbol('ENV');
+export const LOGGER = Symbol('LOGGER');
+export const SESSION_RESOLVER = Symbol('SESSION_RESOLVER');
+export const READINESS_CHECKS = Symbol('READINESS_CHECKS');
+export const SHUTDOWN_STATE = Symbol('SHUTDOWN_STATE');
+
+export interface ShutdownState {
+  isShuttingDown: () => boolean;
+}

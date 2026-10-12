@@ -6,7 +6,7 @@
 
 ```
 Browser ──HTTPS──▶ Load balancer / WAF ──▶ web (Next.js, :3000)
-                                       └─▶ api (Express, :4000) ──▶ PostgreSQL, Redis, object storage
+                                       └─▶ api (NestJS, :4000) ──▶ PostgreSQL, Redis, object storage
                                                  worker (queues, schedules) ──▶ same dependencies
 ```
 
