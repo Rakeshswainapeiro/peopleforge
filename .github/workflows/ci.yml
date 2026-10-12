@@ -1,0 +1,138 @@
+# CI for every pull request and push to main.
+#
+# Data-residency rule: hosted runners may be outside the approved region, so these jobs use
+# synthetic data only and hold no production secrets. Deployment jobs (added once hosting is
+# approved, ADR-001) must run on self-hosted runners in-region.
+#
+# Supply chain: third-party actions are referenced by version tag for now; pin each to a full
+# commit SHA before the first deployment pipeline is added (tracked in SECURITY.md).
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NEXT_TELEMETRY_DISABLED: '1'
+  TURBO_TELEMETRY_DISABLED: '1'
+  HUSKY: '0'
+
+jobs:
+  verify:
+    name: Format, lint, typecheck, test (100% coverage), build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm format:check
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test:coverage
+      - run: pnpm build
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage
+          path: |
+            apps/*/coverage
+            packages/*/coverage
+          retention-days: 14
+
+  dependencies:
+    name: Dependency audit (fail on high/critical)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Accepted exceptions live in pnpm-workspace.yaml (auditConfig) and SECURITY.md.
+      - run: pnpm audit --audit-level high
+      - name: OSV-Scanner
+        uses: google/osv-scanner-action/osv-scanner-action@v2.0.2
+        with:
+          scan-args: --lockfile=pnpm-lock.yaml
+
+  sast:
+    name: SAST (Semgrep)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    container:
+      image: semgrep/semgrep:1.130.0
+    steps:
+      - uses: actions/checkout@v4
+      # Local rulesets only: no code is uploaded to the Semgrep cloud.
+      - run: >-
+          semgrep scan --error --metrics=off
+          --config p/typescript --config p/nodejs --config p/react
+          --config p/owasp-top-ten --config p/secrets
+          --severity ERROR
+          --exclude '**/*.test.ts' --exclude '**/*.test.tsx'
+
+  e2e:
+    name: E2E (Playwright)
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @sirius-hr/web exec playwright install --with-deps chromium webkit msedge
+      - run: pnpm test:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report
+          retention-days: 14
+
+  images:
+    name: Build container images
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      matrix:
+        app: [api, web]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build ${{ matrix.app }}
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: infra/docker/${{ matrix.app }}.Dockerfile
+          push: false
+          load: true
+          tags: sirius-hr-${{ matrix.app }}:${{ github.sha }}
+      - name: Scan image (fail on high/critical)
+        uses: aquasecurity/trivy-action@0.33.1
+        with:
+          image-ref: sirius-hr-${{ matrix.app }}:${{ github.sha }}
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'

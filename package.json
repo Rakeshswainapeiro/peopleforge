@@ -1,0 +1,32 @@
+{
+  "name": "sirius-hr",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Sirius Group HR Portal — Phase 1 (Increment Request Portal, Group-Level Dashboard)",
+  "packageManager": "pnpm@10.28.0",
+  "engines": {
+    "node": ">=22.12.0 <23",
+    "pnpm": ">=10.28.0"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "test:coverage": "turbo run test:coverage",
+    "test:e2e": "turbo run test:e2e",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "audit:deps": "pnpm audit --audit-level high",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "21.2.3",
+    "@commitlint/config-conventional": "21.2.3",
+    "husky": "9.1.7",
+    "prettier": "3.9.9",
+    "turbo": "2.11.7",
+    "typescript": "6.0.3"
+  }
+}

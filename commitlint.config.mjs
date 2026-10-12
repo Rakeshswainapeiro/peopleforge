@@ -1,0 +1,41 @@
+// Conventional Commits. Scopes mirror the Phase 1 backend modules and workspaces so history
+// maps cleanly onto the traceability matrix; reference BRD IDs in the subject, e.g. [R1-08].
+export default {
+  extends: ['@commitlint/config-conventional'],
+  rules: {
+    'scope-enum': [
+      2,
+      'always',
+      [
+        'repo',
+        'api',
+        'web',
+        'worker',
+        'db',
+        'ui',
+        'config',
+        'shared-types',
+        'utils',
+        'integrations',
+        'infra',
+        'ci',
+        'docs',
+        'identity',
+        'criteria',
+        'increment-requests',
+        'evidence',
+        'workflow',
+        'notifications',
+        'data-ingestion',
+        'employee-records',
+        'data-quality',
+        'analytics',
+        'reporting',
+        'audit',
+        'admin',
+        'i18n',
+        'deps',
+      ],
+    ],
+  },
+};

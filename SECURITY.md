@@ -1,0 +1,46 @@
+# Security
+
+## Reporting a vulnerability
+
+Do not open a public issue. Email the Infinia delivery lead and the Sirius IT security contact (addresses to be confirmed at kick-off) with steps to reproduce and impact. We acknowledge within 2 business days. Never include real employee data in a report.
+
+## Baseline
+
+OWASP Top 10 and OWASP ASVS Level 2. The portal holds employee personal data and compensation (NFR-SEC-01, NFR-PRIV-01).
+
+## Controls in place
+
+| Area          | Control                                                                                                                          | Where                                                                           |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| Access        | Deny-by-default: every `/api/v1` route sits behind authentication; with no IdP configured, everything returns 401                | `apps/api/src/app.ts`, `auth/authenticate.ts`                                   |
+| Access        | Principal model carries group vs entity scope for entity isolation (R1-01, R2-12)                                                | `apps/api/src/auth/principal.ts`                                                |
+| Input         | Zod validation of env and shared DTOs; strict JSON parser with size limit; bodies parsed only after authentication               | `config/env.ts`, `app.ts`                                                       |
+| Errors        | One error handler; stable codes + message keys; no stack traces or internal messages to clients                                  | `http/error-handler.ts`                                                         |
+| Headers (API) | CSP `default-src 'none'`, HSTS (1 year, preload), `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, no `X-Powered-By`     | `http/security.ts`                                                              |
+| Headers (web) | Per-request nonce CSP with `strict-dynamic`, no third-party origins, `frame-ancestors 'none'`; HSTS, nosniff, Permissions-Policy | `apps/web/src/proxy.ts`, `next.config.ts`                                       |
+| CORS          | Explicit allow-list; HTTPS-only and mandatory in UAT/Prod                                                                        | `http/security.ts`, `config/env.ts`                                             |
+| Abuse         | Per-IP rate limiting on `/api/v1`; request timeouts                                                                              | `http/security.ts`, `server.ts`                                                 |
+| Logging       | JSON logs with redaction; request logs omit headers and query strings; request IDs validated before logging                      | `packages/utils/src/logger.ts`, `http/log-serializers.ts`, `http/request-id.ts` |
+| Exports       | CSV/Excel formula-injection neutraliser                                                                                          | `packages/utils/src/spreadsheet-safety.ts`                                      |
+| Cookies       | Locale preference cookie: HttpOnly, SameSite=Lax, Secure in production; set via Server Action (Origin-checked)                   | `apps/web/src/app/actions/set-locale.ts`                                        |
+| Residency     | Next.js/Turborepo telemetry disabled; system fonts only (no font CDN)                                                            | Dockerfiles, CI, `globals.css`                                                  |
+| Supply chain  | Exact version pins, frozen lockfile, install scripts allow-listed, `pnpm audit` + OSV + Semgrep + Trivy in CI                    | `.npmrc`, `pnpm-workspace.yaml`, CI                                             |
+| Containers    | Non-root, minimal runtime stage                                                                                                  | `infra/docker/*`                                                                |
+
+## Planned controls (with the feature that needs them)
+
+- OIDC + MFA, session management, CSRF design (ADR-003, blocked on IdP).
+- RBAC permission matrix and PostgreSQL Row-Level Security with cross-entity tests (ADR-002).
+- Append-only audit table enforced by database grants (R1-15, R2-13).
+- File uploads: magic-byte allow-list, size limits, malware scan before use, randomised keys, signed URLs (R1-04, R2-01).
+- Spreadsheet upload parsing limits (rows, size, zip-bomb protection, no formula evaluation) (R2-01).
+- Field-level encryption for salary fields, or an ADR justifying otherwise.
+- Pin GitHub Actions to commit SHAs before any deployment job is added.
+
+## Accepted advisories
+
+Exceptions to "no high/critical findings". Each needs a reason and a review date; expired entries fail review.
+
+| Advisory                   | Package / path                                                       | Why accepted                                                                                                     | Review by  |
+| -------------------------- | -------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ---------- |
+| GHSA-vfj7-8cjw-p6xm (high) | `braces` via `@next/eslint-plugin-next` › `fast-glob` › `micromatch` | Dev-only lint tooling, not in any runtime image; only processes our own glob patterns; no patched version exists | 2026-11-06 |

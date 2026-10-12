@@ -1,0 +1,139 @@
+openapi: 3.1.0
+info:
+  title: Sirius HR Portal API
+  version: 0.1.0
+  description: >
+    Phase 1 API (BRD SIRIUS-HR-BRD-001). All /api/v1 routes require authentication; until the
+    identity provider is configured (assumption A6) every /api/v1 request returns 401.
+servers:
+  - url: http://localhost:4000
+    description: Local development
+tags:
+  - name: health
+  - name: identity
+paths:
+  /health/live:
+    get:
+      tags: [health]
+      summary: Liveness probe
+      security: []
+      responses:
+        '200':
+          description: Process is running
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Liveness' }
+  /health/ready:
+    get:
+      tags: [health]
+      summary: Readiness probe
+      description: 503 when any dependency is down or the instance is shutting down.
+      security: []
+      responses:
+        '200':
+          description: Ready for traffic
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Readiness' }
+        '503':
+          description: Not ready
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Readiness' }
+  /api/v1/me:
+    get:
+      tags: [identity]
+      summary: Current caller's identity and data scope (R1-01, R2-12)
+      responses:
+        '200':
+          description: Authenticated principal
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Principal' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+security:
+  - session: []
+components:
+  securitySchemes:
+    session:
+      type: openIdConnect
+      openIdConnectUrl: https://idp.example/.well-known/openid-configuration
+      description: Identity provider pending Sirius IT (A6).
+  headers:
+    RequestId:
+      description: Correlation ID, echoed or generated per request.
+      schema: { type: string }
+  responses:
+    Unauthenticated:
+      description: Missing or invalid session
+      headers: { X-Request-Id: { $ref: '#/components/headers/RequestId' } }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiError' }
+    RateLimited:
+      description: Too many requests
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiError' }
+  schemas:
+    Liveness:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, const: alive }
+    Readiness:
+      type: object
+      required: [status, checks]
+      properties:
+        status: { type: string, enum: [ready, not_ready] }
+        checks:
+          type: object
+          additionalProperties: { type: string, enum: [up, down] }
+    Principal:
+      oneOf:
+        - type: object
+          required: [userId, roles, scope]
+          properties:
+            userId: { type: string }
+            roles: { type: array, items: { type: string } }
+            scope: { type: string, const: group }
+        - type: object
+          required: [userId, roles, scope, entityIds]
+          properties:
+            userId: { type: string }
+            roles: { type: array, items: { type: string } }
+            scope: { type: string, const: entity }
+            entityIds: { type: array, items: { type: string } }
+    ApiError:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, messageKey, requestId]
+          properties:
+            code:
+              type: string
+              enum:
+                [
+                  VALIDATION_FAILED,
+                  UNAUTHENTICATED,
+                  FORBIDDEN,
+                  NOT_FOUND,
+                  CONFLICT,
+                  PAYLOAD_TOO_LARGE,
+                  RATE_LIMITED,
+                  SERVICE_UNAVAILABLE,
+                  INTERNAL_ERROR,
+                ]
+            messageKey: { type: string, example: errors.UNAUTHENTICATED }
+            requestId: { type: string }
+            details:
+              type: array
+              items:
+                type: object
+                required: [path, code]
+                properties:
+                  path: { type: string }
+                  code: { type: string }

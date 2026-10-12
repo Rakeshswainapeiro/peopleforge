@@ -1,0 +1,16 @@
+packages:
+  - 'apps/*'
+  - 'packages/*'
+
+# Only packages that genuinely need install scripts may run them (supply-chain hardening).
+onlyBuiltDependencies:
+  - esbuild
+  - sharp
+
+# Audit exceptions — each must be justified and dated in SECURITY.md ("Accepted advisories").
+# CI fails on any other high/critical finding.
+auditConfig:
+  ignoreGhsas:
+    # braces (dev-only, via @next/eslint-plugin-next > fast-glob). No patched version exists.
+    # Not in any runtime image; inputs are our own lint globs. Review by 2026-11-06.
+    - GHSA-vfj7-8cjw-p6xm

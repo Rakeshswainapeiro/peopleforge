@@ -1,0 +1,19 @@
+@import 'tailwindcss';
+
+/*
+ * System fonts only: no third-party font CDN (CSP font-src 'self', and no viewer data leaves
+ * the approved region). The stack covers Arabic glyphs on Windows, macOS and iPadOS.
+ */
+@theme {
+  --font-sans:
+    system-ui, 'Segoe UI', 'Noto Sans', 'Noto Sans Arabic', 'Geeza Pro', Tahoma, Arial, sans-serif;
+}
+
+html {
+  font-family: var(--font-sans);
+}
+
+body {
+  background-color: #f8fafc;
+  color: #0f172a;
+}
