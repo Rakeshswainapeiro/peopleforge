@@ -6,6 +6,9 @@ All notable changes are recorded here. Format: [Keep a Changelog](https://keepac
 
 ### Changed
 
+- Renamed to **PeopleForge**: workspaces `@peopleforge/api` and `@peopleforge/web`, images `peopleforge-api` / `peopleforge-web`, app name in the UI. The brand name is not translated, so Arabic falls back to "PeopleForge".
+- `config`, `shared-types` and `utils` moved to the `js-platform` repository and are consumed as published `@sirius/*` 0.1.0 packages from the private registry (ADR-0007). Docker builds and CI need the registry URL and a read token.
+- Removed two object-injection sinks in the access policy code (role lookup through a `Map`, handler lookup through `Reflect.get`); lint is warning-free.
 - API moved from Express to NestJS 12 (ADR-005). Health, security headers, CORS, rate limiting, request IDs, logging, error shape and graceful shutdown behave as before. Entry point is now `dist/main.js`.
 
 ### Added
@@ -14,8 +17,8 @@ All notable changes are recorded here. Format: [Keep a Changelog](https://keepac
 - Role → permission matrix for PeopleForge roles, with tests for separation of duties and executive data limits.
 - `GET /api/v1/me` now returns the caller's effective permissions.
 - Monorepo foundation: pnpm workspaces, Turborepo, strict TypeScript, ESLint (security, i18n and RTL rules), Prettier, Husky, commitlint.
-- `@sirius-hr/shared-types`: API error shape, error codes, cursor pagination, health and locale schemas.
-- `@sirius-hr/utils`: redacting JSON logger, CSV/Excel formula-injection guard, text normalisation.
+- `@sirius/shared-types`: API error shape, error codes, cursor pagination, health and locale schemas.
+- `@sirius/utils`: redacting JSON logger, CSV/Excel formula-injection guard, text normalisation.
 - API: validated config (fail fast), security headers, CORS allow-list, rate limiting, request IDs, minimal request logging, health/readiness endpoints, deny-by-default `/api/v1`, `GET /api/v1/me`, global error handler, graceful shutdown.
 - Web: Next.js App Router shell, nonce-based CSP, English/Arabic catalogues with RTL switch, loading/error/not-found states, skip link.
 - Dockerfiles (multi-stage, non-root), CI pipeline, ADR-001, DEPLOYMENT.md, SECURITY.md, database conventions, traceability matrix, OpenAPI spec.

@@ -4,6 +4,11 @@
 # synthetic data only and hold no production secrets. Deployment jobs (added once hosting is
 # approved, ADR-001) must run on self-hosted runners in-region.
 #
+# Registry: @sirius/* packages (js-platform) install from the private registry. Set the
+# repository variables SIRIUS_REGISTRY (e.g. https://registry.example/) and SIRIUS_REGISTRY_HOST
+# (e.g. registry.example/) and the secret SIRIUS_REGISTRY_TOKEN. A hosted runner cannot reach the
+# local Verdaccio; this pipeline runs once the approved registry and runners exist (ADR-001).
+#
 # Supply chain: third-party actions are referenced by version tag for now; pin each to a full
 # commit SHA before the first deployment pipeline is added (tracked in SECURITY.md).
 
@@ -38,6 +43,13 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: pnpm
+      - name: Point @sirius/* at the private registry
+        run: |
+          npm config set --location=project "@sirius:registry=${SIRIUS_REGISTRY}"
+          npm config set --location=user "//${SIRIUS_REGISTRY#*://}:_authToken=${SIRIUS_REGISTRY_TOKEN}"
+        env:
+          SIRIUS_REGISTRY: ${{ vars.SIRIUS_REGISTRY }}
+          SIRIUS_REGISTRY_TOKEN: ${{ secrets.SIRIUS_REGISTRY_TOKEN }}
       - run: pnpm install --frozen-lockfile
       - run: pnpm format:check
       - run: pnpm lint
@@ -50,7 +62,6 @@ jobs:
           name: coverage
           path: |
             apps/*/coverage
-            packages/*/coverage
           retention-days: 14
 
   dependencies:
@@ -64,6 +75,13 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: pnpm
+      - name: Point @sirius/* at the private registry
+        run: |
+          npm config set --location=project "@sirius:registry=${SIRIUS_REGISTRY}"
+          npm config set --location=user "//${SIRIUS_REGISTRY#*://}:_authToken=${SIRIUS_REGISTRY_TOKEN}"
+        env:
+          SIRIUS_REGISTRY: ${{ vars.SIRIUS_REGISTRY }}
+          SIRIUS_REGISTRY_TOKEN: ${{ secrets.SIRIUS_REGISTRY_TOKEN }}
       - run: pnpm install --frozen-lockfile
       # Accepted exceptions live in pnpm-workspace.yaml (auditConfig) and SECURITY.md.
       - run: pnpm audit --audit-level high
@@ -100,8 +118,15 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: pnpm
+      - name: Point @sirius/* at the private registry
+        run: |
+          npm config set --location=project "@sirius:registry=${SIRIUS_REGISTRY}"
+          npm config set --location=user "//${SIRIUS_REGISTRY#*://}:_authToken=${SIRIUS_REGISTRY_TOKEN}"
+        env:
+          SIRIUS_REGISTRY: ${{ vars.SIRIUS_REGISTRY }}
+          SIRIUS_REGISTRY_TOKEN: ${{ secrets.SIRIUS_REGISTRY_TOKEN }}
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @sirius-hr/web exec playwright install --with-deps chromium webkit msedge
+      - run: pnpm --filter @peopleforge/web exec playwright install --with-deps chromium webkit msedge
       - run: pnpm test:e2e
       - uses: actions/upload-artifact@v4
         if: failure()
@@ -128,11 +153,14 @@ jobs:
           file: infra/docker/${{ matrix.app }}.Dockerfile
           push: false
           load: true
-          tags: sirius-hr-${{ matrix.app }}:${{ github.sha }}
+          build-args: SIRIUS_REGISTRY=${{ vars.SIRIUS_REGISTRY }}
+          secrets: |
+            npmrc=${{ format('//{0}:_authToken={1}', vars.SIRIUS_REGISTRY_HOST, secrets.SIRIUS_REGISTRY_TOKEN) }}
+          tags: peopleforge-${{ matrix.app }}:${{ github.sha }}
       - name: Scan image (fail on high/critical)
         uses: aquasecurity/trivy-action@0.33.1
         with:
-          image-ref: sirius-hr-${{ matrix.app }}:${{ github.sha }}
+          image-ref: peopleforge-${{ matrix.app }}:${{ github.sha }}
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           exit-code: '1'

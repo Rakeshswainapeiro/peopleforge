@@ -2,7 +2,7 @@ import cors from 'cors';
 import type { RequestHandler } from 'express';
 import { rateLimit } from 'express-rate-limit';
 import helmet from 'helmet';
-import { messageKeyFor, type ApiError } from '@sirius-hr/shared-types';
+import { messageKeyFor, type ApiError } from '@sirius/shared-types';
 import type { Env } from '../config/env.js';
 import { getRequestId } from './locals.js';
 

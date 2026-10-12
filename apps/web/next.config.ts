@@ -17,7 +17,7 @@ const nextConfig: NextConfig = {
   outputFileTracingRoot: path.join(import.meta.dirname, '../../'),
   poweredByHeader: false,
   reactStrictMode: true,
-  transpilePackages: ['@sirius-hr/shared-types'],
+  transpilePackages: ['@sirius/shared-types'],
   headers() {
     return Promise.resolve([{ source: '/:path*', headers: securityHeaders }]);
   },

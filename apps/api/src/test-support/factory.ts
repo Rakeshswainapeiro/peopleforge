@@ -1,7 +1,7 @@
 import type { INestApplication } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { pino, type Logger } from 'pino';
-import { ApiErrorSchema, type ApiError } from '@sirius-hr/shared-types';
+import { ApiErrorSchema, type ApiError } from '@sirius/shared-types';
 import type { Principal } from '../auth/principal.js';
 import { unconfiguredSessionResolver, type SessionResolver } from '../auth/session.js';
 import type { AppDependencies } from '../bootstrap/app.module.js';

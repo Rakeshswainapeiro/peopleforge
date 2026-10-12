@@ -1,4 +1,4 @@
-import { baseTestConfig } from '@sirius-hr/config/vitest';
+import { baseTestConfig } from '@sirius/config/vitest';
 import react from '@vitejs/plugin-react';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitest/config';

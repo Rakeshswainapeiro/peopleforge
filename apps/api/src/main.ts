@@ -1,5 +1,5 @@
 import 'reflect-metadata';
-import { createLogger } from '@sirius-hr/utils';
+import { createLogger } from '@sirius/utils';
 import { unconfiguredSessionResolver } from './auth/session.js';
 import { createApp } from './bootstrap/create-app.js';
 import { ConfigError, loadEnv, type Env } from './config/env.js';

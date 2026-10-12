@@ -10,3 +10,4 @@ Significant technical decisions, one file each: context, decision, alternatives,
 | 0004                                            | Assumed volumes and load targets                        | Planned                                |
 | [0005](0005-nestjs-api-and-access-policy.md)    | NestJS for the API, and a deny-by-default access policy | Accepted                               |
 | 0006                                            | TAT measurement: calendar vs business hours             | Planned (needs Sirius HR input)        |
+| [0007](0007-shared-platform-packages.md)        | Shared `@sirius/*` packages from js-platform            | Accepted (production registry: A6)     |

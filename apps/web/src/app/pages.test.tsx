@@ -40,11 +40,9 @@ describe('RootLayout', () => {
     );
   });
 
-  it('localises page metadata', async () => {
+  it('keeps the PeopleForge brand name untranslated in Arabic metadata', async () => {
     vi.mocked(getRequestLocale).mockResolvedValue('ar');
-    await expect(generateMetadata()).resolves.toMatchObject({
-      title: 'بوابة الموارد البشرية - سيريوس',
-    });
+    await expect(generateMetadata()).resolves.toMatchObject({ title: 'PeopleForge' });
   });
 });
 

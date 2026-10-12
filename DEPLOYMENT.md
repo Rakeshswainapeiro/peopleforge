@@ -1,4 +1,4 @@
-# Deployment Guide — Sirius HR Portal
+# Deployment Guide — PeopleForge
 
 > **Status (2026-10-06): foundation only.** Hosting, identity provider, email provider and malware scanner are pending Sirius IT (BRD assumption A6). Sections marked **TBC (A6)** are completed when ADR-001 is accepted. Everything else is current and must be kept in sync with the code: any change that adds an env var, service, port, migration or dependency updates this file in the same PR.
 
@@ -25,23 +25,39 @@ All components, backups and logs must run in the approved region (assumed UAE).
 
 ## 2. Prerequisites
 
-| Item                    | Requirement                                                                            |
-| ----------------------- | -------------------------------------------------------------------------------------- |
-| Container runtime       | Docker 24+ / Kubernetes 1.29+ (orchestrator TBC (A6))                                  |
-| Node.js (build/CI only) | 22.x (see `.nvmrc`), pnpm 10.28 via Corepack                                           |
-| DNS                     | One hostname for web (e.g. `hr.<sirius-domain>`); API hostname depends on ADR-003      |
-| TLS                     | Certificates for every public hostname; TLS 1.2+ only, terminated at the load balancer |
-| Identity                | OIDC application registration with MFA enforced — TBC (A6)                             |
-| Secrets                 | A secrets manager in-region (e.g. cloud KMS-backed vault) — TBC (A6)                   |
-| Registry                | Private, in-region container registry with image scanning                              |
+| Item                    | Requirement                                                                                                   |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------- |
+| Container runtime       | Docker 24+ / Kubernetes 1.29+ (orchestrator TBC (A6))                                                         |
+| Node.js (build/CI only) | 22.x (see `.nvmrc`), pnpm 10.28 via Corepack                                                                  |
+| DNS                     | One hostname for web (e.g. `hr.<sirius-domain>`); API hostname depends on ADR-003                             |
+| TLS                     | Certificates for every public hostname; TLS 1.2+ only, terminated at the load balancer                        |
+| Identity                | OIDC application registration with MFA enforced — TBC (A6)                                                    |
+| Secrets                 | A secrets manager in-region (e.g. cloud KMS-backed vault) — TBC (A6)                                          |
+| Registry                | Private, in-region container registry with image scanning                                                     |
+| Package registry        | Private npm registry for the shared `@sirius/*` packages (js-platform, ADR-0007); local: Verdaccio — TBC (A6) |
 
 ## 3. Build
 
+The build installs `@sirius/*` from the private package registry, so it needs the registry URL (build argument) and a read token (BuildKit secret — it never lands in an image layer):
+
 ```bash
+# A file holding only the read token for the registry host, e.g. for local Verdaccio:
+#   //host.docker.internal:4873/:_authToken=<token from ~/.npmrc>
+# Keep it outside the repository, chmod 600.
+export SIRIUS_REGISTRY=http://host.docker.internal:4873/     # approved registry URL in Test/UAT/Prod
+
 # From the repository root
-docker build -f infra/docker/api.Dockerfile -t <registry>/sirius-hr-api:<git-sha> .
-docker build -f infra/docker/web.Dockerfile -t <registry>/sirius-hr-web:<git-sha> .
+docker build -f infra/docker/api.Dockerfile \
+  --build-arg SIRIUS_REGISTRY="$SIRIUS_REGISTRY" \
+  --secret id=npmrc,src="$HOME/.sirius-registry.npmrc" \
+  -t <registry>/peopleforge-api:<git-sha> .
+docker build -f infra/docker/web.Dockerfile \
+  --build-arg SIRIUS_REGISTRY="$SIRIUS_REGISTRY" \
+  --secret id=npmrc,src="$HOME/.sirius-registry.npmrc" \
+  -t <registry>/peopleforge-web:<git-sha> .
 ```
+
+CI sets the same values from the repository variables `SIRIUS_REGISTRY`, `SIRIUS_REGISTRY_HOST` and the secret `SIRIUS_REGISTRY_TOKEN` (see `.github/workflows/ci.yml`). Use a read-only token for builds; only release jobs in js-platform hold a publish token.
 
 Image properties (both):
 
@@ -161,11 +177,12 @@ TBC (A6), proposed targets for agreement:
 
 ## 12. Troubleshooting
 
-| Symptom                                                                  | Likely cause                                                                 | Action                                              |
-| ------------------------------------------------------------------------ | ---------------------------------------------------------------------------- | --------------------------------------------------- |
-| API exits immediately with `Invalid or missing environment variables: …` | Config validation failed                                                     | Fix the listed keys (§4)                            |
-| Browser shows CORS errors                                                | Web origin not in `CORS_ALLOWED_ORIGINS`                                     | Add the exact origin (scheme + host + port)         |
-| All clients rate-limited at once                                         | `TRUST_PROXY_HOPS` wrong, so every request appears to come from the proxy IP | Set it to the number of proxies in front of the API |
-| Readiness flaps during deploys                                           | Grace period shorter than `SHUTDOWN_TIMEOUT_MS`                              | Increase the grace period                           |
-| Outbound connections to `telemetry.vercel.com`                           | Telemetry not disabled in a custom image                                     | Set `NEXT_TELEMETRY_DISABLED=1`                     |
-| `/api/v1/*` always returns 401                                           | Expected until OIDC is configured (A6)                                       | —                                                   |
+| Symptom                                                                  | Likely cause                                                                   | Action                                                                              |
+| ------------------------------------------------------------------------ | ------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------- |
+| API exits immediately with `Invalid or missing environment variables: …` | Config validation failed                                                       | Fix the listed keys (§4)                                                            |
+| Browser shows CORS errors                                                | Web origin not in `CORS_ALLOWED_ORIGINS`                                       | Add the exact origin (scheme + host + port)                                         |
+| All clients rate-limited at once                                         | `TRUST_PROXY_HOPS` wrong, so every request appears to come from the proxy IP   | Set it to the number of proxies in front of the API                                 |
+| Readiness flaps during deploys                                           | Grace period shorter than `SHUTDOWN_TIMEOUT_MS`                                | Increase the grace period                                                           |
+| Outbound connections to `telemetry.vercel.com`                           | Telemetry not disabled in a custom image                                       | Set `NEXT_TELEMETRY_DISABLED=1`                                                     |
+| Build fails with `ERR_PNPM_FETCH_401` / `404` on `@sirius/…`             | Registry token missing, wrong host in the token line, or package not published | Check the `npmrc` build secret and `SIRIUS_REGISTRY` (§3); publish from js-platform |
+| `/api/v1/*` always returns 401                                           | Expected until OIDC is configured (A6)                                         | —                                                                                   |

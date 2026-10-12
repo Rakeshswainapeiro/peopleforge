@@ -9,7 +9,7 @@ import {
 
 describe('createTranslator', () => {
   it('returns English text', () => {
-    expect(createTranslator('en')('app.name')).toBe('Sirius HR Portal');
+    expect(createTranslator('en')('app.name')).toBe('PeopleForge');
   });
 
   it('returns Arabic text where a translation exists', () => {

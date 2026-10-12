@@ -1,4 +1,4 @@
-import { SUPPORTED_LOCALES, type Locale } from '@sirius-hr/shared-types';
+import { SUPPORTED_LOCALES, type Locale } from '@sirius/shared-types';
 import { setLocale } from '@/app/actions/set-locale';
 import type { Translate } from '@/i18n/translator';
 

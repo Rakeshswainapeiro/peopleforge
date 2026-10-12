@@ -22,7 +22,7 @@ A migration PR that doesn't update the relevant files is incomplete.
 - Primary keys: `uuid` (v7, time-ordered for index locality), column `id`.
 - Timestamps: `timestamptz`, stored in UTC; `created_at`, `updated_at` on every business table.
 - Money: `numeric(18,2)` plus an explicit `currency char(3)` column — never float. Percentages: `numeric(9,4)`.
-- Text: UTF-8, NFC-normalised before insert (`normaliseText` in `@sirius-hr/utils`) so Arabic and Latin names compare reliably.
+- Text: UTF-8, NFC-normalised before insert (`normaliseText` in `@sirius/utils`) so Arabic and Latin names compare reliably.
 - Enumerations that admins can change (criteria, field templates, anomaly rules) are rows in configuration tables, not Postgres enums (R1-05, NFR-CFG-01).
 
 **Entity isolation (R1-01, R2-12, NFR-SEC-01)**

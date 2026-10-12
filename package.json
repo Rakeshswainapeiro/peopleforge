@@ -1,13 +1,14 @@
 {
-  "name": "sirius-hr",
+  "name": "peopleforge",
   "version": "0.1.0",
   "private": true,
-  "description": "Sirius Group HR Portal — Phase 1 (Increment Request Portal, Group-Level Dashboard)",
+  "description": "PeopleForge — Sirius Group HR Portal, Phase 1 (Increment Request Portal, Group-Level Dashboard)",
   "packageManager": "pnpm@10.28.0",
   "engines": {
     "node": ">=22.12.0 <23",
     "pnpm": ">=10.28.0"
   },
+  "prettier": "@sirius/config/prettier",
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev",
@@ -24,6 +25,7 @@
   "devDependencies": {
     "@commitlint/cli": "21.2.3",
     "@commitlint/config-conventional": "21.2.3",
+    "@sirius/config": "0.1.0",
     "husky": "9.1.7",
     "prettier": "3.9.9",
     "turbo": "2.11.7",

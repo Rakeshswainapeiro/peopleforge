@@ -1,4 +1,4 @@
-import type { ReadinessResponse } from '@sirius-hr/shared-types';
+import type { ReadinessResponse } from '@sirius/shared-types';
 
 /** A dependency the API cannot serve traffic without (database, cache, object storage). */
 export interface ReadinessCheck {

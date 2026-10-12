@@ -1,6 +1,6 @@
 import { Controller, Get, Inject, Res } from '@nestjs/common';
 import type { Response } from 'express';
-import type { LivenessResponse, ReadinessResponse } from '@sirius-hr/shared-types';
+import type { LivenessResponse, ReadinessResponse } from '@sirius/shared-types';
 import { Public } from '../auth/policy.js';
 import type { Env } from '../config/env.js';
 import { ENV, READINESS_CHECKS, SHUTDOWN_STATE, type ShutdownState } from '../bootstrap/tokens.js';

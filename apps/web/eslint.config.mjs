@@ -1,5 +1,5 @@
 import nextPlugin from '@next/eslint-plugin-next';
-import { baseConfig } from '@sirius-hr/config/eslint';
+import { baseConfig } from '@sirius/config/eslint';
 import reactHooks from 'eslint-plugin-react-hooks';
 import globals from 'globals';
 

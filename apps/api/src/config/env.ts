@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { LOG_LEVELS } from '@sirius-hr/utils';
+import { LOG_LEVELS } from '@sirius/utils';
 
 export const APP_ENVS = ['dev', 'test', 'uat', 'prod'] as const;
 export type AppEnv = (typeof APP_ENVS)[number];

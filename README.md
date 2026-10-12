@@ -1,4 +1,4 @@
-# Sirius HR Portal
+# PeopleForge — Sirius HR Portal
 
 Sirius Group HR Digital Transformation Programme — Phase 1, delivered by Infinia Technologies.
 
@@ -11,7 +11,11 @@ Requirements: BRD `SIRIUS-HR-BRD-001` · Scope: SOW `SIRIUS-HR-SOW-P1-001` · Pr
 
 ## Local setup (under 10 minutes)
 
-Prerequisites: Node.js 22 (`nvm use`), Corepack.
+Prerequisites: Node.js 22 (`nvm use`), Corepack, and the local Verdaccio from `~/sirius/local-infra` with the shared `@sirius/*` packages published from `~/sirius/js-platform` (see its README). Log in to the registry once per machine:
+
+```bash
+npm adduser --registry http://localhost:4873/    # token is stored in ~/.npmrc, never in this repo
+```
 
 ```bash
 corepack enable
@@ -34,14 +38,14 @@ Open http://localhost:3000 and switch the language to العربية to see the 
 
 ## Common commands
 
-| Command                        | What it does                                                                                              |
-| ------------------------------ | --------------------------------------------------------------------------------------------------------- |
-| `pnpm lint` / `pnpm typecheck` | Static checks across all workspaces                                                                       |
-| `pnpm test`                    | Unit and integration tests                                                                                |
-| `pnpm test:coverage`           | Tests with the 100% coverage gate (same as CI)                                                            |
-| `pnpm test:e2e`                | Playwright against the production build (run `pnpm --filter @sirius-hr/web exec playwright install` once) |
-| `pnpm format`                  | Prettier                                                                                                  |
-| `pnpm audit:deps`              | Dependency audit, fails on high/critical                                                                  |
+| Command                        | What it does                                                                                                |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------- |
+| `pnpm lint` / `pnpm typecheck` | Static checks across all workspaces                                                                         |
+| `pnpm test`                    | Unit and integration tests                                                                                  |
+| `pnpm test:coverage`           | Tests with the 100% coverage gate (same as CI)                                                              |
+| `pnpm test:e2e`                | Playwright against the production build (run `pnpm --filter @peopleforge/web exec playwright install` once) |
+| `pnpm format`                  | Prettier                                                                                                    |
+| `pnpm audit:deps`              | Dependency audit, fails on high/critical                                                                    |
 
 ## Repository layout
 
@@ -49,15 +53,13 @@ Open http://localhost:3000 and switch the language to العربية to see the 
 apps/
   api/            NestJS API — bootstrap, auth (policy guard, permissions), http, health, modules/*
   web/            Next.js App Router — i18n (en/ar), proxy (CSP), app/*, components/*, e2e/
-packages/
-  config/         Shared ESLint and Vitest config (100% thresholds)
-  shared-types/   Zod schemas and types shared by web and API
-  utils/          Logger with redaction, spreadsheet safety, text normalisation
 infra/docker/     Production Dockerfiles
 docs/             ADRs, API (OpenAPI), database conventions, runbooks, traceability
 ```
 
-`apps/worker`, `packages/db`, `packages/ui` and `packages/integrations` are added with the first feature that needs them, rather than as empty packages.
+Shared code used by every Sirius app comes from the `js-platform` repository as versioned packages ([ADR-0007](docs/adr/0007-shared-platform-packages.md)): `@sirius/config` (TypeScript, ESLint, Vitest with the 100% gate, Prettier), `@sirius/shared-types` (Zod schemas: API error shape, pagination, locale, health) and `@sirius/utils` (redacting logger, spreadsheet safety, text normalisation). Change them there, publish, then bump the version here with `pnpm up -E '@sirius/*@<version>'`.
+
+`apps/worker` and PeopleForge-only packages (`packages/db`, `packages/integrations`) are added with the first feature that needs them, rather than as empty packages.
 
 ## Further reading
 

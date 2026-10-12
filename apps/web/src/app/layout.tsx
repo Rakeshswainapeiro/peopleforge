@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
-import { directionFor } from '@sirius-hr/shared-types';
+import { directionFor } from '@sirius/shared-types';
 import { getRequestLocale } from '@/i18n/request-locale';
 import { createTranslator } from '@/i18n/translator';
 import './globals.css';

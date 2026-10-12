@@ -7,7 +7,7 @@ import {
   type ApiError,
   type ErrorCode,
   type ErrorDetail,
-} from '@sirius-hr/shared-types';
+} from '@sirius/shared-types';
 import { DomainError } from '../errors/domain-errors.js';
 import { getRequestId } from './locals.js';
 

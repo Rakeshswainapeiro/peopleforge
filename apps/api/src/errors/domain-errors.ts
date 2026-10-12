@@ -1,4 +1,4 @@
-import type { ErrorCode, ErrorDetail } from '@sirius-hr/shared-types';
+import type { ErrorCode, ErrorDetail } from '@sirius/shared-types';
 
 /**
  * Base for every error a client is allowed to learn about. Anything that is not a DomainError

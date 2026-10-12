@@ -1,4 +1,4 @@
-import { DEFAULT_LOCALE, type Locale } from '@sirius-hr/shared-types';
+import { DEFAULT_LOCALE, type Locale } from '@sirius/shared-types';
 import ar from '../../messages/ar.json';
 import en from '../../messages/en.json';
 

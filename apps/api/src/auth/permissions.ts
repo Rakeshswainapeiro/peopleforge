@@ -71,16 +71,17 @@ export const ROLE_PERMISSIONS: Readonly<Record<Role, readonly Permission[]>> = {
   [ROLES.executive]: ['report:read_executive'],
 };
 
-function isRole(value: string): value is Role {
-  return Object.hasOwn(ROLE_PERMISSIONS, value);
-}
+// A Map lookup cannot reach Object.prototype, so a token claiming a role such as "__proto__" or
+// "constructor" grants nothing.
+const PERMISSIONS_BY_ROLE: ReadonlyMap<string, readonly Permission[]> = new Map(
+  Object.entries(ROLE_PERMISSIONS),
+);
 
 /** Union of permissions for the given roles. Unknown role names grant nothing. */
 export function permissionsFor(roles: readonly string[]): ReadonlySet<Permission> {
   const granted = new Set<Permission>();
   for (const role of roles) {
-    if (!isRole(role)) continue;
-    for (const permission of ROLE_PERMISSIONS[role]) granted.add(permission);
+    for (const permission of PERMISSIONS_BY_ROLE.get(role) ?? []) granted.add(permission);
   }
   return granted;
 }

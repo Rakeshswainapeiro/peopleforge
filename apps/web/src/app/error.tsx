@@ -1,6 +1,6 @@
 'use client';
 
-import { resolveLocale } from '@sirius-hr/shared-types';
+import { resolveLocale } from '@sirius/shared-types';
 import { createTranslator } from '@/i18n/translator';
 
 interface ErrorPageProps {

@@ -38,7 +38,7 @@ export function findRoutesWithoutPolicy(app: INestApplication): string[] {
     const controllerName = String(wrapper.name);
 
     for (const name of scanner.getAllMethodNames(prototype)) {
-      const handler = prototype[name];
+      const handler: unknown = Reflect.get(prototype, name);
       if (typeof handler !== 'function' || !isRouteHandler(handler)) continue;
       const policy = reflector.getAllAndOverride<unknown>(POLICY_METADATA, [
         handler as ReflectTarget,

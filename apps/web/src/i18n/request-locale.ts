@@ -1,5 +1,5 @@
 import { cookies } from 'next/headers';
-import { resolveLocale, type Locale } from '@sirius-hr/shared-types';
+import { resolveLocale, type Locale } from '@sirius/shared-types';
 
 export const LOCALE_COOKIE = 'locale';
 

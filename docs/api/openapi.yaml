@@ -1,6 +1,6 @@
 openapi: 3.1.0
 info:
-  title: Sirius HR Portal API
+  title: PeopleForge API
   version: 0.2.0
   description: >
     Phase 1 API (BRD SIRIUS-HR-BRD-001). All /api/v1 routes require authentication; until the

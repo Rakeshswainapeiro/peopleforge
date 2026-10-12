@@ -1,7 +1,7 @@
 'use server';
 
 import { cookies } from 'next/headers';
-import { LocaleSchema } from '@sirius-hr/shared-types';
+import { LocaleSchema } from '@sirius/shared-types';
 import { LOCALE_COOKIE } from '@/i18n/request-locale';
 
 const ONE_YEAR_SECONDS = 60 * 60 * 24 * 365;
