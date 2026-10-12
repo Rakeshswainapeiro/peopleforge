@@ -1,5 +1,6 @@
-import { z } from 'zod';
+import { identityEnvShape } from '@sirius/identity';
 import { LOG_LEVELS } from '@sirius/utils';
+import { z } from 'zod';
 
 export const APP_ENVS = ['dev', 'test', 'uat', 'prod'] as const;
 export type AppEnv = (typeof APP_ENVS)[number];
@@ -8,6 +9,9 @@ const origin = z.url({ protocol: /^https?$/ }).transform((value) => new URL(valu
 
 const EnvSchema = z
   .object({
+    // OIDC_ISSUER, OIDC_AUDIENCE, OIDC_TENANT_ID, OIDC_ALLOW_HTTP, OIDC_TIMEOUT_MS — shared
+    // with every Sirius API (@sirius/identity).
+    ...identityEnvShape,
     APP_ENV: z.enum(APP_ENVS),
     PORT: z.coerce.number().int().min(1).max(65535).default(4000),
     LOG_LEVEL: z.enum(LOG_LEVELS).default('info'),
@@ -29,8 +33,12 @@ const EnvSchema = z
     SHUTDOWN_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(120_000).default(25_000),
   })
   .superRefine((env, ctx) => {
-    // UAT and production must only ever accept HTTPS origins from an explicit allow-list.
+    // UAT and production must only ever accept HTTPS origins from an explicit allow-list,
+    // and must only talk to the identity provider over HTTPS.
     if (env.APP_ENV === 'uat' || env.APP_ENV === 'prod') {
+      if (env.OIDC_ALLOW_HTTP || !env.OIDC_ISSUER.startsWith('https://')) {
+        ctx.addIssue({ code: 'custom', path: ['OIDC_ISSUER'], message: 'https only' });
+      }
       if (env.CORS_ALLOWED_ORIGINS.length === 0) {
         ctx.addIssue({ code: 'custom', path: ['CORS_ALLOWED_ORIGINS'], message: 'required' });
       }

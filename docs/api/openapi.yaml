@@ -1,10 +1,13 @@
 openapi: 3.1.0
 info:
   title: PeopleForge API
-  version: 0.2.0
+  version: 0.3.0
   description: >
-    Phase 1 API (BRD SIRIUS-HR-BRD-001). All /api/v1 routes require authentication; until the
-    identity provider is configured (assumption A6) every /api/v1 request returns 401.
+    Phase 1 API (BRD SIRIUS-HR-BRD-001). Every /api/v1 route requires an access token from the
+    Sirius identity provider (Microsoft Entra ID; Keycloak locally) sent as
+    `Authorization: Bearer <token>`. Tokens must be issued for this API (audience), by the
+    configured issuer and tenant, and unexpired; anything else is 401. When the identity
+    provider cannot be reached the API answers 503 so clients retry.
 servers:
   - url: http://localhost:4000
     description: Local development
@@ -60,21 +63,30 @@ paths:
                         items: { type: string, example: 'increment_request:decide' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/IdentityProviderUnavailable' }
 security:
-  - session: []
+  - bearer: []
 components:
   securitySchemes:
-    session:
-      type: openIdConnect
-      openIdConnectUrl: https://idp.example/.well-known/openid-configuration
-      description: Identity provider pending Sirius IT (A6).
+    bearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: >
+        OIDC access token for audience `OIDC_AUDIENCE`, issued by `OIDC_ISSUER` (Entra ID in
+        production, pending Sirius IT, A6; Keycloak locally). Roles come from the `roles` claim.
   headers:
     RequestId:
       description: Correlation ID, echoed or generated per request.
       schema: { type: string }
   responses:
+    IdentityProviderUnavailable:
+      description: The identity provider's signing keys could not be loaded; retry later
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiError' }
     Unauthenticated:
-      description: Missing or invalid session
+      description: Missing, malformed, expired or foreign access token
       headers: { X-Request-Id: { $ref: '#/components/headers/RequestId' } }
       content:
         application/json:
@@ -101,15 +113,19 @@ components:
     Principal:
       oneOf:
         - type: object
-          required: [userId, roles, scope]
+          required: [userId, username, name, roles, scope]
           properties:
-            userId: { type: string }
+            userId: { type: string, description: Identity-provider object ID (Entra oid) }
+            username: { type: [string, 'null'] }
+            name: { type: [string, 'null'] }
             roles: { type: array, items: { type: string } }
             scope: { type: string, const: group }
         - type: object
-          required: [userId, roles, scope, entityIds]
+          required: [userId, username, name, roles, scope, entityIds]
           properties:
-            userId: { type: string }
+            userId: { type: string, description: Identity-provider object ID (Entra oid) }
+            username: { type: [string, 'null'] }
+            name: { type: [string, 'null'] }
             roles: { type: array, items: { type: string } }
             scope: { type: string, const: entity }
             entityIds: { type: array, items: { type: string } }

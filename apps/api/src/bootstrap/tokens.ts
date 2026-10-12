@@ -5,7 +5,6 @@
  */
 export const ENV = Symbol('ENV');
 export const LOGGER = Symbol('LOGGER');
-export const SESSION_RESOLVER = Symbol('SESSION_RESOLVER');
 export const READINESS_CHECKS = Symbol('READINESS_CHECKS');
 export const SHUTDOWN_STATE = Symbol('SHUTDOWN_STATE');
 

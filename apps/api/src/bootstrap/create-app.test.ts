@@ -8,9 +8,17 @@ function permissionsOf(res: { body: unknown }): string[] {
   return (res.body as { permissions: string[] }).permissions;
 }
 
-const reviewer: Principal = { userId: 'u-sirius', roles: [ROLES.reviewer], scope: 'group' };
+const reviewer: Principal = {
+  userId: 'u-sirius',
+  username: 'reviewer@sirius.test',
+  name: 'Reviewer',
+  roles: [ROLES.reviewer],
+  scope: 'group',
+};
 const subsidiaryHr: Principal = {
   userId: 'u-sub',
+  username: null,
+  name: null,
   roles: [ROLES.subsidiaryHr],
   scope: 'entity',
   entityIds: ['entity-alpha'],
@@ -119,7 +127,7 @@ describe('health endpoints', () => {
 });
 
 describe('/api/v1 is deny-by-default', () => {
-  it('rejects every request when no identity provider is configured', async () => {
+  it('rejects every request from an anonymous caller', async () => {
     const res = await request((await buildApp()).getHttpServer()).get('/api/v1/me');
     expect(res.status).toBe(401);
     expect(errorOf(res).code).toBe('UNAUTHENTICATED');
@@ -131,7 +139,7 @@ describe('/api/v1 is deny-by-default', () => {
   });
 
   it('returns 404 in the standard shape for an unknown route once authenticated', async () => {
-    const app = await buildApp({ sessionResolver: resolveAs(reviewer) });
+    const app = await buildApp({ resolvePrincipal: resolveAs(reviewer) });
     const res = await request(app.getHttpServer()).get('/api/v1/does-not-exist');
     expect(res.status).toBe(404);
     expect(errorOf(res)).toMatchObject({ code: 'NOT_FOUND', messageKey: 'errors.NOT_FOUND' });
@@ -146,7 +154,7 @@ describe('/api/v1 is deny-by-default', () => {
 
 describe('GET /api/v1/me', () => {
   it('returns a group-scoped reviewer with their effective permissions', async () => {
-    const app = await buildApp({ sessionResolver: resolveAs(reviewer) });
+    const app = await buildApp({ resolvePrincipal: resolveAs(reviewer) });
     const res = await request(app.getHttpServer()).get('/api/v1/me');
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ userId: 'u-sirius', scope: 'group', roles: [ROLES.reviewer] });
@@ -155,7 +163,7 @@ describe('GET /api/v1/me', () => {
   });
 
   it('returns an entity-scoped subsidiary user with their entities', async () => {
-    const app = await buildApp({ sessionResolver: resolveAs(subsidiaryHr) });
+    const app = await buildApp({ resolvePrincipal: resolveAs(subsidiaryHr) });
     const res = await request(app.getHttpServer()).get('/api/v1/me');
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ scope: 'entity', entityIds: ['entity-alpha'] });
@@ -165,7 +173,13 @@ describe('GET /api/v1/me', () => {
 
   it('returns no permissions for a signed-in user without a PeopleForge role', async () => {
     const app = await buildApp({
-      sessionResolver: resolveAs({ userId: 'u-none', roles: [], scope: 'group' }),
+      resolvePrincipal: resolveAs({
+        userId: 'u-none',
+        username: null,
+        name: null,
+        roles: [],
+        scope: 'group',
+      }),
     });
     const res = await request(app.getHttpServer()).get('/api/v1/me');
     expect(res.status).toBe(200);
@@ -178,7 +192,7 @@ describe('request bodies', () => {
     (
       await buildApp({
         env: testEnv({ REQUEST_BODY_LIMIT_KB: '1' }),
-        sessionResolver: resolveAs(reviewer),
+        resolvePrincipal: resolveAs(reviewer),
       })
     ).getHttpServer();
 
@@ -233,7 +247,7 @@ describe('unexpected errors', () => {
     const errorSpy = vi.spyOn(logger, 'error');
     const app = await buildApp({
       logger,
-      sessionResolver: () => Promise.reject(new Error('db password=hunter2 rejected')),
+      resolvePrincipal: () => Promise.reject(new Error('db password=hunter2 rejected')),
     });
 
     const res = await request(app.getHttpServer()).get('/api/v1/me');

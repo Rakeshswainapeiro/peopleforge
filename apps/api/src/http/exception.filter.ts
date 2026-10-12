@@ -53,6 +53,8 @@ function mapHttpException(error: HttpException): Mapped {
       return { status: 403, code: 'FORBIDDEN' };
     case 400: // Bad Request
       return { status: 400, code: 'VALIDATION_FAILED' };
+    case 503: // Service Unavailable (e.g. identity provider unreachable)
+      return { status: 503, code: 'SERVICE_UNAVAILABLE' };
     default:
       return { status: 500, code: 'INTERNAL_ERROR' };
   }

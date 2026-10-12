@@ -1,40 +1,35 @@
 import {
   Controller,
   Get,
-  Injectable,
   type MiddlewareConsumer,
   Module,
-  type NestMiddleware,
   type NestModule,
   RequestMethod,
 } from '@nestjs/common';
-import { APP_FILTER, APP_GUARD } from '@nestjs/core';
+import { APP_FILTER } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
-import type { NextFunction, Request, Response } from 'express';
+import { AuthenticateMiddleware, SiriusAuthModule } from '@sirius/auth-nest';
+import type { IncomingMessage } from 'node:http';
 import request from 'supertest';
 import { describe, expect, it } from 'vitest';
 import { ApiExceptionFilter } from '../http/exception.filter.js';
-import { setPrincipal } from '../http/locals.js';
 import { errorOf, silentLogger, track } from '../test-support/factory.js';
 import { ROLES } from './permissions.js';
 import { Authenticated, Public, RequirePermission } from './policy.js';
-import { PolicyGuard } from './policy.guard.js';
+import { permissionsOfPrincipal, type Principal } from './principal.js';
 
 /** Test-only identity: roles come from a header so each request can act as any role. */
-@Injectable()
-class HeaderIdentityMiddleware implements NestMiddleware {
-  use(req: Request, res: Response, next: NextFunction): void {
-    const roles = req.header('x-test-roles');
-    if (roles !== undefined) {
-      setPrincipal(res, {
-        userId: 'u-test',
-        roles: roles.split(',').filter(Boolean),
-        scope: 'group',
-      });
-    }
-    next();
-  }
+function rolesFromHeader(req: IncomingMessage): Promise<Principal | null> {
+  const roles = req.headers['x-test-roles'];
+  if (typeof roles !== 'string') return Promise.resolve(null);
+  return Promise.resolve({
+    userId: 'u-test',
+    username: null,
+    name: null,
+    roles: roles.split(',').filter(Boolean),
+    scope: 'group',
+  });
 }
 
 @Controller('t')
@@ -74,15 +69,20 @@ class ClassPolicyController {
 
 @Module({
   controllers: [PolicyController, ClassPolicyController],
-  providers: [
-    { provide: APP_GUARD, useClass: PolicyGuard },
-    { provide: APP_FILTER, useValue: new ApiExceptionFilter(silentLogger()) },
+  imports: [
+    SiriusAuthModule.forRoot<Principal>({
+      resolvePrincipal: rolesFromHeader,
+      permissionsOf: permissionsOfPrincipal,
+    }),
   ],
+  providers: [{ provide: APP_FILTER, useValue: new ApiExceptionFilter(silentLogger()) }],
 })
 class PolicyTestModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {
+    // As in the real app: everything is authenticated except the explicitly public routes.
     consumer
-      .apply(HeaderIdentityMiddleware)
+      .apply(AuthenticateMiddleware)
+      .exclude('t/public', 'reports/status')
       .forRoutes({ path: '*path', method: RequestMethod.ALL });
   }
 }
@@ -115,7 +115,7 @@ const MATRIX: [route: string, caller: string | null, status: number][] = [
   ['/t/configure', admin, 200],
   ['/t/configure', reviewer, 403],
   ['/t/configure', `${admin},${executive}`, 200],
-  ['/t/no-policy', ANON, 403],
+  ['/t/no-policy', ANON, 401],
   ['/t/no-policy', admin, 403],
   ['/t/no-policy', reviewer, 403],
   ['/reports/executive', executive, 200],
@@ -125,7 +125,7 @@ const MATRIX: [route: string, caller: string | null, status: number][] = [
   ['/reports/status', ANON, 200],
 ];
 
-describe('PolicyGuard', () => {
+describe('PeopleForge access matrix (shared policy guard + PeopleForge permissions)', () => {
   it.each(MATRIX)('GET %s as %j → %i', async (route, caller, status) => {
     const req = request(await server()).get(route);
     const res = await (caller === null ? req : req.set('x-test-roles', caller));

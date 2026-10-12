@@ -6,6 +6,7 @@ import {
   HttpException,
   MethodNotAllowedException,
   NotFoundException,
+  ServiceUnavailableException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { APP_FILTER } from '@nestjs/core';
@@ -110,6 +111,7 @@ describe('mapError', () => {
     [new UnauthorizedException(), 401, 'UNAUTHENTICATED'],
     [new ForbiddenException(), 403, 'FORBIDDEN'],
     [new BadRequestException(), 400, 'VALIDATION_FAILED'],
+    [new ServiceUnavailableException(), 503, 'SERVICE_UNAVAILABLE'],
     [new HttpException('teapot', 418), 500, 'INTERNAL_ERROR'],
   ])('maps Nest %s to %i %s', (error, status, code) => {
     expect(mapError(error)).toEqual({ status, code });

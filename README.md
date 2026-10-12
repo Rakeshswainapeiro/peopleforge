@@ -7,7 +7,7 @@ Sirius Group HR Digital Transformation Programme — Phase 1, delivered by Infin
 
 Requirements: BRD `SIRIUS-HR-BRD-001` · Scope: SOW `SIRIUS-HR-SOW-P1-001` · Progress: [docs/traceability.md](docs/traceability.md)
 
-> **Current state:** foundation only — tooling, API and web shells, security baseline, i18n/RTL, CI and docs. No business features yet: the data model and module design are awaiting go-ahead, and SSO is blocked on Sirius IT (A6), so every `/api/v1` route returns 401 by design.
+> **Current state:** foundation only — tooling, API and web shells, security baseline, i18n/RTL, CI and docs. No business features yet: the data model and module design are awaiting go-ahead. The API verifies sign-in tokens from the local Keycloak (shaped like Entra ID, which is pending Sirius IT, A6); every `/api/v1` route needs one.
 
 ## Local setup (under 10 minutes)
 
@@ -31,7 +31,11 @@ Check it works:
 
 ```bash
 curl localhost:4000/health/ready     # {"status":"ready","checks":{}}
-curl localhost:4000/api/v1/me        # 401 — expected until SSO is configured
+curl localhost:4000/api/v1/me        # 401 — no token
+
+# With a token from the local Keycloak (needs ~/sirius/local-infra running):
+TOKEN=$(~/sirius/local-infra/scripts/token.sh pf.reviewer --raw)
+curl -H "Authorization: Bearer $TOKEN" localhost:4000/api/v1/me   # 200, reviewer permissions
 ```
 
 Open http://localhost:3000 and switch the language to العربية to see the RTL layout.

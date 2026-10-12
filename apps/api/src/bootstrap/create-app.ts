@@ -1,6 +1,6 @@
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
-import { assertEveryRouteHasPolicy } from '../auth/policy-audit.js';
+import { assertEveryRouteHasPolicy } from '@sirius/auth-nest';
 import { requestId } from '../http/request-id.js';
 import { requestLogger } from '../http/request-logging.js';
 import { corsPolicy, rateLimiter, securityHeaders } from '../http/security.js';

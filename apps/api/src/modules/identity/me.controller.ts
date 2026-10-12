@@ -1,11 +1,9 @@
-import { Controller, Get, Res } from '@nestjs/common';
-import type { Response } from 'express';
-import { permissionsFor, type Permission } from '../../auth/permissions.js';
+import { Controller, Get, Req } from '@nestjs/common';
+import type { IncomingMessage } from 'node:http';
+import type { Permission } from '../../auth/permissions.js';
 import { Authenticated } from '../../auth/policy.js';
-import type { Principal } from '../../auth/principal.js';
+import { permissionsOfPrincipal, principal, type Principal } from '../../auth/principal.js';
 import { API_V1 } from '../../bootstrap/routes.js';
-import { UnauthenticatedError } from '../../errors/domain-errors.js';
-import { getPrincipal } from '../../http/locals.js';
 
 export type MeResponse = Principal & { permissions: Permission[] };
 
@@ -18,12 +16,9 @@ export type MeResponse = Principal & { permissions: Permission[] };
 export class MeController {
   @Get()
   @Authenticated()
-  me(@Res({ passthrough: true }) res: Response): MeResponse {
-    const principal = getPrincipal(res);
-    if (principal === undefined) {
-      // Defence in depth: only reachable if the middleware is mis-wired.
-      throw new UnauthenticatedError('Authentication required');
-    }
-    return { ...principal, permissions: [...permissionsFor(principal.roles)].sort() };
+  me(@Req() req: IncomingMessage): MeResponse {
+    // require() throws 401 if the authentication middleware was ever mis-wired.
+    const caller = principal.require(req);
+    return { ...caller, permissions: [...permissionsOfPrincipal(caller)].sort() };
   }
 }
