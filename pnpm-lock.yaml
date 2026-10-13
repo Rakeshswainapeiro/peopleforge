@@ -124,8 +124,8 @@ importers:
         specifier: 0.1.0
         version: 0.1.0(better-auth@1.7.7(next@16.3.8(@babel/core@7.29.7)(@playwright/test@1.63.0)(@types/node@26.6.4)(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(pg@8.23.1)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(vitest@5.0.3))
       '@sirius/login-ui':
-        specifier: 0.1.0
-        version: 0.1.0(react@19.3.0)
+        specifier: 0.1.1
+        version: 0.1.1(react@19.3.0)
       '@sirius/shared-types':
         specifier: 0.1.0
         version: 0.1.0
@@ -1212,8 +1212,8 @@ packages:
   '@sirius/identity@0.2.0':
     resolution: {integrity: sha512-hnQTsQGlLT7jo5lRvm4S4zqe18KinkN8KaTN+iT10o1RDMdnsgC8PcI3s01jC911ccR8aNTIorKvqjS2m9SskA==}
 
-  '@sirius/login-ui@0.1.0':
-    resolution: {integrity: sha512-kxy2T82PdrQL1WM9ZNEytoFbx6iU9wKVeQS8vD8WDYWuytqt0dvoPQpjREC4WpDYSMUi4HaX7m04MK2CNZC3TQ==}
+  '@sirius/login-ui@0.1.1':
+    resolution: {integrity: sha512-JgFrGouM46cS9KQjtP0HpeenVsNJm2CMNXAmBCoW03et24nESE0DUgmfOhKReDeb28bKY6P3opfXo+nHar+eQw==}
     peerDependencies:
       react: '>=18.3.0 <20'
 
@@ -4143,7 +4143,7 @@ snapshots:
       jose: 6.2.12
       zod: 4.6.5
 
-  '@sirius/login-ui@0.1.0(react@19.3.0)':
+  '@sirius/login-ui@0.1.1(react@19.3.0)':
     dependencies:
       react: 19.3.0
 
