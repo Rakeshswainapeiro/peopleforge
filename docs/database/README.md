@@ -1,6 +1,6 @@
 # Database documentation
 
-**Status:** no tables yet. The data model is part of the solution design (SOW-D2) and lands with ADR-002 after go-ahead. This file defines the conventions every migration must follow, so the schema is documented and production-ready from the first table.
+**Status:** only the web sign-in schema [`auth`](auth-schema.md) exists. The business data model is part of the solution design (SOW-D2) and lands with ADR-002 after go-ahead. This file defines the conventions every migration must follow, so the schema is documented and production-ready from the first table.
 
 ## What lives here
 
@@ -49,3 +49,7 @@ A migration PR that doesn't update the relevant files is incomplete.
 - Forward-only files with a paired, tested rollback script.
 - Expand/contract for breaking changes; no long-held locks (`CREATE INDEX CONCURRENTLY`, batched backfills).
 - Never edit a migration that has been applied in any shared environment.
+
+## Schemas in use
+
+- [`auth`](auth-schema.md) — web sign-in (sessions, identity-provider accounts). Migrations in `apps/web/db/migrations`.

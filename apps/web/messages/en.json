@@ -13,7 +13,7 @@
     "incrementPortalBody": "Create requests, evidence the eligibility criteria and follow each request to a decision.",
     "groupDashboardTitle": "Group dashboard",
     "groupDashboardBody": "Upload entity data, review anomalies and produce monthly, quarterly and annual reports.",
-    "comingSoon": "Available once sign-in is configured."
+    "comingSoon": "Coming in a later release."
   },
   "locale": {
     "label": "Language",
@@ -40,5 +40,58 @@
     "RATE_LIMITED": "Too many requests. Please wait a moment and try again.",
     "SERVICE_UNAVAILABLE": "The service is temporarily unavailable.",
     "INTERNAL_ERROR": "Something went wrong on our side."
+  },
+  "signIn": {
+    "pageTitle": "Sign in",
+    "brand": {
+      "lead": "People",
+      "accent": "Forge",
+      "tagline": "HR Management",
+      "badge": "HR Team Portal"
+    },
+    "hero": {
+      "headline": "Increments and employee data,",
+      "headlineAccent": "in one place.",
+      "description": "Increment requests and group employee data for HR teams across Sirius and its subsidiaries.",
+      "highlights": {
+        "incrementRequests": "Increment requests",
+        "evidence": "Eligibility evidence",
+        "approvals": "Approvals",
+        "employeeData": "Employee data",
+        "anomalyChecks": "Anomaly checks",
+        "groupReports": "Group reports"
+      },
+      "oneSignInTitle": "One sign-in",
+      "oneSignInText": "Your organisation account. No separate HR password.",
+      "secondCheckTitle": "A second check",
+      "secondCheckText": "You confirm a code on each sign-in.",
+      "roleAccessTitle": "Role-based access",
+      "roleAccessText": "Subsidiary HR sees its own entities. Sirius HR sees all of them.",
+      "organisation": "Sirius International Holding.",
+      "notice": "Every sign-in, successful or not, is recorded."
+    },
+    "heading": "Sign in",
+    "subheading": "Use the account your organisation gave you.",
+    "button": "Sign in with your organisation account",
+    "buttonBusy": "Redirecting…",
+    "note": "For Sirius and subsidiary staff. You will continue on your organisation's sign-in page, such as Microsoft Entra ID.",
+    "unavailable": "Sign-in is not available right now. Try again in a moment.",
+    "failedHeading": "Sign-in failed",
+    "back": "Back to sign in",
+    "errors": {
+      "noAccess": "Your organisation account doesn't have access to PeopleForge. Ask your administrator to give you a PeopleForge role.",
+      "cancelled": "Sign-in was cancelled.",
+      "sessionExpired": "Your session has ended. Please sign in again.",
+      "fallback": "We could not sign you in. Try again, or contact your administrator.",
+      "reference": "Reference"
+    }
+  },
+  "account": {
+    "signOut": "Sign out",
+    "signedInAs": "Signed in as {name}",
+    "noPermissions": "You are signed in, but your PeopleForge role doesn't include any permissions yet. Ask your administrator.",
+    "unavailableTitle": "PeopleForge is temporarily unavailable",
+    "unavailableBody": "We couldn't load your access details. Try again in a moment.",
+    "retry": "Try again"
   }
 }

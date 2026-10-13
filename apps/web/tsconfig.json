@@ -11,8 +11,15 @@
     "declaration": false,
     "verbatimModuleSyntax": false,
     "types": ["node", "vitest/globals", "@testing-library/jest-dom"],
-    "plugins": [{ "name": "next" }],
-    "paths": { "@/*": ["./src/*"] }
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
+    "paths": {
+      "@/*": ["./src/*"]
+    },
+    "allowImportingTsExtensions": true
   },
   "include": [
     "next-env.d.ts",
@@ -20,7 +27,8 @@
     "src/**/*.tsx",
     "e2e/**/*.ts",
     ".next/types/**/*.ts",
-    "messages/*.json"
+    "messages/*.json",
+    "scripts/**/*.ts"
   ],
   "exclude": ["node_modules"]
 }

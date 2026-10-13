@@ -7,11 +7,11 @@ Sirius Group HR Digital Transformation Programme — Phase 1, delivered by Infin
 
 Requirements: BRD `SIRIUS-HR-BRD-001` · Scope: SOW `SIRIUS-HR-SOW-P1-001` · Progress: [docs/traceability.md](docs/traceability.md)
 
-> **Current state:** foundation only — tooling, API and web shells, security baseline, i18n/RTL, CI and docs. No business features yet: the data model and module design are awaiting go-ahead. The API verifies sign-in tokens from the local Keycloak (shaped like Entra ID, which is pending Sirius IT, A6); every `/api/v1` route needs one.
+> **Current state:** foundation plus sign-in. You sign in with your organisation account (the local Keycloak stands in for Entra ID, pending Sirius IT, A6); the web app shows who you are as confirmed by the API. No business features yet: the data model and module design are awaiting go-ahead.
 
 ## Local setup (under 10 minutes)
 
-Prerequisites: Node.js 22 (`nvm use`), Corepack, and the local Verdaccio from `~/sirius/local-infra` with the shared `@sirius/*` packages published from `~/sirius/js-platform` (see its README). Log in to the registry once per machine:
+Prerequisites: Node.js 22 (`nvm use`), Corepack, and `~/sirius/local-infra` running (Keycloak, PostgreSQL, Verdaccio) with the shared `@sirius/*` packages published from `~/sirius/js-platform` (see its README). Log in to the registry once per machine:
 
 ```bash
 npm adduser --registry http://localhost:4873/    # token is stored in ~/.npmrc, never in this repo
@@ -22,7 +22,8 @@ corepack enable
 export NEXT_TELEMETRY_DISABLED=1 TURBO_TELEMETRY_DISABLED=1   # data residency — keep off
 pnpm install
 cp apps/api/.env.example apps/api/.env
-cp apps/web/.env.example apps/web/.env.local
+cp apps/web/.env.example apps/web/.env.local     # then set AUTH_SECRET: openssl rand -base64 48
+pnpm --filter @peopleforge/web db:migrate        # sign-in tables (schema auth)
 pnpm build
 pnpm dev            # web on http://localhost:3000, api on http://localhost:4000
 ```
@@ -38,7 +39,19 @@ TOKEN=$(~/sirius/local-infra/scripts/token.sh pf.reviewer --raw)
 curl -H "Authorization: Bearer $TOKEN" localhost:4000/api/v1/me   # 200, reviewer permissions
 ```
 
-Open http://localhost:3000 and switch the language to العربية to see the RTL layout.
+Open http://localhost:3000: you are sent to the sign-in screen. Sign in as `pf.reviewer` / `LocalDev-2026` at Keycloak; you come back signed in. `pf.norole` shows the "no access" screen. Switch the language to العربية to see the RTL layout.
+
+### End-to-end tests
+
+Playwright runs the production builds against a local test OpenID provider (no Keycloak needed) and a separate test database, `peopleforge_test` (created by local-infra; never the development database):
+
+```bash
+pnpm build && pnpm --filter @peopleforge/api build
+pnpm --filter @peopleforge/web exec playwright install   # once
+pnpm test:e2e
+```
+
+Override the database with `E2E_DATABASE_URL` / `E2E_DATABASE_OWNER_URL`.
 
 ## Common commands
 

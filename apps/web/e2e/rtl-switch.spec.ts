@@ -1,9 +1,10 @@
 import { expect, test } from '@playwright/test';
+import { signIn } from './support/sign-in';
 
 // Internal i18n standard (ADR-001): demonstrate an en ↔ ar switch with a mirrored layout.
 test.describe('language and direction switch', () => {
   test('switches the page to Arabic, right-to-left, and back', async ({ page }) => {
-    await page.goto('/');
+    await signIn(page, 'reviewer');
 
     const html = page.locator('html');
     await expect(html).toHaveAttribute('lang', 'en');
@@ -11,6 +12,8 @@ test.describe('language and direction switch', () => {
 
     const appName = page.locator('header p').first();
     const switcher = page.getByRole('group', { name: 'Language' });
+    await expect(appName).toBeVisible();
+    await expect(switcher).toBeVisible();
     const ltrName = await appName.boundingBox();
     const ltrSwitcher = await switcher.boundingBox();
     expect(ltrName?.x).toBeLessThan(ltrSwitcher?.x ?? 0);
@@ -31,7 +34,7 @@ test.describe('language and direction switch', () => {
   });
 
   test('sends a nonce-based CSP and no third-party origins', async ({ page }) => {
-    const response = await page.goto('/');
+    const response = await page.goto('/sign-in');
     const csp = response?.headers()['content-security-policy'] ?? '';
     expect(csp).toMatch(/script-src 'self' 'nonce-[^']+' 'strict-dynamic'/);
     expect(csp).not.toMatch(/https?:\/\//);

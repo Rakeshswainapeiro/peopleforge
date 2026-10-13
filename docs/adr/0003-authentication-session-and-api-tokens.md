@@ -1,6 +1,6 @@
 # ADR-003: Authentication — web session (BFF) and API access tokens
 
-- **Status:** Proposed. The production identity provider is Microsoft Entra ID, pending Sirius IT app registrations (A6). Locally, Keycloak stands in with the same token shape.
+- **Status:** Proposed — implemented end to end locally (Keycloak), production identity provider Microsoft Entra ID pending Sirius IT app registrations (A6).
 - **Date:** 2026-10-12
 - **Requirements:** NFR-SEC-01, R1-01, R2-12
 
@@ -28,6 +28,12 @@ Every Sirius application signs people in with their Microsoft work account. Peop
 6. **Failure handling:**
    - a bad, expired or foreign token gets 401, and only a reason code is logged;
    - an unreachable identity provider gets 503, so clients retry instead of signing the user out.
+7. **Web sign-in details** (`@sirius/auth-better`, shared by all Sirius web apps):
+   - organisation sign-in only, no passwords; authorization code + PKCE (S256); ID token verified against the provider's keys and nonce;
+   - an account is created only for people whose access token carries a PeopleForge app role (data minimisation); others see "no access" and nothing is stored;
+   - provider tokens are encrypted at rest; the session cookie is HttpOnly, SameSite=Lax, Secure outside development, prefixed per app;
+   - sessions end 8 hours after sign-in; sign-out also ends the provider session (RP-initiated logout);
+   - every sign-in outcome is logged as a structured event (IDs and reason codes only). The append-only audit table (NFR-AUD-01) receives these once the audit module exists.
 
 ## Alternatives considered
 
