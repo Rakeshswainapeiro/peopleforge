@@ -17,6 +17,9 @@ const nextConfig: NextConfig = {
   outputFileTracingRoot: path.join(import.meta.dirname, '../../'),
   poweredByHeader: false,
   reactStrictMode: true,
+  // The dev-tools badge is injected after the page and makes full-height screens scroll in
+  // development only; errors still show in the overlay.
+  devIndicators: false,
   transpilePackages: ['@sirius/shared-types'],
   headers() {
     return Promise.resolve([{ source: '/:path*', headers: securityHeaders }]);
