@@ -15,8 +15,9 @@ export async function currentSession(): ReturnType<Auth['api']['getSession']> {
 export type ViewerResult = MeResult | { kind: 'signed_out' };
 
 /**
- * Who is looking at the page, as the API sees them. Signed out when there is no session or the
- * provider token can't be renewed.
+ * Who is looking at the page, as the API sees them. `signed_out`: no session.
+ * `unauthenticated`: a session exists but is no longer usable (token not renewable or refused
+ * by the API) — end it via /session-ended.
  */
 export async function currentViewer(): Promise<ViewerResult> {
   const requestHeaders = await headers();
@@ -26,7 +27,9 @@ export async function currentViewer(): Promise<ViewerResult> {
   });
   if (session === null) return { kind: 'signed_out' };
   const bearer = await getProviderAccessToken(getAuth(), requestHeaders);
-  if (bearer === null) return { kind: 'signed_out' };
+  // The session exists but its provider token can't be renewed (e.g. signed out at the
+  // identity provider): the caller must end the session, or / and /sign-in redirect forever.
+  if (bearer === null) return { kind: 'unauthenticated' };
   const env = serverEnv();
   return fetchMe(
     { apiUrl: env.PEOPLEFORGE_API_URL, timeoutMs: env.PEOPLEFORGE_API_TIMEOUT_MS },

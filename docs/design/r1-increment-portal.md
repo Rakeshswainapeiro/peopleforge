@@ -1,0 +1,195 @@
+# R1 — Increment Request Portal: design proposal (for go-ahead)
+
+- **Status:** Proposal, 2026-10-13. Part of SOW-D2 (solution design). Nothing below is built yet. Building starts on go-ahead, in the slices in §8.
+- **Source:** BRD `SIRIUS-HR-BRD-001`, tab **"2. Req1 Increment Portal"** (sections A–D) and tab **"8. Assumptions & Open Items"**; Figma "Dashboard – By request / By employee / New increment request / Notifications / Reports / Employee status" (received 2026-10-13).
+
+## 1. What the BRD asks for (tab 2)
+
+| ID           | Requirement (BRD wording, shortened)                                                                                                                | Priority |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| R1-01        | Subsidiary HR login scoped to their entity; Sirius HR sees all entities                                                                             | Must     |
+| R1-02        | Request = list of employees with proposed increment % / amount                                                                                      | Must     |
+| R1-03        | Per employee, all 5 criteria: pass/fail + **mandatory justification**                                                                               | Must     |
+| R1-04        | Evidence per criterion; submission blocked when evidence missing (**configurable**)                                                                 | Must     |
+| R1-05        | Criteria (name, description, evidence & justification requirements, pass logic) configurable by Sirius HR admins                                    | Should   |
+| R1-06        | Colour-coded pass/fail/pending per criterion per employee, justification accessible                                                                 | Must     |
+| R1-07        | Submitted requests route to Sirius HR; status states; **both parties notified at each stage**                                                       | Must     |
+| R1-08        | Clarifications/returns logged with party, timestamp, reason; visible in dashboard                                                                   | Must     |
+| R1-09        | Sirius HR approves / rejects / returns, **whole request or per employee**, with comments; decision recorded with reason and reflected to subsidiary | Must     |
+| R1-10        | Dashboard: current stage of each request (**which criterion, 1–5**) and age                                                                         | Must     |
+| R1-11        | TAT per criterion and per request; filter by entity/period                                                                                          | Must     |
+| R1-12        | Back-and-forth (clarification) time per request/entity                                                                                              | Must     |
+| R1-13        | Reminders/alerts on configured triggers (pending actions, deadlines, stage changes), email + in-app                                                 | Should   |
+| R1-14        | Export approved/pending/rejected + TAT to Excel/PDF with filters                                                                                    | Should   |
+| R1-15        | Immutable audit of actions, edits, uploads, decisions, stage changes; per request and per user                                                      | Must     |
+| DASH-D1…D4   | Tracker (Sirius + Subsidiary), Stage by criterion, TAT analysis, Back-and-forth analysis (Sirius)                                                   | —        |
+| RP-01, RP-02 | Status report (weekly/on demand, both audiences, Excel/PDF); TAT & back-and-forth (monthly, Sirius, Excel)                                          | —        |
+
+## 2. Design vs BRD — findings
+
+Each finding cites where the BRD says it. "Design" = the Figma frames received.
+
+### 2.1 Missing from the designs (BRD requires them)
+
+| #   | Missing                                                                                                                                                                                 | BRD location                                                                                       | Impact                                                                                |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| M1  | **All Sirius HR screens**: review queue, per-criterion verification, approve/reject/return per employee or whole request, raise clarification                                           | Tab 2 §A **R1-07, R1-08, R1-09, R1-10**; §C **DASH-D1** (audience "Sirius HR")                     | Blocks M2 (R1 build complete). Every frame is the Subsidiary HR view.                 |
+| M2  | **Respond to clarification / returned request** screen (the "Respond" buttons have no target)                                                                                           | Tab 2 §A **R1-08** ("Capture clarifications and returns … with timestamps")                        | Subsidiary can't answer; the back-and-forth loop can't close.                         |
+| M3  | **Decision reason / Sirius HR comments** on the employee status page (Approved and Rejected frames show no reason)                                                                      | Tab 2 §A **R1-09** acceptance: "Decision recorded with **reason**; status reflected to subsidiary" | Rejected frame says "Close the gap in Sirius HR's reason" but the reason isn't shown. |
+| M4  | **Returned** status (third decision) — designs show only Approved / Partly approved / Rejected                                                                                          | Tab 2 §A **R1-09** "approve, reject **or return**"                                                 | Needs a status chip, a banner and the respond flow (M2).                              |
+| M5  | **Criteria configuration (admin)** screen                                                                                                                                               | Tab 2 §A **R1-05**; §B **NFR-CFG-01**                                                              | Criteria come from configuration (placeholders until A1).                             |
+| M6  | **TAT and back-and-forth dashboards** (D3, D4) and **RP-02**                                                                                                                            | Tab 2 §A **R1-11, R1-12**; §C **D3, D4**; §D **RP-02**                                             | Sirius HR only.                                                                       |
+| M7  | **Request audit history** (per request, per user)                                                                                                                                       | Tab 2 §A **R1-15** acceptance: "Full history retrievable per request and per user"                 | At least a "History" tab on the request.                                              |
+| M8  | **Reminder/trigger configuration**                                                                                                                                                      | Tab 2 §A **R1-13** ("on configured triggers")                                                      | Can start with fixed defaults, admin screen later.                                    |
+| M9  | **Request detail** (the request as a whole: all employees, request-level status, request-level return/decision). Designs link from the request ID but only the per-employee page exists | Tab 2 §A **R1-09** ("whole or per employee"), **R1-06** ("within the request")                     | Proposal: request detail page = the "New increment request" layout in read-only mode. |
+| M10 | **Entity filter** for Sirius HR on the tracker and reports                                                                                                                              | Tab 2 §C **D1** filters "Entity, Period, Status"; **R1-11** "filterable by entity/period"          | Subsidiary view correctly has no entity filter.                                       |
+
+### 2.2 In the designs but not in the BRD (change control, SOW §11)
+
+| #   | Item                                                                       | Note                                                                                                                       |
+| --- | -------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| X1  | **"Propose in a new request"** on the Rejected page                        | Not in R1-09. Reasonable and cheap (pre-fills a new draft). Proposal: build it, record as a minor clarification, not a CR. |
+| X2  | **"Each employee can appear once"** (New request)                          | BRD silent on whether once per request or once per cycle. Needs Sirius HR's rule (Q4).                                     |
+| X3  | **Grade and current monthly salary** columns; **"New salary if approved"** | BRD R1-02 only asks for "employee + proposed increment". Salary source is undefined (Q2, A2/A3).                           |
+| X4  | Currency **AED** fixed                                                     | BRD silent; subsidiaries may pay in other currencies (Q3).                                                                 |
+
+### 2.3 Inconsistencies inside the designs (fix in Figma)
+
+| #   | Frame                                               | Issue                                                                                                                                              |
+| --- | --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| I1  | Employee status (all 4)                             | Current salary "AED 1,500" but proposed 8% → "AED 23,220" (that's 21,500 × 1.08). New request frame shows AED 21,500.                              |
+| I2  | Employee status (all 4)                             | Card "New salary if approved" subtitle says "Clarification requested".                                                                             |
+| I3  | Employee status (Submitted, Under review, Approved) | Every criterion row labelled "C1 · [Criterion 1 name]".                                                                                            |
+| I4  | Employee status                                     | Sidebar highlights **New Request** while viewing a status page (should be Home).                                                                   |
+| I5  | Rejected                                            | "Rejected by Sirius HR on 13 Sep" but the Decision step says 14 Oct 2026.                                                                          |
+| I6  | New request §2                                      | Second criterion card labelled "C1" (should be C2).                                                                                                |
+| I7  | New request §1 vs §3                                | Table says Neha/Daniel/Kavya "4/5 complete"; §3 says "5 criteria incomplete".                                                                      |
+| I8  | Dashboard "Needs your action"                       | Draft row's sub-text repeats "Requests raised by Subsidiary C…".                                                                                   |
+| I9  | Reports                                             | "Employees" column shows dates; every row is INC-2026-0152; Stage "Criterion 1 of 5" for Draft/Approved/Rejected.                                  |
+| I10 | Dashboard vs Reports                                | Period is "Q3 2026" on the dashboard but "Increment cycle 2026" in Reports — the period model must be one thing (Q1).                              |
+| I11 | Dashboard KPI "Approved: 1 full, 1 partly"          | Fine, but the table has one Approved and one Partly approved — "1" should be 2, or the card should say "2 (1 full, 1 partly)".                     |
+| I12 | Dashboard "Age"                                     | "2 d" everywhere, including requests created 18 Sep. Age definition needed (since creation? since last status change?) — affects R1-10/R1-11 (Q6). |
+
+### 2.4 Matches the BRD (keep)
+
+KPI cards and tracker with stage + age (**R1-10, D1**); criteria icons and employee status (**R1-06**); % / amount toggle (**R1-02**); pass/fail + mandatory justification + evidence per criterion, submit blocked until complete (**R1-03, R1-04**); "criteria names come from settings" (**R1-05**); notifications list, email sent (**R1-07, R1-13**); report with format choice and "every download is logged" (**R1-14, R1-15**, RP-01).
+
+## 3. Questions for Sirius HR (blocking marked ●)
+
+| #    | Question                                                                                                                                                   | Blocks                                 |
+| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- |
+| Q1 ● | Period model: is a request tied to an **increment cycle** (e.g. "2026") or to a **quarter**? Can a subsidiary submit more than once per cycle?             | Data model, filters, reports           |
+| Q2 ● | Where does **current salary and grade** come from — R2 uploads (needs R2 first), Palm HR, or typed in the request? (BRD A2, A3)                            | R1-02 build                            |
+| Q3   | Currencies per subsidiary? Is the proposal always monthly basic salary?                                                                                    | Money model                            |
+| Q4   | Employee at most once **per request** or **per cycle**?                                                                                                    | Validation                             |
+| Q5 ● | The 5 criteria (BRD **A1**, tab 7): names, descriptions, evidence required y/n, file types, and is "pass" a manual judgement or a rule (e.g. "rated ≥ 4")? | Real criteria; placeholders until then |
+| Q6   | TAT / age measured in **calendar or business hours** (Asia/Dubai working week)? From creation or from submission?                                          | R1-10, R1-11 (ADR-006)                 |
+| Q7   | Does Sirius HR verify criteria **in order** (C1 then C2…), giving the "Criterion 4 of 5" stage? Or any order?                                              | Stage logic (R1-10, DASH-D2)           |
+| Q8   | Is a **partly approved** request final, or do returned employees come back in the same request?                                                            | State machine                          |
+| Q9   | Submission deadlines per cycle, and which reminders (how many days before, to whom)?                                                                       | R1-13                                  |
+| Q10  | Retention period for evidence files and decided requests?                                                                                                  | NFR-PRIV-01                            |
+
+## 4. Data model (schema `increments`, PostgreSQL)
+
+All tables carry `entity_id` (except configuration), are protected by **Row-Level Security** (subsidiary sessions see only their `entity_id`; Sirius roles see all — ADR-002), use `uuid` keys, `timestamptz` (UTC), soft delete for business rows, and `version` for optimistic locking.
+
+| Table                  | Purpose                                                                                    | Key columns                                                                                                                                                                                                                |
+| ---------------------- | ------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `entity`               | Subsidiaries                                                                               | `code`, `name_i18n`, `default_currency`                                                                                                                                                                                    |
+| `user_entity`          | Which entities a Subsidiary HR user may act for (fills `Principal.entityIds`)              | `user_id` (Entra oid), `entity_id`                                                                                                                                                                                         |
+| `criteria_set`         | Versioned set of 5 criteria (R1-05); a request pins the version active when it was created | `version`, `status` (draft/active/retired)                                                                                                                                                                                 |
+| `criterion`            | One criterion                                                                              | `position` 1–5, `code` C1–C5, `name_i18n`, `description_i18n`, `justification_required`, `evidence_policy` (required/optional/none), `allowed_types[]`, `max_file_mb`, `pass_rule` (jsonb, manual for now)                 |
+| `increment_cycle`      | Period (pending Q1)                                                                        | `name`, `starts_on`, `ends_on`, `submission_deadline`                                                                                                                                                                      |
+| `increment_request`    | Request batch (R1-02)                                                                      | `reference` (INC-YYYY-NNNN, sequence per year), `entity_id`, `cycle_id`, `criteria_set_id`, `status`, `stage_criterion` (1–5, null), `submitted_at`, `decided_at`                                                          |
+| `request_employee`     | Employee line                                                                              | `employee_ref`, snapshot of name/number/grade, `current_salary` 🔒, `currency`, `proposal_kind` (percent/amount), `proposal_value` 🔒, `decision` (pending/approved/rejected/returned), `decision_reason`, `decided_by/at` |
+| `criterion_assessment` | R1-03                                                                                      | `request_employee_id`, `criterion_id`, `result` (pass/fail/null), `justification`                                                                                                                                          |
+| `evidence_file`        | R1-04                                                                                      | `assessment_id`, `storage_key` (random), `original_name`, `media_type` (magic bytes), `size`, `sha256`, `scan_status` (pending/clean/infected/failed)                                                                      |
+| `criterion_review`     | Sirius HR verification per criterion (R1-10 stage)                                         | `request_id`, `criterion_id`, `status` (pending/verified/queried), `by/at`                                                                                                                                                 |
+| `clarification`        | R1-08                                                                                      | `request_id`, optional `request_employee_id`/`criterion_id`, `raised_by/at`, `message`, `responded_by/at`, `response`                                                                                                      |
+| `status_event`         | Append-only status/stage history → TAT (R1-11) and back-and-forth time (R1-12)             | `request_id`, `from`, `to`, `stage`, `at`, `by`, `reason`                                                                                                                                                                  |
+| `notification`         | In-app + email (R1-07, R1-13)                                                              | `recipient_user_id`, `entity_id`, `request_id`, `kind`, `message_key`, `params`, `read_at`, `emailed_at`                                                                                                                   |
+| `audit_log`            | Append-only, all modules (R1-15); UPDATE/DELETE revoked at DB level; partitioned by month  | `actor`, `action`, `entity_id`, `subject`, `before`, `after`, `at`, `request_id`(correlation)                                                                                                                              |
+
+🔒 Salary and proposed amounts: field-level encryption (project rule) — but D3/RP-04 need sums and averages. **ADR-008 to decide:** application-level envelope encryption (KMS key, decrypt in the API for aggregation) vs. database encryption at rest only with column privileges. Money is `numeric(14,2)` + `char(3)` currency; percentages `numeric(7,4)`; calculations with a decimal library, rounding half-even, worked examples in tests.
+
+### Request state machine (R1-07, R1-08, R1-09)
+
+```
+draft ──submit──▶ submitted ──Sirius opens──▶ under_review ──decide all──▶ approved | partly_approved | rejected
+  ▲                                              │  ▲
+  └──────────── edit (only in draft/returned) ───┤  └── respond ── returned / clarification_requested
+                                                 └── return / ask ─┘
+```
+
+- Submit is allowed only when every employee has all criteria answered, justification present, and evidence where the criterion requires it (R1-03, R1-04).
+- Decisions are per employee; the request outcome is derived: all approved → approved; mixed → partly approved; all rejected → rejected. A whole-request decision applies one decision to every employee.
+- Stage (R1-10) = first criterion not yet verified by Sirius HR (pending Q7). Age = now − last status change (pending Q6).
+- Every transition writes `status_event` + `audit_log` + notifications to both sides, in one transaction (outbox for email).
+
+## 5. API (REST, `/api/v1`, OpenAPI updated per slice)
+
+| Method & path                                                                                 | Policy (permission)                               | BRD             |
+| --------------------------------------------------------------------------------------------- | ------------------------------------------------- | --------------- |
+| `GET /increment-requests?status&cycle&entity&q&page`                                          | `increment_request:create` or `:review` (scoped)  | R1-10, D1       |
+| `POST /increment-requests` (Idempotency-Key)                                                  | `increment_request:create`                        | R1-02           |
+| `GET /increment-requests/{id}` · `PATCH …/{id}` (draft/returned only)                         | create/review · create                            | R1-02, R1-06    |
+| `POST …/{id}/employees` · `PATCH/DELETE …/employees/{lineId}`                                 | `increment_request:create`                        | R1-02           |
+| `PUT …/employees/{lineId}/criteria/{criterionId}` (result, justification)                     | `increment_request:create`                        | R1-03           |
+| `POST …/criteria/{criterionId}/evidence` (multipart) · `GET …/evidence/{fileId}` (signed URL) | `evidence:upload` · scoped read                   | R1-04           |
+| `POST …/{id}/submit` (Idempotency-Key)                                                        | `increment_request:submit`                        | R1-07           |
+| `POST …/{id}/clarifications` · `POST …/clarifications/{cid}/response`                         | `:review` · `:submit`                             | R1-08           |
+| `POST …/{id}/criteria/{criterionId}/verify`                                                   | `increment_request:review`                        | R1-10           |
+| `POST …/{id}/decisions` (whole or per line: approve/reject/return + reason)                   | `increment_request:decide`                        | R1-09           |
+| `GET …/{id}/history`                                                                          | scoped read + `audit:read` for full actor details | R1-15           |
+| `GET /criteria` · `PUT /admin/criteria-sets/{id}`                                             | read: any · `criteria:configure`                  | R1-05           |
+| `GET /notifications` · `POST /notifications/read`                                             | `@Authenticated` (own)                            | R1-07, R1-13    |
+| `GET /reports/increment-requests?format=xlsx\|pdf&filters` (streamed, audited)                | `report:read_operational`                         | R1-14, RP-01    |
+| `GET /analytics/increments/{stage,tat,back-and-forth}`                                        | `report:read_operational` (Sirius)                | R1-10–12, D2–D4 |
+
+Every endpoint gets 401/403/cross-entity tests (NFR-SEC-01).
+
+## 6. Screens
+
+| Screen                                                        | Design                | Role          | BRD          |
+| ------------------------------------------------------------- | --------------------- | ------------- | ------------ |
+| App shell (sidebar, user, sign-out)                           | ✓                     | all           | —            |
+| My increment requests — by request / by employee              | ✓                     | Subsidiary HR | R1-10, D1    |
+| New / edit request (employees, criteria, submit)              | ✓                     | Subsidiary HR | R1-02–R1-06  |
+| Employee status (submitted, under review, approved, rejected) | ✓ (fix I1–I5, add M3) | Subsidiary HR | R1-06, R1-09 |
+| Request detail                                                | **missing (M9)**      | both          | R1-06, R1-09 |
+| Respond to clarification / returned                           | **missing (M2, M4)**  | Subsidiary HR | R1-08        |
+| Notifications                                                 | ✓                     | both          | R1-07, R1-13 |
+| Reports (RP-01)                                               | ✓ (fix I9)            | both          | R1-14        |
+| Sirius HR review queue, review & decide                       | **missing (M1)**      | Sirius HR     | R1-07–R1-10  |
+| D2–D4 analytics, RP-02                                        | **missing (M6)**      | Sirius HR     | R1-10–R1-12  |
+| Criteria settings                                             | **missing (M5)**      | Admin         | R1-05        |
+| Request history                                               | **missing (M7)**      | both          | R1-15        |
+
+## 7. Assets needed (placeholders until provided)
+
+| Asset                                                                                       | Used on                             | Placeholder until then                                                                                        |
+| ------------------------------------------------------------------------------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| The 5 criteria: names, descriptions, evidence rules (BRD A1, tab 7)                         | New request, status pages, settings | `C1 · [Criterion 1 name]` / "[Definition pending from Sirius HR]" — seeded as configuration, never hard-coded |
+| Sample increment request format & fields (BRD A2)                                           | New request, export                 | Fields from the Figma                                                                                         |
+| Employee master data (number, name, grade, current salary, currency) per subsidiary (A2/A3) | Add employee search                 | Synthetic seed employees for "Subsidiary C"                                                                   |
+| Subsidiary (entity) list and codes                                                          | Scoping, filters                    | `Subsidiary A/B/C` seeds                                                                                      |
+| User → entity assignments                                                                   | Scoping (R1-01)                     | Seed: `pf.alpha.hr` → Subsidiary A, `pf.beta.hr` → Subsidiary B                                               |
+| User avatar                                                                                 | Sidebar footer                      | Initials badge (no photo fetch: avoids sending data to Graph until agreed)                                    |
+| Increment cycle(s) and deadlines                                                            | Period filter, reminders            | "Increment cycle 2026" seed                                                                                   |
+| Email sender address, provider and templates' legal footer (A6)                             | Notifications                       | Mailpit locally; footer "[Legal footer pending]"                                                              |
+| Report logo / PDF branding                                                                  | RP-01 PDF                           | Text wordmark                                                                                                 |
+| Arabic translations (not ours to produce)                                                   | All screens                         | English fallback                                                                                              |
+
+## 8. Build plan (proposed slices, each demo-able end to end)
+
+| Slice | Contents                                                                                                                                                          | BRD                         |
+| ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------- |
+| S1    | ADR-002 (model + RLS), ADR-008 (salary encryption), migrations for config + entity + user_entity, seeds with placeholder criteria; app shell (sidebar, user, nav) | R1-01, R1-05 (data)         |
+| S2    | Create/edit draft: employees, % / amount, criteria pass/fail + justification, validation, totals                                                                  | R1-02, R1-03, R1-06         |
+| S3    | Evidence upload (magic-byte allow-list, size, scan hook, object storage, signed download)                                                                         | R1-04                       |
+| S4    | Submit → Sirius HR; notifications (in-app + email via outbox/worker); dashboard by request / by employee                                                          | R1-07, R1-10, R1-13 (basic) |
+| S5    | Sirius HR review: verify criteria, clarifications both ways, decisions per employee / whole request; status pages                                                 | R1-08, R1-09                |
+| S6    | Audit trail + history view; reports/export (RP-01)                                                                                                                | R1-14, R1-15                |
+| S7    | D2–D4 analytics, RP-02, reminders on triggers, criteria settings screen                                                                                           | R1-05 (UI), R1-11–R1-13     |
+
+S1–S6 fit the R1 window to M2 (end of week 5) only if Q1, Q2, Q5 and M1–M2 designs arrive by the end of week 2; otherwise S7 moves after M2 via change control.

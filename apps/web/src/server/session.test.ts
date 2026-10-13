@@ -39,10 +39,13 @@ describe('currentViewer', () => {
     expect(getProviderAccessToken).not.toHaveBeenCalled();
   });
 
-  it('is signed out when the provider token cannot be renewed', async () => {
+  // Bug: after signing out at Keycloak, the refresh token is dead but the PeopleForge session
+  // lives on. Reporting "signed out" sent / → /sign-in, and /sign-in (session exists) → /,
+  // forever. A session whose token can't be renewed must be ended instead.
+  it('treats a session whose provider token cannot be renewed as ended, not signed out', async () => {
     getSession.mockResolvedValue({ user: { id: 'u-1' } });
     vi.mocked(getProviderAccessToken).mockResolvedValue(null);
-    await expect(currentViewer()).resolves.toEqual({ kind: 'signed_out' });
+    await expect(currentViewer()).resolves.toEqual({ kind: 'unauthenticated' });
   });
 
   it('asks the API who the user is, with their access token', async () => {

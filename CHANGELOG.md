@@ -4,7 +4,14 @@ All notable changes are recorded here. Format: [Keep a Changelog](https://keepac
 
 ## [Unreleased]
 
+### Fixed
+
+- Endless redirect between `/` and `/sign-in` after signing out at the identity provider: a session whose token can't be renewed is now ended via `/session-ended`.
+- Sign-in screen spacing matches the Figma (`@sirius/login-ui` 0.1.1).
+
 ### Added
+
+- R1 design proposal with BRD gap analysis: `docs/design/r1-increment-portal.md`.
 
 - **Sign-in for the web app** (ADR-003): the shared Sirius sign-in screen (`@sirius/login-ui`, PeopleForge copy in `messages/en.json`), organisation sign-in through Keycloak locally / Entra ID later (`@sirius/auth-better`: OIDC code + PKCE, verified ID tokens, encrypted provider tokens, 8-hour HttpOnly session), "no access" screen for people without a PeopleForge role, sign-out that also ends the provider session, and the home page showing the identity the API confirms (`GET /api/v1/me`).
 - Schema `auth` with migration `0001_auth_schema` (up/down), a migration runner (`pnpm --filter @peopleforge/web db:migrate | db:rollback | db:status`) and the data dictionary `docs/database/auth-schema.md`.
