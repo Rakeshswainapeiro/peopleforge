@@ -41,6 +41,12 @@ importers:
       '@nestjs/platform-express':
         specifier: 12.1.2
         version: 12.1.2(@nestjs/common@12.1.2(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@12.1.2)
+      '@sirius/auth-nest':
+        specifier: 0.1.0
+        version: 0.1.0(@nestjs/common@12.1.2(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@12.1.2)(reflect-metadata@0.2.2)
+      '@sirius/identity':
+        specifier: 0.1.0
+        version: 0.1.0
       '@sirius/shared-types':
         specifier: 0.1.0
         version: 0.1.0
@@ -1061,6 +1067,13 @@ packages:
     resolution: {integrity: sha512-fCTuZK4QBa+39Oz9l4OGfJfz+GpwCp3AqO7Zch3to99xHPgstVsRFpeQ8LNd2o1Gv8raL2mCFwiaHh7bFSp5DQ==}
     engines: {node: '>=22'}
 
+  '@sirius/auth-nest@0.1.0':
+    resolution: {integrity: sha512-RYyYKhtxXROyQ0l0YhwdHENM/Cv0rKBQQgoDPDv8WUl+lrFZV8EeLQTnslmUiRFP3WoANb0tTHB0NODaOJuqkg==}
+    peerDependencies:
+      '@nestjs/common': ^12.1.2
+      '@nestjs/core': ^12.1.2
+      reflect-metadata: ^0.2.2
+
   '@sirius/config@0.1.0':
     resolution: {integrity: sha512-b+NEgOHLY1Rh3x7btr/53bRtxgnmvcPK0JwmyvTabZlFlcqGig3SlUBa/IiKYpPVKgAnRuWXKhqCJvmNXw1huA==}
     peerDependencies:
@@ -1069,6 +1082,9 @@ packages:
     peerDependenciesMeta:
       vitest:
         optional: true
+
+  '@sirius/identity@0.1.0':
+    resolution: {integrity: sha512-dYVjSGjUv5GaqbF/KWINMAqDudA4ERNiWDS42Qs7EduaClQlm2lUjE9Prx8v6dyAXcX0+YH8k5adCpSL10lRBA==}
 
   '@sirius/shared-types@0.1.0':
     resolution: {integrity: sha512-DtiLihqQtKtpryf+zrqlg3chmTVtzlr/MPKyV0yGfHRuptRzj12RSoU59HLS7cDBoJhWlj4jJM6RUy1gmRd2+Q==}
@@ -2072,6 +2088,9 @@ packages:
   jiti@2.7.0:
     resolution: {integrity: sha512-AC/7JofJvZGrrneWNaEnJeOLUx+JlGt7tNa0wZiRPT4MY1wmfKjt2+6O2p2uz2+skll8OZZmJMNqeke7kKbNgQ==}
     hasBin: true
+
+  jose@6.2.12:
+    resolution: {integrity: sha512-9NiFmJEex0sy2Dk58j2UGBSHgUs2ypF9eZSu4L6vjOX3Dp96Sw1F3uL+H+D1sx02jZZdzUT0HgvCy59CuvXcWw==}
 
   js-tokens@10.0.0:
     resolution: {integrity: sha512-lM/UBzQmfJRo9ABXbPWemivdCW8V2G8FHaHdypQaIy523snUjog0W71ayWXTjiR+ixeMyVHN2XcpnTd/liPg/Q==}
@@ -3753,6 +3772,13 @@ snapshots:
 
   '@simple-libs/stream-utils@2.0.0': {}
 
+  '@sirius/auth-nest@0.1.0(@nestjs/common@12.1.2(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@12.1.2)(reflect-metadata@0.2.2)':
+    dependencies:
+      '@nestjs/common': 12.1.2(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      '@nestjs/core': 12.1.2(@nestjs/common@12.1.2(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/platform-express@12.1.2)(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      '@sirius/identity': 0.1.0
+      reflect-metadata: 0.2.2
+
   '@sirius/config@0.1.0(eslint@10.12.0(jiti@2.7.0))(typescript@6.0.3)(vitest@5.0.3)':
     dependencies:
       '@eslint/js': 10.0.1(eslint@10.12.0(jiti@2.7.0))
@@ -3766,6 +3792,11 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
       - typescript
+
+  '@sirius/identity@0.1.0':
+    dependencies:
+      jose: 6.2.12
+      zod: 4.6.5
 
   '@sirius/shared-types@0.1.0':
     dependencies:
@@ -4794,6 +4825,8 @@ snapshots:
   jiti@2.6.1: {}
 
   jiti@2.7.0: {}
+
+  jose@6.2.12: {}
 
   js-tokens@10.0.0: {}
 
