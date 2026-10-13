@@ -6,6 +6,7 @@ import {
   RequestMethod,
 } from '@nestjs/common';
 import { APP_FILTER } from '@nestjs/core';
+import type { EntityDirectory } from '@peopleforge/db';
 import { AuthenticateMiddleware, SiriusAuthModule } from '@sirius/auth-nest';
 import type { IncomingMessage } from 'node:http';
 import type { Logger } from 'pino';
@@ -17,7 +18,7 @@ import { ApiExceptionFilter } from '../http/exception.filter.js';
 import { JsonBodyMiddleware } from '../http/json-body.middleware.js';
 import { MeController } from '../modules/identity/me.controller.js';
 import { API_V1 } from './routes.js';
-import { ENV, LOGGER, READINESS_CHECKS, SHUTDOWN_STATE } from './tokens.js';
+import { ENTITY_DIRECTORY, ENV, LOGGER, READINESS_CHECKS, SHUTDOWN_STATE } from './tokens.js';
 
 export interface AppDependencies {
   env: Env;
@@ -27,6 +28,8 @@ export interface AppDependencies {
    * (main.ts); tests inject fixed principals or a resolver backed by a test issuer.
    */
   resolvePrincipal: (request: IncomingMessage) => Promise<Principal | null>;
+  /** Subsidiaries and assignments, read under Row-Level Security (packages/db). */
+  directory: EntityDirectory;
   readinessChecks: readonly ReadinessCheck[];
   isShuttingDown: () => boolean;
 }
@@ -51,6 +54,7 @@ export class AppModule implements NestModule {
       providers: [
         { provide: ENV, useValue: deps.env },
         { provide: LOGGER, useValue: deps.logger },
+        { provide: ENTITY_DIRECTORY, useValue: deps.directory },
         { provide: READINESS_CHECKS, useValue: deps.readinessChecks },
         { provide: SHUTDOWN_STATE, useValue: { isShuttingDown: deps.isShuttingDown } },
         {

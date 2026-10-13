@@ -36,6 +36,19 @@ jobs:
     name: Format, lint, typecheck, test (100% coverage), build
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    # packages/db integration tests prove Row-Level Security against a real, throwaway database.
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_PASSWORD: ci-only-postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgres://peopleforge_app:ci-only-app@localhost:5432/peopleforge_test
+      TEST_DATABASE_OWNER_URL: postgres://peopleforge_owner:ci-only-owner@localhost:5432/peopleforge_test
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -54,6 +67,17 @@ jobs:
       - run: pnpm format:check
       - run: pnpm lint
       - run: pnpm typecheck
+      - name: Create the test database and roles
+        env:
+          PGPASSWORD: ci-only-postgres
+        run: |
+          psql -h localhost -U postgres -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE ROLE peopleforge_owner LOGIN PASSWORD 'ci-only-owner';
+          CREATE ROLE peopleforge_app LOGIN PASSWORD 'ci-only-app';
+          CREATE DATABASE peopleforge_test OWNER peopleforge_owner;
+          REVOKE CONNECT ON DATABASE peopleforge_test FROM PUBLIC;
+          GRANT CONNECT ON DATABASE peopleforge_test TO peopleforge_app;
+          SQL
       - run: pnpm test:coverage
       - run: pnpm build
       - uses: actions/upload-artifact@v4

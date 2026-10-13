@@ -17,6 +17,9 @@ export const E2E = {
   databaseOwnerUrl:
     process.env.E2E_DATABASE_OWNER_URL ??
     'postgres://peopleforge_owner:local-pf-owner-2026@localhost:55432/peopleforge_test',
+  /** Test-only salary key (ADR-008) for the synthetic seed; never used outside E2E. */
+  dataEncryptionKeys: `e2e-1:${Buffer.alloc(32, 9).toString('base64')}`,
+  dataEncryptionActiveKey: 'e2e-1',
 } as const;
 
 export const ISSUER = `http://127.0.0.1:${String(E2E.oidcPort)}/realms/sirius`;

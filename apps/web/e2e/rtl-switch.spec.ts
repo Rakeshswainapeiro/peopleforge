@@ -1,22 +1,26 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import { signIn } from './support/sign-in';
+
+/** Horizontal centre of an element as a fraction of the viewport width. */
+async function centre(page: Page, locator: Locator): Promise<number> {
+  const box = await locator.boundingBox();
+  const width = page.viewportSize()?.width ?? 1;
+  return ((box?.x ?? 0) + (box?.width ?? 0) / 2) / width;
+}
 
 // Internal i18n standard (ADR-001): demonstrate an en ↔ ar switch with a mirrored layout.
 test.describe('language and direction switch', () => {
-  test('switches the page to Arabic, right-to-left, and back', async ({ page }) => {
+  test('switches the portal to Arabic, right-to-left, and back', async ({ page }) => {
     await signIn(page, 'reviewer');
 
     const html = page.locator('html');
     await expect(html).toHaveAttribute('lang', 'en');
     await expect(html).toHaveAttribute('dir', 'ltr');
 
-    const appName = page.locator('header p').first();
-    const switcher = page.getByRole('group', { name: 'Language' });
-    await expect(appName).toBeVisible();
-    await expect(switcher).toBeVisible();
-    const ltrName = await appName.boundingBox();
-    const ltrSwitcher = await switcher.boundingBox();
-    expect(ltrName?.x).toBeLessThan(ltrSwitcher?.x ?? 0);
+    // The avatar sits at the start of the user block: left in English.
+    const avatar = page.getByTestId('viewer-avatar');
+    await expect(avatar).toBeVisible();
+    expect(await centre(page, avatar)).toBeLessThan(0.5);
 
     await page.getByRole('button', { name: 'Switch language to العربية' }).click();
 
@@ -24,10 +28,8 @@ test.describe('language and direction switch', () => {
     await expect(html).toHaveAttribute('dir', 'rtl');
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('مرحباً');
 
-    // Mirrored: the app name now sits to the right of the language switcher.
-    const rtlName = await appName.boundingBox();
-    const rtlSwitcher = await page.getByRole('group', { name: 'اللغة' }).boundingBox();
-    expect(rtlName?.x).toBeGreaterThan(rtlSwitcher?.x ?? Number.POSITIVE_INFINITY);
+    // Mirrored: the start is now on the right.
+    expect(await centre(page, avatar)).toBeGreaterThan(0.5);
 
     await page.getByRole('button', { name: 'تغيير اللغة إلى English' }).click();
     await expect(html).toHaveAttribute('dir', 'ltr');

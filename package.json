@@ -20,6 +20,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "audit:deps": "pnpm audit --audit-level high",
+    "db:migrate": "turbo run build --filter=@peopleforge/db && pnpm --filter @peopleforge/db migrate && pnpm --filter @peopleforge/web db:migrate",
+    "db:seed": "turbo run build --filter=@peopleforge/db && pnpm --filter @peopleforge/db seed",
     "prepare": "husky"
   },
   "devDependencies": {

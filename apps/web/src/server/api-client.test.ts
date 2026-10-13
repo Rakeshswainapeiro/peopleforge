@@ -8,6 +8,7 @@ const ME = {
   roles: ['PeopleForge.Reviewer'],
   scope: 'group',
   permissions: ['increment_request:decide'],
+  entities: [],
 };
 
 function api(response: Response | Error) {

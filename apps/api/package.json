@@ -16,6 +16,8 @@
     "@nestjs/common": "12.1.2",
     "@nestjs/core": "12.1.2",
     "@nestjs/platform-express": "12.1.2",
+    "@peopleforge/access": "workspace:*",
+    "@peopleforge/db": "workspace:*",
     "@sirius/auth-nest": "0.1.0",
     "@sirius/identity": "0.1.0",
     "@sirius/shared-types": "0.1.0",

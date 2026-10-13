@@ -1,6 +1,6 @@
 # ADR-002: Data access, migrations and Row-Level Security
 
-- **Status:** Proposed (2026-10-13), for go-ahead before slice S1 is built.
+- **Status:** Accepted (2026-10-13, go-ahead from the Infinia lead). Still a proposal to Sirius until the solution design (SOW-D2) is signed off at M1.
 - **Requirements:** R1-01, R2-12, NFR-SEC-01, NFR-AUD-01, NFR-CFG-01
 - **Related:** ADR-003 (identity), ADR-005 (access policy), ADR-008 (salary encryption), `docs/design/r1-increment-portal.md`
 
@@ -24,7 +24,7 @@ The R2 schemas follow the same rules when they arrive.
 ### 2. Data access: Kysely and plain SQL migrations, in `packages/db`
 
 - Kysely is a typed query builder. It is always parameterised, and is already a dependency of Better Auth.
-- Schema changes are hand-written SQL files `NNNN_name.up.sql` / `.down.sql`, applied by the same runner the web app uses, which moves to `packages/db`. Each module records what it applied in its own table: `migrations.core`, `migrations.web`.
+- Schema changes are hand-written SQL files `NNNN_name.up.sql` / `.down.sql`, applied by one shared runner in `packages/db` (`runMigrations`), which the web app also uses for its `auth` schema. Each module records what it applied in its own table: `migrations.core`, `migrations.web`.
 - Migrations run as the schema **owner**. The API connects as `peopleforge_app`, which has data access only and no DDL.
 
 **Alternatives:**

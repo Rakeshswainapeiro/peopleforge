@@ -1,6 +1,6 @@
 # Database documentation
 
-**Status:** only the web sign-in schema [`auth`](auth-schema.md) exists. The business data model is part of the solution design (SOW-D2) and lands with ADR-002 after go-ahead. This file defines the conventions every migration must follow, so the schema is documented and production-ready from the first table.
+**Status:** schemas [`core` and `increments`](core-schema.md) (slice S1, ADR-002, ADR-008) and the web sign-in schema [`auth`](auth-schema.md). The full business data model is part of the solution design (SOW-D2). This file defines the conventions every migration must follow, so the schema is documented and production-ready from the first table.
 
 ## What lives here
 
@@ -19,9 +19,9 @@ A migration PR that doesn't update the relevant files is incomplete.
 
 **Identifiers and types**
 
-- Primary keys: `uuid` (v7, time-ordered for index locality), column `id`.
+- Primary keys: `uuid`, column `id`, default `gen_random_uuid()` (ADR-002; PostgreSQL 16 has no built-in v7).
 - Timestamps: `timestamptz`, stored in UTC; `created_at`, `updated_at` on every business table.
-- Money: `numeric(18,2)` plus an explicit `currency char(3)` column — never float. Percentages: `numeric(9,4)`.
+- Individual pay (salaries, increment amounts, resulting salaries): encrypted `bytea` (ADR-008) plus a plain `currency char(3)`. Aggregates and non-pay money: `numeric(18,2)` — never float. Percentages: `numeric(9,4)`.
 - Text: UTF-8, NFC-normalised before insert (`normaliseText` in `@sirius/utils`) so Arabic and Latin names compare reliably.
 - Enumerations that admins can change (criteria, field templates, anomaly rules) are rows in configuration tables, not Postgres enums (R1-05, NFR-CFG-01).
 

@@ -1,18 +1,36 @@
-import { execFileSync } from 'node:child_process';
+import {
+  createFieldCipher,
+  parseKeyRing,
+  runMigrations,
+  seedDevelopmentData,
+} from '@peopleforge/db';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import pg from 'pg';
 import { E2E } from './support/env';
 
-/** Brings the test database's schema up to date and starts every run with no sessions. */
+const require = createRequire(import.meta.url);
+// Core migrations ship inside @peopleforge/db, next to its package.json.
+const CORE_MIGRATIONS = path.join(
+  path.dirname(require.resolve('@peopleforge/db/package.json')),
+  'migrations',
+  'core',
+);
+const WEB_MIGRATIONS = path.join(import.meta.dirname, '..', 'db', 'migrations');
+
+/**
+ * Brings the test database up to date in deployment order (core, then web), loads the
+ * synthetic seed (subsidiaries, assignments) and starts every run with no sessions.
+ */
 export default async function globalSetup(): Promise<void> {
-  execFileSync(
-    process.execPath,
-    [path.join(import.meta.dirname, '..', 'scripts', 'migrate.ts'), 'up'],
-    {
-      env: { ...process.env, DATABASE_OWNER_URL: E2E.databaseOwnerUrl },
-      stdio: 'inherit',
-    },
-  );
+  const common = { connectionString: E2E.databaseOwnerUrl, appRole: 'peopleforge_app' };
+  await runMigrations('up', { ...common, directory: CORE_MIGRATIONS, module: 'core' });
+  await runMigrations('up', { ...common, directory: WEB_MIGRATIONS, module: 'web' });
+  await seedDevelopmentData({
+    connectionString: E2E.databaseOwnerUrl,
+    appEnv: 'test',
+    cipher: createFieldCipher(parseKeyRing(E2E.dataEncryptionKeys, E2E.dataEncryptionActiveKey)),
+  });
   const client = new pg.Client({ connectionString: E2E.databaseOwnerUrl });
   await client.connect();
   try {

@@ -1,6 +1,7 @@
+import type { Scope } from '@peopleforge/db';
 import { definePrincipal } from '@sirius/auth-nest';
 import type { VerifiedIdentity } from '@sirius/identity';
-import { permissionsFor, ROLES, type Permission } from './permissions.js';
+import { permissionsFor, ROLES, type Permission } from '@peopleforge/access';
 
 interface PrincipalBase {
   /** Identity-provider object ID (Entra `oid`): the stable key for audit and assignments. */
@@ -23,21 +24,36 @@ export const principal = definePrincipal<Principal>();
 
 const GROUP_ROLES: ReadonlySet<string> = new Set([ROLES.admin, ROLES.reviewer, ROLES.executive]);
 
+/** Sirius roles (Admin, Reviewer, Executive) see every subsidiary (ADR-002 §4). */
+export function hasGroupRole(roles: readonly string[]): boolean {
+  return roles.some((role) => GROUP_ROLES.has(role));
+}
+
 /**
- * Maps a verified token to the PeopleForge caller. Entity assignments for subsidiary users
- * come from the data model (ADR-002, pending); until then they are scoped to no entities, so
- * a subsidiary user can sign in but sees no subsidiary data (deny by default).
+ * Maps a verified token to the PeopleForge caller. Group roles ignore assignments; everyone
+ * else is limited to `assignedEntityIds` from core.user_entity — none means no subsidiary data
+ * (deny by default).
  */
-export function principalFromIdentity(identity: VerifiedIdentity): Principal {
+export function principalFromIdentity(
+  identity: VerifiedIdentity,
+  assignedEntityIds: readonly string[],
+): Principal {
   const base: PrincipalBase = {
     userId: identity.subject,
     username: identity.username,
     name: identity.name,
     roles: identity.roles,
   };
-  return identity.roles.some((role) => GROUP_ROLES.has(role))
+  return hasGroupRole(identity.roles)
     ? { ...base, scope: 'group' }
-    : { ...base, scope: 'entity', entityIds: [] };
+    : { ...base, scope: 'entity', entityIds: [...assignedEntityIds] };
+}
+
+/** The Row-Level Security scope every query of this caller runs under (ADR-002). */
+export function scopeOf(caller: Principal): Scope {
+  return caller.scope === 'group'
+    ? { userId: caller.userId, kind: 'group' }
+    : { userId: caller.userId, kind: 'entity', entityIds: caller.entityIds };
 }
 
 /** Effective permissions of a caller: the union over their roles; unknown roles grant nothing. */

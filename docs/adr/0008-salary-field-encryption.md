@@ -1,6 +1,6 @@
 # ADR-008: Field-level encryption of salary and increment amounts
 
-- **Status:** Proposed (2026-10-13), for go-ahead before slice S1 is built.
+- **Status:** Accepted (2026-10-13, go-ahead from the Infinia lead). Still a proposal to Sirius until the solution design (SOW-D2) is signed off at M1.
 - **Requirements:** NFR-SEC-01, NFR-PRIV-01; affects R1-02, R1-14, DASH-D3, RP-04 and the R2 compensation views (D6)
 
 ## Context

@@ -4,7 +4,12 @@
     "tagline": "Increment requests and group-level employee data in one place."
   },
   "nav": {
-    "skipToContent": "Skip to main content"
+    "skipToContent": "Skip to main content",
+    "main": "Main",
+    "home": "Home",
+    "newRequest": "New Request",
+    "notifications": "Notifications",
+    "reports": "Reports"
   },
   "home": {
     "heading": "Welcome",
@@ -93,5 +98,28 @@
     "unavailableTitle": "PeopleForge is temporarily unavailable",
     "unavailableBody": "We couldn't load your access details. Try again in a moment.",
     "retry": "Try again"
+  },
+  "shell": {
+    "allEntities": "All subsidiaries",
+    "noEntities": "No subsidiary assigned"
+  },
+  "roles": {
+    "admin": "Sirius HR Admin",
+    "reviewer": "Sirius HR Reviewer",
+    "executive": "Sirius Executive",
+    "subsidiaryHr": "Subsidiary HR",
+    "none": "No PeopleForge role"
+  },
+  "newRequest": {
+    "heading": "New increment request",
+    "intro": "Add employees, evidence each eligibility criterion and submit the request to Sirius HR."
+  },
+  "notifications": {
+    "heading": "Notifications",
+    "intro": "Clarification requests, decisions and deadline reminders for your increment requests."
+  },
+  "reports": {
+    "heading": "Reports",
+    "intro": "Increment request reports for your subsidiaries, exportable to Excel and PDF."
   }
 }

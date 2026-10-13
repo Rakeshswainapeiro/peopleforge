@@ -13,6 +13,9 @@ const EnvSchema = z
     // with every Sirius API (@sirius/identity).
     ...identityEnvShape,
     APP_ENV: z.enum(APP_ENVS),
+    // The app role (data access only, no DDL): migrations use the owner, never the API (ADR-002).
+    DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/ }),
+    DATABASE_POOL_MAX: z.coerce.number().int().min(1).max(100).default(10),
     PORT: z.coerce.number().int().min(1).max(65535).default(4000),
     LOG_LEVEL: z.enum(LOG_LEVELS).default('info'),
     CORS_ALLOWED_ORIGINS: z

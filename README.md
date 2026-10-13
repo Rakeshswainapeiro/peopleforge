@@ -23,23 +23,29 @@ export NEXT_TELEMETRY_DISABLED=1 TURBO_TELEMETRY_DISABLED=1   # data residency �
 pnpm install
 cp apps/api/.env.example apps/api/.env
 cp apps/web/.env.example apps/web/.env.local     # then set AUTH_SECRET: openssl rand -base64 48
-pnpm --filter @peopleforge/web db:migrate        # sign-in tables (schema auth)
+cp packages/db/.env.example packages/db/.env     # then set DATA_ENCRYPTION_KEYS (command in the file)
 pnpm build
+pnpm db:migrate     # core schema + placeholder criteria (packages/db), then sign-in tables (web)
+pnpm db:seed        # synthetic subsidiaries A/B/C, pf.alpha.hr → A, pf.beta.hr → B, employees
 pnpm dev            # web on http://localhost:3000, api on http://localhost:4000
 ```
 
 Check it works:
 
 ```bash
-curl localhost:4000/health/ready     # {"status":"ready","checks":{}}
+curl localhost:4000/health/ready     # {"status":"ready","checks":{"database":"up"}}
 curl localhost:4000/api/v1/me        # 401 — no token
 
 # With a token from the local Keycloak (needs ~/sirius/local-infra running):
 TOKEN=$(~/sirius/local-infra/scripts/token.sh pf.reviewer --raw)
-curl -H "Authorization: Bearer $TOKEN" localhost:4000/api/v1/me   # 200, reviewer permissions
+curl -H "Authorization: Bearer $TOKEN" localhost:4000/api/v1/me   # 200, reviewer permissions, all entities
 ```
 
-Open http://localhost:3000: you are sent to the sign-in screen. Sign in as `pf.reviewer` / `LocalDev-2026` at Keycloak; you come back signed in. `pf.norole` shows the "no access" screen. Switch the language to العربية to see the RTL layout.
+Open http://localhost:3000: you are sent to the sign-in screen. Sign in as `pf.reviewer` / `LocalDev-2026` at Keycloak; you come back signed in. `pf.alpha.hr` sees only Subsidiary A and the New Request item; `pf.norole` shows the "no access" screen. Switch the language to العربية to see the RTL layout.
+
+### Database integration tests
+
+`packages/db` tests run against the real `peopleforge_test` database (Row-Level Security can't be mocked): they drop and recreate the core schema each run. Override with `TEST_DATABASE_URL` / `TEST_DATABASE_OWNER_URL`. Don't run them at the same time as the E2E tests, which use the same database.
 
 ### End-to-end tests
 
@@ -68,15 +74,18 @@ Override the database with `E2E_DATABASE_URL` / `E2E_DATABASE_OWNER_URL`.
 
 ```
 apps/
-  api/            NestJS API — bootstrap, auth (policy guard, permissions), http, health, modules/*
-  web/            Next.js App Router — i18n (en/ar), proxy (CSP), app/*, components/*, e2e/
+  api/            NestJS API — bootstrap, auth (policy guard, principal), http, health, modules/*
+  web/            Next.js App Router — i18n (en/ar), proxy (CSP), app/(portal)/*, components/*, e2e/
+packages/
+  access/         Roles, permissions and the /me contract, shared by api and web (ADR-005)
+  db/             SQL migrations, migration runner, RLS scope (withScope), field encryption, dev seed
 infra/docker/     Production Dockerfiles
 docs/             ADRs, API (OpenAPI), database conventions, runbooks, traceability
 ```
 
 Shared code used by every Sirius app comes from the `js-platform` repository as versioned packages ([ADR-0007](docs/adr/0007-shared-platform-packages.md)): `@sirius/config` (TypeScript, ESLint, Vitest with the 100% gate, Prettier), `@sirius/shared-types` (Zod schemas: API error shape, pagination, locale, health) and `@sirius/utils` (redacting logger, spreadsheet safety, text normalisation). Change them there, publish, then bump the version here with `pnpm up -E '@sirius/*@<version>'`.
 
-`apps/worker` and PeopleForge-only packages (`packages/db`, `packages/integrations`) are added with the first feature that needs them, rather than as empty packages.
+`apps/worker` and `packages/integrations` are added with the first feature that needs them, rather than as empty packages.
 
 ## Further reading
 

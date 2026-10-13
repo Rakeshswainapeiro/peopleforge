@@ -11,3 +11,5 @@ export const SHUTDOWN_STATE = Symbol('SHUTDOWN_STATE');
 export interface ShutdownState {
   isShuttingDown: () => boolean;
 }
+
+export const ENTITY_DIRECTORY = Symbol('ENTITY_DIRECTORY');

@@ -1,17 +1,6 @@
-import { z } from 'zod';
+import { MeSchema, type Me } from '@peopleforge/access';
 
-/** GET /api/v1/me (docs/api/openapi.yaml). Validated: the API is trusted, but not blindly. */
-export const MeSchema = z.object({
-  userId: z.string(),
-  username: z.string().nullable(),
-  name: z.string().nullable(),
-  roles: z.array(z.string()),
-  scope: z.enum(['group', 'entity']),
-  entityIds: z.array(z.string()).optional(),
-  permissions: z.array(z.string()),
-});
-
-export type Me = z.infer<typeof MeSchema>;
+export type { Me };
 
 export type MeResult =
   { kind: 'ok'; me: Me } | { kind: 'unauthenticated' } | { kind: 'unavailable' };

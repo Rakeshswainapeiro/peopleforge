@@ -3,15 +3,19 @@ import { createTestIssuer, type TestIssuer } from '@sirius/identity/testing';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import request from 'supertest';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
+import type { EntityDirectory } from '@peopleforge/db';
 import {
+  brokenDirectory,
   buildApp,
   errorOf,
+  fakeDirectory,
   silentLogger,
+  SUB_A,
   TEST_AUDIENCE,
   TEST_ISSUER,
   TEST_TENANT,
 } from '../test-support/factory.js';
-import { ROLES } from './permissions.js';
+import { MeSchema, ROLES } from '@peopleforge/access';
 import { tokenResolver } from './token-resolver.js';
 
 // End-to-end through the real resolver, guard and filter, with tokens signed by an in-memory
@@ -27,14 +31,23 @@ beforeAll(async () => {
   });
 });
 
-async function app(logger = silentLogger()): Promise<NestExpressApplication> {
+const ALPHA = '7d6a1c3e-2b4f-4c8a-9e10-000000000004';
+
+async function app(
+  logger = silentLogger(),
+  directory: EntityDirectory = fakeDirectory({ [ALPHA]: [SUB_A] }),
+): Promise<NestExpressApplication> {
   const verifier = createAccessTokenVerifier({
     issuer: TEST_ISSUER,
     audience: TEST_AUDIENCE,
     tenantId: TEST_TENANT,
     keys: idp.keys,
   });
-  return buildApp({ logger, resolvePrincipal: tokenResolver({ verifier, logger }) });
+  return buildApp({
+    logger,
+    directory,
+    resolvePrincipal: tokenResolver({ verifier, logger, directory }),
+  });
 }
 
 function me(server: NestExpressApplication, token?: string) {
@@ -63,10 +76,50 @@ describe('bearer-token authentication [NFR-SEC-01]', () => {
     );
   });
 
-  it('scopes a subsidiary HR user to no entities until assignments exist [R1-01, R2-12]', async () => {
+  it('lists every subsidiary for a Sirius role without looking up assignments', async () => {
+    const directory = fakeDirectory();
+    const lookup = vi.spyOn(directory, 'assignedEntityIds');
+    const token = await idp.sign({ roles: [ROLES.admin] });
+    const res = await me(await app(silentLogger(), directory), token).expect(200);
+    expect((res.body as { entities: { code: string }[] }).entities.map((e) => e.code)).toEqual([
+      'SUB-A',
+      'SUB-B',
+    ]);
+    expect(lookup).not.toHaveBeenCalled();
+  });
+
+  it('scopes a subsidiary HR user to their assigned subsidiaries [R1-01, R2-12]', async () => {
+    const token = await idp.sign({ oid: ALPHA, roles: [ROLES.subsidiaryHr] });
+    const res = await me(await app(), token).expect(200);
+    // The response honours the contract the web app validates against.
+    expect(MeSchema.safeParse(res.body).success).toBe(true);
+    expect(res.body).toMatchObject({
+      scope: 'entity',
+      entityIds: [SUB_A],
+      entities: [{ id: SUB_A, code: 'SUB-A', name: { en: 'Subsidiary A' } }],
+    });
+  });
+
+  it('scopes a subsidiary HR user without assignments to no subsidiaries', async () => {
     const token = await idp.sign({ roles: [ROLES.subsidiaryHr] });
     const res = await me(await app(), token).expect(200);
-    expect(res.body).toMatchObject({ scope: 'entity', entityIds: [] });
+    expect(res.body).toMatchObject({ scope: 'entity', entityIds: [], entities: [] });
+  });
+
+  it('answers 503, never an unscoped caller, when assignments cannot be read', async () => {
+    const logger = silentLogger();
+    const error = vi.spyOn(logger, 'error');
+    const token = await idp.sign({ oid: ALPHA, roles: [ROLES.subsidiaryHr] });
+    const res = await me(await app(logger, brokenDirectory), token).expect(503);
+    expect(errorOf(res).code).toBe('SERVICE_UNAVAILABLE');
+    expect(error).toHaveBeenCalledWith({ errorName: 'Error' }, 'Entity assignments unavailable');
+  });
+
+  it('answers 503 when the entity list cannot be read', async () => {
+    const directory = { ...fakeDirectory(), entities: brokenDirectory.entities };
+    const token = await idp.sign({ roles: [ROLES.reviewer] });
+    const res = await me(await app(silentLogger(), directory), token).expect(503);
+    expect(errorOf(res).code).toBe('SERVICE_UNAVAILABLE');
   });
 
   it('signs in a user without a PeopleForge role, with no permissions', async () => {
@@ -109,7 +162,7 @@ describe('bearer-token authentication [NFR-SEC-01]', () => {
     };
     const server = await buildApp({
       logger,
-      resolvePrincipal: tokenResolver({ verifier, logger }),
+      resolvePrincipal: tokenResolver({ verifier, logger, directory: fakeDirectory() }),
     });
     const res = await me(server, await idp.sign()).expect(503);
     expect(errorOf(res).code).toBe('SERVICE_UNAVAILABLE');

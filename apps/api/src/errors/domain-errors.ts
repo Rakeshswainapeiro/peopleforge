@@ -41,3 +41,9 @@ export class ConflictError extends DomainError {
   readonly code = 'CONFLICT' as const;
   readonly status = 409;
 }
+
+/** A dependency (database, identity provider) is down: clients may retry later. */
+export class DependencyUnavailableError extends DomainError {
+  readonly code = 'SERVICE_UNAVAILABLE' as const;
+  readonly status = 503;
+}

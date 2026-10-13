@@ -1,5 +1,6 @@
 packages:
   - 'apps/*'
+  - 'packages/*'
 
 # Only packages that genuinely need install scripts may run them (supply-chain hardening).
 onlyBuiltDependencies:

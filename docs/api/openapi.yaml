@@ -46,7 +46,7 @@ paths:
   /api/v1/me:
     get:
       tags: [identity]
-      summary: Current caller's identity, data scope and effective permissions (R1-01, R2-12)
+      summary: Current caller's identity, data scope, visible subsidiaries and effective permissions (R1-01, R2-12)
       responses:
         '200':
           description: Authenticated principal with permissions derived from its roles
@@ -56,11 +56,15 @@ paths:
                 allOf:
                   - { $ref: '#/components/schemas/Principal' }
                   - type: object
-                    required: [permissions]
+                    required: [permissions, entities]
                     properties:
                       permissions:
                         type: array
                         items: { type: string, example: 'increment_request:decide' }
+                      entities:
+                        description: Subsidiaries the caller can see (all for Sirius roles), ordered by code
+                        type: array
+                        items: { $ref: '#/components/schemas/EntitySummary' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '429': { $ref: '#/components/responses/RateLimited' }
         '503': { $ref: '#/components/responses/IdentityProviderUnavailable' }
@@ -81,7 +85,7 @@ components:
       schema: { type: string }
   responses:
     IdentityProviderUnavailable:
-      description: The identity provider's signing keys could not be loaded; retry later
+      description: A dependency is unavailable (identity provider signing keys or the database); retry later
       content:
         application/json:
           schema: { $ref: '#/components/schemas/ApiError' }
@@ -129,6 +133,17 @@ components:
             roles: { type: array, items: { type: string } }
             scope: { type: string, const: entity }
             entityIds: { type: array, items: { type: string } }
+    EntitySummary:
+      type: object
+      required: [id, code, name]
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: string, example: SUB-A }
+        name:
+          type: object
+          description: Localised names keyed by locale; `en` always present
+          required: [en]
+          additionalProperties: { type: string }
     ApiError:
       type: object
       required: [error]

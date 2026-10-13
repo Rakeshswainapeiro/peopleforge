@@ -45,6 +45,7 @@ export default defineConfig({
         OIDC_AUDIENCE: E2E.audience,
         OIDC_TENANT_ID: E2E.tenantId,
         OIDC_ALLOW_HTTP: 'true',
+        DATABASE_URL: E2E.databaseUrl,
       },
     },
     {

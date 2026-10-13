@@ -1,5 +1,6 @@
 /**
- * Role → permission matrix (proposal for ADR-002; confirm roles with Sirius HR).
+ * Role → permission matrix (ADR-005; confirm roles with Sirius HR). Shared by the API, which
+ * enforces it, and the web app, which only uses it to decide what to show.
  *
  * Code authorises against permissions, never role names. Role names are the app-role
  * values issued by the identity provider (Entra app roles; Keycloak client roles locally).

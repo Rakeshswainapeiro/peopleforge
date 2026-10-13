@@ -17,6 +17,8 @@
     "db:status": "node --env-file-if-exists=.env.local scripts/migrate.ts status"
   },
   "dependencies": {
+    "@peopleforge/access": "workspace:*",
+    "@peopleforge/db": "workspace:*",
     "@sirius/auth-better": "0.1.0",
     "@sirius/login-ui": "0.1.3",
     "@sirius/shared-types": "0.1.0",

@@ -9,6 +9,14 @@ export const USERS = {
     name: 'Reviewer Test',
     roles: ['PeopleForge.Reviewer'],
   },
+  /** Subsidiary HR for Subsidiary A (assignment seeded by @peopleforge/db). */
+  alphaHr: {
+    id: '7d6a1c3e-2b4f-4c8a-9e10-000000000004',
+    email: 'pf.alpha.hr@sirius.local',
+    username: 'pf.alpha.hr',
+    name: 'Alpha HR Test',
+    roles: ['PeopleForge.SubsidiaryHR'],
+  },
   noRole: {
     id: '7d6a1c3e-2b4f-4c8a-9e10-000000000006',
     email: 'pf.norole@sirius.local',

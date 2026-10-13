@@ -1,4 +1,5 @@
 import 'reflect-metadata';
+import { createDatabase, createEntityDirectory } from '@peopleforge/db';
 import { verifierFromEnv } from '@sirius/identity';
 import { createLogger } from '@sirius/utils';
 import { tokenResolver } from './auth/token-resolver.js';
@@ -20,12 +21,20 @@ async function start(): Promise<void> {
   const logger = createLogger({ service: 'api', level: env.LOG_LEVEL });
   let isShuttingDown = (): boolean => false;
 
+  // Connects as the app role; every query runs under Row-Level Security (ADR-002).
+  const database = createDatabase({
+    connectionString: env.DATABASE_URL,
+    poolMax: env.DATABASE_POOL_MAX,
+  });
+  const directory = createEntityDirectory(database.db);
+
   const app = await createApp({
     env,
     logger,
     // Signing keys are discovered from OIDC_ISSUER on first use (see @sirius/identity).
-    resolvePrincipal: tokenResolver({ verifier: verifierFromEnv(env), logger }),
-    readinessChecks: [],
+    resolvePrincipal: tokenResolver({ verifier: verifierFromEnv(env), logger, directory }),
+    directory,
+    readinessChecks: [{ name: 'database', check: () => database.ping() }],
     isShuttingDown: () => isShuttingDown(),
   });
 
@@ -40,14 +49,17 @@ async function start(): Promise<void> {
   const lifecycle = createShutdown({
     server: {
       close: (callback) => {
-        app.close().then(
-          () => {
-            callback();
-          },
-          (error: unknown) => {
-            callback(error instanceof Error ? error : new Error('Close failed'));
-          },
-        );
+        app
+          .close()
+          .then(() => database.close())
+          .then(
+            () => {
+              callback();
+            },
+            (error: unknown) => {
+              callback(error instanceof Error ? error : new Error('Close failed'));
+            },
+          );
       },
     },
     logger,

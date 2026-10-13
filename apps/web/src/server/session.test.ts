@@ -3,12 +3,17 @@ import { headers } from 'next/headers';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fetchMe } from './api-client';
 import { getAuth } from './auth';
-import { currentSession, currentViewer } from './session';
+import { currentSession, currentViewer, requireViewer } from './session';
 
 vi.mock('next/headers', () => ({ headers: vi.fn() }));
 vi.mock('@sirius/auth-better', () => ({ getProviderAccessToken: vi.fn() }));
 vi.mock('./api-client', () => ({ fetchMe: vi.fn() }));
 vi.mock('./auth', () => ({ getAuth: vi.fn() }));
+vi.mock('next/navigation', () => ({
+  redirect: vi.fn((url: string) => {
+    throw new Error(`NEXT_REDIRECT ${url}`);
+  }),
+}));
 vi.mock('./env', () => ({
   serverEnv: () => ({ PEOPLEFORGE_API_URL: 'http://api.test', PEOPLEFORGE_API_TIMEOUT_MS: 2000 }),
 }));
@@ -57,5 +62,38 @@ describe('currentViewer', () => {
       { apiUrl: 'http://api.test', timeoutMs: 2000 },
       'eyJ.token',
     );
+  });
+});
+
+describe('requireViewer', () => {
+  const me = {
+    userId: 'u-1',
+    username: null,
+    name: null,
+    roles: [],
+    scope: 'entity' as const,
+    permissions: [],
+    entities: [],
+  };
+
+  it('sends a visitor without a session to sign-in', async () => {
+    getSession.mockResolvedValue(null);
+    await expect(requireViewer()).rejects.toThrow('NEXT_REDIRECT /sign-in');
+  });
+
+  it('ends a session the API no longer accepts', async () => {
+    getSession.mockResolvedValue({ user: { id: 'u-1' } });
+    vi.mocked(getProviderAccessToken).mockResolvedValue(null);
+    await expect(requireViewer()).rejects.toThrow('NEXT_REDIRECT /session-ended');
+  });
+
+  it.each([
+    [{ kind: 'ok' as const, me }, me],
+    [{ kind: 'unavailable' as const }, null],
+  ])('returns the viewer, or null while the API is unavailable', async (result, expected) => {
+    getSession.mockResolvedValue({ user: { id: 'u-1' } });
+    vi.mocked(getProviderAccessToken).mockResolvedValue('eyJ.token');
+    vi.mocked(fetchMe).mockResolvedValue(result);
+    await expect(requireViewer()).resolves.toEqual(expected);
   });
 });

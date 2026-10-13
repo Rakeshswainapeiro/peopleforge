@@ -1,6 +1,8 @@
 import { getProviderAccessToken } from '@sirius/auth-better';
 import { headers } from 'next/headers';
-import { fetchMe, type MeResult } from './api-client';
+import { redirect } from 'next/navigation';
+import { cache } from 'react';
+import { fetchMe, type Me, type MeResult } from './api-client';
 import { getAuth, type Auth } from './auth';
 import { serverEnv } from './env';
 
@@ -15,11 +17,11 @@ export async function currentSession(): ReturnType<Auth['api']['getSession']> {
 export type ViewerResult = MeResult | { kind: 'signed_out' };
 
 /**
- * Who is looking at the page, as the API sees them. `signed_out`: no session.
- * `unauthenticated`: a session exists but is no longer usable (token not renewable or refused
+ * Who is looking at the page, as the API sees them; once per request (React cache).
+ * `signed_out`: no session. `unauthenticated`: a session exists but is no longer usable (token not renewable or refused
  * by the API) — end it via /session-ended.
  */
-export async function currentViewer(): Promise<ViewerResult> {
+export const currentViewer = cache(async (): Promise<ViewerResult> => {
   const requestHeaders = await headers();
   const session = await getAuth().api.getSession({
     headers: requestHeaders,
@@ -35,4 +37,16 @@ export async function currentViewer(): Promise<ViewerResult> {
     { apiUrl: env.PEOPLEFORGE_API_URL, timeoutMs: env.PEOPLEFORGE_API_TIMEOUT_MS },
     bearer,
   );
+});
+
+/**
+ * The viewer of a portal page, or null while the API is unavailable (the portal layout shows
+ * the notice). Redirects when there is no usable session. Cached per request, so layout and
+ * page share one /me call.
+ */
+export async function requireViewer(): Promise<Me | null> {
+  const viewer = await currentViewer();
+  if (viewer.kind === 'signed_out') redirect('/sign-in');
+  if (viewer.kind === 'unauthenticated') redirect('/session-ended');
+  return viewer.kind === 'ok' ? viewer.me : null;
 }
