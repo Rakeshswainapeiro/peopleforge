@@ -4,10 +4,21 @@ All notable changes are recorded here. Format: [Keep a Changelog](https://keepac
 
 ## [Unreleased]
 
+### Added — slice S1 (ADR-002, ADR-008)
+
+- `packages/db` (`@peopleforge/db`): plain-SQL migrations for schemas `core` (entities, user → entity assignments, increment cycles, interim employee directory) and `increments` (criteria sets and criteria), Row-Level Security (`ENABLE` + `FORCE`) on every entity-owned table, `withScope` for per-transaction scope, typed Kysely access, AES-256-GCM field encryption for salaries bound to table/column/row, and a synthetic dev/test seed (refused in UAT/Prod). One migration runner shared with the web app (`migrations.core`, `migrations.web`). Root scripts `pnpm db:migrate`, `pnpm db:seed`.
+- Placeholder configuration (R1-05): "Increment cycle 2026" and a five-criterion set marked `[Placeholder]`, to be replaced when Sirius provides the criteria (A1).
+- `packages/access` (`@peopleforge/access`): roles, permissions and the `/me` contract shared by the API and web, so both change together.
+- API: subsidiary HR users are scoped to their `core.user_entity` assignments (R1-01, R2-12); `GET /api/v1/me` returns the visible `entities`; `/health/ready` checks the database; new variables `DATABASE_URL`, `DATABASE_POOL_MAX`. Database outages answer 503, never an unscoped caller.
+- Web: portal shell — dark sidebar with Home, New Request, Notifications and Reports filtered by permission, user block with initials, role and subsidiary, language switch and sign-out; responsive (sidebar becomes a header below 1024 px). New Request, Notifications and Reports are placeholders that answer 404 without the permission.
+- Integration tests for Row-Level Security against a real PostgreSQL; E2E for the shell and entity scoping.
+
 ### Fixed
 
+- `DEPLOYMENT.md` had been emptied by an earlier commit (614eaa3); restored and brought up to date (web and migration variables, migration procedure).
+
 - Endless redirect between `/` and `/sign-in` after signing out at the identity provider: a session whose token can't be renewed is now ended via `/session-ended`.
-- Sign-in screen spacing matches the Figma (`@sirius/login-ui` 0.1.1).
+- Sign-in screen spacing matches the Figma and never overflows the viewport, from short laptop screens to large monitors, tablet and phone (`@sirius/login-ui` 0.1.3). In `next dev` the Next.js dev badge is turned off: it was added below the page and made full-height screens scroll.
 
 ### Added
 
