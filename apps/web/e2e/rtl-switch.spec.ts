@@ -18,7 +18,7 @@ test.describe('language and direction switch', () => {
     await expect(html).toHaveAttribute('dir', 'ltr');
 
     // The avatar sits at the start of the user block: left in English.
-    const avatar = page.getByTestId('viewer-avatar');
+    const avatar = page.getByTestId('avatar');
     await expect(avatar).toBeVisible();
     expect(await centre(page, avatar)).toBeLessThan(0.5);
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { displayName, entityName, initials, roleLabel } from './viewer-display';
+import { displayName, entityName, roleLabel } from './viewer-display';
 
 describe('displayName', () => {
   it.each([
@@ -8,19 +8,6 @@ describe('displayName', () => {
     [{ name: null, username: null, userId: 'oid' }, 'oid'],
   ])('falls back from name to sign-in name to ID (%j)', (me, expected) => {
     expect(displayName(me)).toBe(expected);
-  });
-});
-
-describe('initials', () => {
-  it.each([
-    ['Reviewer Test', 'RT'],
-    ['Aisha bint Rahman', 'AR'],
-    ['pf.reviewer', 'P'],
-    ['  élodie   martin ', 'ÉM'],
-    ['عائشة رحمن', 'عر'],
-    ['', ''],
-  ])('%j → %j', (name, expected) => {
-    expect(initials(name)).toBe(expected);
   });
 });
 

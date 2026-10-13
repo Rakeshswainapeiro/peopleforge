@@ -78,6 +78,7 @@ apps/
   web/            Next.js App Router — i18n (en/ar), proxy (CSP), app/(portal)/*, components/*, e2e/
 packages/
   access/         Roles, permissions and the /me contract, shared by api and web (ADR-005)
+  ui/             Design system: Figma tokens + components (ADR-009, docs/design/design-system.md)
   db/             SQL migrations, migration runner, RLS scope (withScope), field encryption, dev seed
 infra/docker/     Production Dockerfiles
 docs/             ADRs, API (OpenAPI), database conventions, runbooks, traceability

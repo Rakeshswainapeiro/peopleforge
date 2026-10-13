@@ -1,3 +1,4 @@
+import { Alert, Card, CardBody, CardHeader, PageHeader } from '@peopleforge/ui';
 import { getRequestLocale } from '@/i18n/request-locale';
 import { createTranslator, type MessageKey } from '@/i18n/translator';
 import { requireViewer } from '@/server/session';
@@ -7,7 +8,10 @@ const AREAS: readonly { title: MessageKey; body: MessageKey; ref: string }[] = [
   { title: 'home.groupDashboardTitle', body: 'home.groupDashboardBody', ref: 'R2' },
 ];
 
-/** Landing page. The portal layout handles sign-in redirects and the API-unavailable notice. */
+/**
+ * Landing page until the R1 dashboard (Figma "My increment requests") lands in a later slice.
+ * The portal layout handles sign-in redirects and the API-unavailable notice.
+ */
 export default async function HomePage() {
   const me = await requireViewer();
   if (me === null) return null;
@@ -15,23 +19,17 @@ export default async function HomePage() {
 
   return (
     <>
-      <h1 className="text-3xl font-bold">{t('home.heading')}</h1>
-      <p className="mt-3 max-w-prose text-start text-slate-700">{t('home.intro')}</p>
+      <PageHeader title={t('home.heading')} description={t('home.intro')} />
       {me.permissions.length === 0 ? (
-        <p role="status" className="mt-6 rounded-md bg-amber-50 p-4 text-sm text-amber-900">
-          {t('account.noPermissions')}
-        </p>
+        <Alert tone="warning" title={t('account.noPermissions')} className="mt-6" />
       ) : null}
-      <ul className="mt-8 grid gap-4 sm:grid-cols-2">
+      <ul className="mt-6 grid gap-4 sm:grid-cols-2">
         {AREAS.map((area) => (
-          <li
-            key={area.ref}
-            data-requirement={area.ref}
-            className="rounded-lg border border-slate-200 bg-white p-5 ps-6 shadow-sm"
-          >
-            <h2 className="text-xl font-semibold">{t(area.title)}</h2>
-            <p className="mt-2 text-slate-700">{t(area.body)}</p>
-            <p className="mt-4 text-sm text-slate-500">{t('home.comingSoon')}</p>
+          <li key={area.ref} data-requirement={area.ref}>
+            <Card className="h-full">
+              <CardHeader title={t(area.title)} description={t('home.comingSoon')} />
+              <CardBody className="pt-3 text-sm text-ink-muted">{t(area.body)}</CardBody>
+            </Card>
           </li>
         ))}
       </ul>

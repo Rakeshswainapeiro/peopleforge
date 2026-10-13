@@ -1,4 +1,5 @@
 import type { Permission } from '@peopleforge/access';
+import type { IconName } from '@peopleforge/ui';
 import { notFound } from 'next/navigation';
 import { PlaceholderPage } from '@/components/placeholder-page';
 import { getRequestLocale } from '@/i18n/request-locale';
@@ -14,11 +15,17 @@ export async function guardedPlaceholder(
   anyOf: readonly Permission[] | undefined,
   title: MessageKey,
   body: MessageKey,
+  icon: IconName,
 ) {
   const me = await requireViewer();
   if (me === null) return null;
   if (!hasAnyPermission(me.permissions, anyOf)) notFound();
   return (
-    <PlaceholderPage t={createTranslator(await getRequestLocale())} title={title} body={body} />
+    <PlaceholderPage
+      t={createTranslator(await getRequestLocale())}
+      title={title}
+      body={body}
+      icon={icon}
+    />
   );
 }

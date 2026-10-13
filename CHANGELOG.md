@@ -4,6 +4,17 @@ All notable changes are recorded here. Format: [Keep a Changelog](https://keepac
 
 ## [Unreleased]
 
+### Added — design system (ADR-009)
+
+- `packages/ui` (`@peopleforge/ui`): Figma tokens as a Tailwind theme, plus the components:
+  - layout and content: Button/ButtonLink, Badge, Card, StatCard, PageHeader, Alert, Table, EmptyState;
+  - inputs and navigation: Field/Input/Select/Textarea, ToggleGroup, Pagination;
+  - progress and loading: ProgressSteps, Spinner, Skeleton;
+  - identity: Avatar, Wordmark/BrandMark, NavItem, and an icon set.
+    Every interactive part has a pointer cursor, hover/active states, 150 ms transitions and a keyboard focus ring; motion is reduced on request. Guide: `docs/design/design-system.md`.
+- Portal restyled to the Figma: the dark sidebar has the PeopleForge wordmark, white active pill, initials avatar, and a sign-out icon with role and subsidiary. Page headers, cards, not-found, error and loading (skeleton) states use the design system.
+- Shared ESLint rules for React workspaces (`eslint/react-rules.mjs`): i18n literals and physical-direction classes, now also inside variant tables.
+
 ### Added — slice S1 (ADR-002, ADR-008)
 
 - `packages/db` (`@peopleforge/db`): plain-SQL migrations for schemas `core` (entities, user → entity assignments, increment cycles, interim employee directory) and `increments` (criteria sets and criteria), Row-Level Security (`ENABLE` + `FORCE`) on every entity-owned table, `withScope` for per-transaction scope, typed Kysely access, AES-256-GCM field encryption for salaries bound to table/column/row, and a synthetic dev/test seed (refused in UAT/Prod). One migration runner shared with the web app (`migrations.core`, `migrations.web`). Root scripts `pnpm db:migrate`, `pnpm db:seed`.

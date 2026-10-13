@@ -7,19 +7,6 @@ export function displayName(me: Pick<Me, 'name' | 'username' | 'userId'>): strin
   return me.name ?? me.username ?? me.userId;
 }
 
-/**
- * Up to two initials for the avatar badge (no photo is fetched: design §7). Splits on
- * whitespace and takes whole grapheme clusters, so Arabic and accented names work.
- */
-export function initials(name: string): string {
-  const segmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
-  const firstGrapheme = (word: string) =>
-    Array.from(segmenter.segment(word), (part) => part.segment).slice(0, 1);
-  const words = name.normalize('NFC').trim().split(/\s+/u).filter(Boolean);
-  const firstAndLast = words.filter((_, index) => index === 0 || index === words.length - 1);
-  return firstAndLast.flatMap(firstGrapheme).join('').toLocaleUpperCase();
-}
-
 // Most senior first: a person holding several roles is described by the highest.
 const ROLE_LABELS: readonly [string, MessageKey][] = [
   [ROLES.admin, 'roles.admin'],

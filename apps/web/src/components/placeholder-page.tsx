@@ -1,22 +1,23 @@
-import type { Translate, MessageKey } from '@/i18n/translator';
+import { Card, EmptyState, PageHeader, type IconName } from '@peopleforge/ui';
+import type { MessageKey, Translate } from '@/i18n/translator';
 
-/** A screen whose slice is not built yet (design §8): says so instead of a blank page. */
-export function PlaceholderPage({
-  t,
-  title,
-  body,
-}: {
+interface PlaceholderPageProps {
   t: Translate;
   title: MessageKey;
   body: MessageKey;
-}) {
+  icon: IconName;
+}
+
+/** A screen whose slice is not built yet (design §8): says so instead of a blank page. */
+export function PlaceholderPage({ t, title, body, icon }: PlaceholderPageProps) {
   return (
     <>
-      <h1 className="text-3xl font-bold">{t(title)}</h1>
-      <p className="mt-3 max-w-prose text-slate-700">{t(body)}</p>
-      <p role="status" className="mt-6 rounded-md bg-slate-100 p-4 text-sm text-slate-700">
-        {t('home.comingSoon')}
-      </p>
+      <PageHeader title={t(title)} description={t(body)} />
+      <Card className="mt-6">
+        <div role="status">
+          <EmptyState icon={icon} title={t('home.comingSoon')} />
+        </div>
+      </Card>
     </>
   );
 }

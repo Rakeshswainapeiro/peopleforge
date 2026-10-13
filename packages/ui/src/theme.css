@@ -1,0 +1,95 @@
+/*
+ * PeopleForge design tokens (Figma: "Dashboard" frames), as a Tailwind v4 theme. Components use
+ * only these names (bg-surface, text-ink-muted, bg-brand-600 …), so a palette change happens here
+ * once. Import after `tailwindcss` in the app's global stylesheet, and add the package's dist to
+ * Tailwind's sources:
+ *
+ *   @import 'tailwindcss';
+ *   @import '@peopleforge/ui/theme.css';
+ *   @source '../../node_modules/@peopleforge/ui/dist';
+ */
+@theme {
+  /* System fonts only: no font CDN (CSP font-src 'self', data residency). Covers Arabic glyphs. */
+  --font-sans:
+    'Inter', system-ui, 'Segoe UI', 'Noto Sans', 'Noto Sans Arabic', 'Geeza Pro', Tahoma, Arial,
+    sans-serif;
+
+  /* Neutrals */
+  --color-canvas: #f2f3f5; /* page background behind cards */
+  --color-surface: #ffffff; /* cards, inputs */
+  --color-surface-muted: #f7f8fa; /* table hover, read-only fields, notes */
+  --color-line: #e4e6eb; /* borders, dividers */
+  --color-line-strong: #cfd3da; /* input borders */
+  --color-ink: #111318; /* headings, body */
+  --color-ink-muted: #5d6470; /* descriptions, labels */
+  --color-ink-subtle: #8a909b; /* meta text, placeholders */
+
+  /* Sidebar */
+  --color-sidebar: #0b0b0b;
+  --color-sidebar-ink: #e8e8e8;
+  --color-sidebar-muted: #9a9a9a;
+  --color-accent: #5db563; /* "Forge" and the shield mark */
+
+  /* Brand (primary actions, links, "Approved") */
+  --color-brand-50: #eef0fe;
+  --color-brand-100: #dfe2fd;
+  --color-brand-300: #a9b0f6;
+  --color-brand-500: #5a64ee;
+  --color-brand-600: #4f58e5;
+  --color-brand-700: #3f47c9;
+
+  /* Status */
+  --color-success-50: #ebf6ec;
+  --color-success-600: #3e7d44;
+  --color-success-700: #2f6534;
+  --color-danger-50: #fdeeed;
+  --color-danger-200: #f4c4bf;
+  --color-danger-600: #a8362d;
+  --color-danger-700: #8b2a22;
+  --color-warning-50: #fef8ee;
+  --color-warning-200: #f6dcae;
+  --color-warning-700: #a86400;
+
+  --radius-control: 0.375rem; /* buttons, inputs */
+  --radius-card: 0.625rem;
+
+  --shadow-card: 0 1px 2px rgb(17 19 24 / 0.04);
+  --shadow-raised: 0 4px 14px rgb(17 19 24 / 0.08);
+
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+}
+
+@layer base {
+  html {
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    background-color: var(--color-canvas);
+    color: var(--color-ink);
+  }
+
+  /* Tailwind v4 resets buttons to the default cursor; anything clickable shows a pointer. */
+  button:not(:disabled),
+  [role='button']:not([aria-disabled='true']),
+  summary,
+  label[for],
+  select:not(:disabled) {
+    cursor: pointer;
+  }
+
+  :disabled,
+  [aria-disabled='true'] {
+    cursor: not-allowed;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      transition-duration: 0.01ms !important;
+      animation-duration: 0.01ms !important;
+    }
+  }
+}

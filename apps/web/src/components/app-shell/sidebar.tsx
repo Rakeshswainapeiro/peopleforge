@@ -1,10 +1,11 @@
 import type { Me } from '@peopleforge/access';
+import { Avatar, Wordmark } from '@peopleforge/ui';
 import type { Locale } from '@sirius/shared-types';
 import { LanguageSwitcher } from '@/components/language-switcher';
 import { SignOutButton } from '@/components/sign-out-button';
 import type { Translate } from '@/i18n/translator';
 import { visibleNavItems } from '@/lib/navigation';
-import { displayName, entityName, initials, roleLabel } from '@/lib/viewer-display';
+import { displayName, entityName, roleLabel } from '@/lib/viewer-display';
 import { NavLinks } from './nav-links';
 
 interface SidebarProps {
@@ -14,15 +15,15 @@ interface SidebarProps {
 }
 
 /** Second line under the name: role, then the subsidiary (or "All subsidiaries" for Sirius). */
-function scopeText(me: Me, locale: Locale, t: Translate): string {
+export function scopeText(me: Me, locale: Locale, t: Translate): string {
   if (me.scope === 'group') return t('shell.allEntities');
   if (me.entities.length === 0) return t('shell.noEntities');
   return me.entities.map((entity) => entityName(entity, locale)).join(', ');
 }
 
 /**
- * Portal sidebar (design: app shell): brand, navigation filtered by permission, language
- * switcher and the signed-in user. On narrow screens it becomes a header above the content.
+ * Portal sidebar (Figma: dark rail): wordmark, navigation filtered by permission, language
+ * switch and the signed-in user with sign-out. Below 1024px it becomes a header bar.
  */
 export function Sidebar({ me, locale, t }: SidebarProps) {
   const name = displayName(me);
@@ -32,35 +33,31 @@ export function Sidebar({ me, locale, t }: SidebarProps) {
     label: t(item.label),
   }));
   return (
-    <aside className="flex flex-col gap-6 bg-slate-950 p-4 text-white lg:sticky lg:top-0 lg:h-dvh lg:w-64 lg:shrink-0">
-      <p className="px-3 pt-2 text-xl font-bold tracking-tight">
-        <span>{t('signIn.brand.lead')}</span>
-        <span className="text-emerald-400">{t('signIn.brand.accent')}</span>
-      </p>
+    <aside className="flex flex-col gap-6 bg-sidebar px-3 py-4 text-sidebar-ink lg:sticky lg:top-0 lg:h-dvh lg:w-60 lg:shrink-0 lg:py-5">
+      <div className="px-2">
+        <Wordmark
+          lead={t('signIn.brand.lead')}
+          accent={t('signIn.brand.accent')}
+          tagline={t('signIn.brand.tagline')}
+        />
+      </div>
       <NavLinks items={items} label={t('nav.main')} />
       <div className="flex flex-col gap-4 lg:mt-auto">
-        <div className="[&_span]:text-slate-300 [&_button]:border-slate-600 [&_button]:text-white">
-          <LanguageSwitcher locale={locale} t={t} />
+        <div className="px-2">
+          <LanguageSwitcher locale={locale} t={t} tone="dark" />
         </div>
-        <div className="flex items-center gap-3 border-t border-white/10 pt-4">
-          <span
-            aria-hidden="true"
-            data-testid="viewer-avatar"
-            className="flex size-10 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-sm font-semibold"
-          >
-            {initials(name)}
-          </span>
-          <div className="min-w-0">
-            <p className="truncate text-sm font-semibold" data-testid="viewer-name">
-              {t('account.signedInAs', { name })}
+        <div className="flex items-center gap-3 border-t border-white/10 px-2 pt-4">
+          <Avatar name={name} />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-semibold text-white" data-testid="viewer-name">
+              <span className="sr-only">{t('account.signedInAs', { name })}</span>
+              <span aria-hidden="true">{name}</span>
             </p>
-            <p className="truncate text-xs text-slate-400">
+            <p className="line-clamp-2 text-xs text-sidebar-muted">
               {t(roleLabel(me.roles))} · {scopeText(me, locale, t)}
             </p>
           </div>
-        </div>
-        <div className="[&_button]:w-full [&_button]:border-slate-600 [&_button]:text-white">
-          <SignOutButton t={t} />
+          <SignOutButton t={t} variant="icon" />
         </div>
       </div>
     </aside>

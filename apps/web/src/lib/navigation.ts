@@ -1,12 +1,11 @@
 import type { Permission } from '@peopleforge/access';
+import type { IconName } from '@peopleforge/ui';
 import type { MessageKey } from '@/i18n/translator';
-
-export type NavIcon = 'home' | 'new-request' | 'notifications' | 'reports';
 
 export interface NavItem {
   href: string;
   label: MessageKey;
-  icon: NavIcon;
+  icon: IconName;
   /** Shown when the viewer has any of these; omitted: everyone signed in. */
   anyOf?: readonly Permission[];
 }
@@ -20,14 +19,14 @@ export const NAV_ITEMS: readonly NavItem[] = [
   {
     href: '/requests/new',
     label: 'nav.newRequest',
-    icon: 'new-request',
+    icon: 'file',
     anyOf: ['increment_request:create'],
   },
-  { href: '/notifications', label: 'nav.notifications', icon: 'notifications' },
+  { href: '/notifications', label: 'nav.notifications', icon: 'bell' },
   {
     href: '/reports',
     label: 'nav.reports',
-    icon: 'reports',
+    icon: 'chart',
     anyOf: ['report:read_operational', 'report:read_executive'],
   },
 ];

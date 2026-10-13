@@ -15,7 +15,7 @@ test.describe('organisation sign-in', () => {
 
   test('signs in, shows the API-confirmed identity, and signs out', async ({ page }) => {
     await signIn(page, 'reviewer');
-    await expect(page.getByText('Signed in as Reviewer Test')).toBeVisible();
+    await expect(page.getByTestId('viewer-name')).toContainText('Reviewer Test');
     await expect(page.getByRole('heading', { level: 1, name: 'Welcome' })).toBeVisible();
 
     const cookies = await page.context().cookies();

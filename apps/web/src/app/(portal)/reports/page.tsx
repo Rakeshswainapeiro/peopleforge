@@ -6,5 +6,6 @@ export default function ReportsPage() {
     ['report:read_operational', 'report:read_executive'],
     'reports.heading',
     'reports.intro',
+    'chart',
   );
 }

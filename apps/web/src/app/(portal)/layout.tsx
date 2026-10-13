@@ -1,3 +1,4 @@
+import { Alert, ButtonLink } from '@peopleforge/ui';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { Sidebar } from '@/components/app-shell/sidebar';
@@ -17,13 +18,18 @@ export default async function PortalLayout({ children }: { children: ReactNode }
   if (me === null) {
     return (
       <main id="main" className="mx-auto max-w-3xl px-4 py-10">
-        <section role="alert" className="rounded-lg border border-amber-300 bg-amber-50 p-5">
-          <h1 className="text-xl font-semibold">{t('account.unavailableTitle')}</h1>
-          <p className="mt-2 text-slate-700">{t('account.unavailableBody')}</p>
-          <Link href="/" className="mt-4 inline-block text-sm font-medium text-sky-800 underline">
-            {t('account.retry')}
-          </Link>
-        </section>
+        <Alert
+          role="alert"
+          tone="warning"
+          title={t('account.unavailableTitle')}
+          actions={
+            <ButtonLink href="/" variant="secondary" size="sm" as={Link}>
+              {t('account.retry')}
+            </ButtonLink>
+          }
+        >
+          {t('account.unavailableBody')}
+        </Alert>
       </main>
     );
   }
@@ -31,8 +37,8 @@ export default async function PortalLayout({ children }: { children: ReactNode }
   return (
     <div className="flex min-h-dvh flex-col lg:flex-row">
       <Sidebar me={me} locale={locale} t={t} />
-      <main id="main" className="min-w-0 flex-1 px-4 py-8 sm:px-8 lg:py-10">
-        {children}
+      <main id="main" className="min-w-0 flex-1 px-4 py-6 sm:px-8 lg:py-8">
+        <div className="mx-auto max-w-7xl">{children}</div>
       </main>
     </div>
   );
