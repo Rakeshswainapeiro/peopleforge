@@ -5,11 +5,14 @@ import { saveDraft } from '@/app/(portal)/requests/actions';
 import { createTranslator } from '@/i18n/translator';
 import { saveMessages, tableLabels } from '@/lib/request-view';
 import { AddEmployeeForm } from './add-employee-form';
+import { DraftForm } from './draft-form';
 import { ProposalsTable, type ProposalRowView } from './proposals-table';
 
 vi.mock('@/app/(portal)/requests/actions', () => ({
   saveDraft: vi.fn(),
   removeEmployeeAction: vi.fn(),
+  uploadEvidenceAction: vi.fn(),
+  removeEvidenceAction: vi.fn(),
 }));
 
 const t = createTranslator('en');
@@ -33,35 +36,44 @@ const row: ProposalRowView = {
     proposedAs: 'Proposed as, for Omar Haddad',
     value: 'Proposed increase for Omar Haddad',
     remove: 'Remove Omar Haddad',
+    assess: 'Assess criteria for Omar Haddad',
   },
 };
 
 function table(editable = true) {
   return render(
-    <ProposalsTable
-      formId="proposals-form"
+    <DraftForm
+      formId="draft-form"
       requestId="11111111-1111-4111-8111-111111111111"
       version={3}
+      employee={LINE}
       editable={editable}
-      rows={[
-        row,
-        {
-          ...row,
-          lineId: 'line-2',
-          fullName: 'Neha Iyer',
-          kind: 'amount',
-          value: '',
-          labels: {
-            remove: 'Remove Neha Iyer',
-            value: 'Proposed increase for Neha Iyer',
-            proposedAs: 'Proposed as, for Neha Iyer',
+      saveLabel="Save draft"
+    >
+      <ProposalsTable
+        editable={editable}
+        selectedLineId={LINE}
+        rows={[
+          row,
+          {
+            ...row,
+            lineId: 'line-2',
+            fullName: 'Neha Iyer',
+            kind: 'amount',
+            value: '',
+            labels: {
+              remove: 'Remove Neha Iyer',
+              value: 'Proposed increase for Neha Iyer',
+              proposedAs: 'Proposed as, for Neha Iyer',
+              assess: 'Assess criteria for Neha Iyer',
+            },
           },
-        },
-      ]}
-      labels={tableLabels(t)}
-      messages={saveMessages(t)}
-      footer={<p>Totals</p>}
-    />,
+        ]}
+        labels={tableLabels(t)}
+        messages={saveMessages(t)}
+        footer={<p>Totals</p>}
+      />
+    </DraftForm>,
   );
 }
 
@@ -96,6 +108,30 @@ describe('ProposalsTable', () => {
     const { container } = table();
     const first = container.querySelector('form button[type="submit"]');
     expect(first).toHaveTextContent('Save draft');
+  });
+
+  it('joins every field to the draft form and posts the whole table', () => {
+    const { container } = table();
+    const form = container.querySelector<HTMLFormElement>('form#draft-form');
+    if (form === null) throw new Error('no form');
+    const data = new FormData(form);
+    expect(data.get('requestId')).toBe('11111111-1111-4111-8111-111111111111');
+    expect(data.get('employee')).toBe(LINE);
+    expect(data.getAll('lineId')).toEqual([LINE, 'line-2']);
+    expect(data.get(`value:${LINE}`)).toBe('8');
+    expect(data.get(`kind:${LINE}`)).toBe('percent');
+  });
+
+  it('marks the employee being assessed, whose pencil saves and opens their criteria', () => {
+    table();
+    const pencil = screen.getByRole('button', { name: 'Assess criteria for Omar Haddad' });
+    expect(pencil).toHaveAttribute('aria-current', 'true');
+    expect(pencil).toHaveAttribute('name', 'selectLine');
+    expect(pencil).toHaveAttribute('value', LINE);
+    expect(pencil).toHaveAttribute('form', 'draft-form');
+    expect(
+      screen.getByRole('button', { name: 'Assess criteria for Neha Iyer' }),
+    ).not.toHaveAttribute('aria-current');
   });
 
   it('shows the refusal and the row’s problem, keeping what was typed', async () => {
@@ -144,7 +180,7 @@ describe('ProposalsTable', () => {
   it('renders read-only for people who cannot edit', () => {
     table(false);
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
-    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { hidden: true })).not.toBeInTheDocument();
     expect(screen.getAllByText('%')).toHaveLength(1);
     expect(screen.getByText('AED', { selector: 'span' })).toBeInTheDocument();
   });

@@ -62,13 +62,16 @@ export function proposalProblem(
   return proposed.greaterThan(limit) ? 'over_limit' : null;
 }
 
+/** `complete`: every criterion done for the employee (R1-06); with a proposal, ready to submit. */
 export function requestTotals(
-  lines: readonly { currency: string; figures: LineFigures | null }[],
+  lines: readonly { currency: string; figures: LineFigures | null; complete: boolean }[],
 ): RequestTotals {
   const byCurrency = new Map<string, Decimal>();
   const percents: Decimal[] = [];
+  let ready = 0;
   for (const line of lines) {
     if (line.figures === null) continue;
+    if (line.complete) ready += 1;
     const sum = byCurrency.get(line.currency) ?? new Money(0);
     byCurrency.set(line.currency, sum.plus(line.figures.increase));
     percents.push(new Money(line.figures.percent));
@@ -83,6 +86,7 @@ export function requestTotals(
   return {
     employees: lines.length,
     proposed: percents.length,
+    ready,
     increaseByCurrency: [...byCurrency.entries()]
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([currency, amount]) => ({ currency, amount: amount.toFixed(2) })),

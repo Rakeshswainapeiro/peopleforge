@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { MAX_EVIDENCE_PER_CRITERION } from '@peopleforge/contracts';
 import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createDatabase, type DatabaseHandle } from './database.js';
@@ -6,8 +7,9 @@ import {
   createIncrementRequestRepository,
   RequestDataError,
   type IncrementRequestRepository,
+  type NewEvidence,
 } from './increment-requests.js';
-import type { Scope } from './scope.js';
+import { withScope, type Scope } from './scope.js';
 import { SEED_ASSIGNMENTS, SEED_ENTITIES } from './seed.js';
 import { resetCoreDatabase, TEST_APP_URL, TEST_OWNER_URL, testCipher } from './test-support/db.js';
 
@@ -408,7 +410,7 @@ describe('editing a draft', () => {
     const id = await draft(['EMP-1101', 'EMP-1102']);
     const request = await repo.get(alpha, id);
     const [first, second] = request?.lines ?? [];
-    await repo.setProposals(alpha, id, {
+    await repo.saveDraft(alpha, id, {
       version: 1,
       proposals: [
         { lineId: String(first?.id), kind: 'percent', value: '8.00' },
@@ -438,7 +440,7 @@ describe('editing a draft', () => {
     };
     expect(testCipher.decrypt(stored, context)).toBe('8.00');
 
-    await repo.setProposals(alpha, id, {
+    await repo.saveDraft(alpha, id, {
       version: 2,
       proposals: [{ lineId: String(first?.id), kind: null, value: null }],
     });
@@ -450,14 +452,12 @@ describe('editing a draft', () => {
 
   it('refuses a stale version and unknown lines', async () => {
     const id = await draft(['EMP-1101']);
-    expect(
-      await refusal(repo.setProposals(alpha, id, { version: 9, proposals: [] })),
-    ).toMatchObject({
+    expect(await refusal(repo.saveDraft(alpha, id, { version: 9, proposals: [] }))).toMatchObject({
       reason: 'version_conflict',
     });
     const lineId = randomUUID();
     const error = await refusal(
-      repo.setProposals(alpha, id, {
+      repo.saveDraft(alpha, id, {
         version: 1,
         proposals: [{ lineId, kind: 'percent', value: '5' }],
       }),
@@ -465,3 +465,392 @@ describe('editing a draft', () => {
     expect(error).toMatchObject({ reason: 'line_not_found', subject: lineId });
   });
 });
+
+/** A draft with one employee, its line ID and the criteria of its set. */
+async function draftWithLine(employees: string[] = ['EMP-1101']) {
+  const id = await draft(employees);
+  const request = await repo.get(alpha, id);
+  if (request === null) throw new Error('draft not found');
+  const [line] = request.lines;
+  if (line === undefined) throw new Error('draft has no line');
+  return { id, request, lineId: line.id, criteria: request.criteria.map((c) => c.id) };
+}
+
+function evidence(lineId: string, criterionId: string, overrides: Partial<NewEvidence> = {}) {
+  const id = randomUUID();
+  return {
+    id,
+    lineId,
+    criterionId,
+    objectKey: `evidence/${SUB_A.id}/${id}`,
+    fileName: 'appraisal-2026.pdf',
+    mediaType: 'application/pdf',
+    sizeBytes: 2048,
+    sha256: 'a'.repeat(64),
+    scanEngine: 'clamav',
+    scannedAt: new Date('2026-10-14T08:00:00Z'),
+    ...overrides,
+  } satisfies NewEvidence;
+}
+
+async function rawResult(lineId: string, criterionId: string) {
+  await owner.query('BEGIN');
+  await owner.query("SELECT set_config('app.scope', 'group', true)");
+  const raw = await owner.query<{
+    id: string;
+    result: string | null;
+    justification: Buffer | null;
+  }>(
+    'SELECT id, result, justification FROM increments.criterion_result WHERE line_id = $1 AND criterion_id = $2',
+    [lineId, criterionId],
+  );
+  await owner.query('COMMIT');
+  return raw.rows[0];
+}
+
+describe('criteria configuration on a request [R1-03, R1-05]', () => {
+  it('carries what each criterion asks for, and an empty assessment per employee', async () => {
+    const { request } = await draftWithLine();
+    expect(request.criteria[0]).toMatchObject({
+      code: 'C1',
+      description: { en: 'Latest appraisal meets the minimum rating.' },
+      justificationRequired: true,
+      evidencePolicy: 'required',
+      maxFileMb: 10,
+    });
+    expect(request.criteria[0]?.allowedMediaTypes).toContain('application/pdf');
+    expect(request.criteria[4]?.evidencePolicy).toBe('optional');
+    expect(request.lines[0]?.criteria).toEqual(
+      request.criteria.map((criterion) => ({
+        criterionId: criterion.id,
+        result: null,
+        justification: '',
+        evidence: [],
+      })),
+    );
+  });
+});
+
+describe('saving criteria with the draft [R1-03]', () => {
+  it('saves one employee’s results with the proposals, justification encrypted', async () => {
+    const { id, lineId, criteria } = await draftWithLine(['EMP-1101', 'EMP-1102']);
+    const [c1, c2] = criteria;
+    await repo.saveDraft(alpha, id, {
+      version: 1,
+      proposals: [{ lineId, kind: 'percent', value: '6.00' }],
+      assessment: {
+        lineId,
+        results: [
+          { criterionId: String(c1), result: 'pass', justification: '  Rated 4 of 5 in 2026.  ' },
+          { criterionId: String(c2), result: null, justification: '' },
+        ],
+      },
+    });
+    const saved = await repo.get(alpha, id);
+    expect(saved?.version).toBe(2);
+    expect(saved?.lines[0]?.proposedValue).toBe('6.00');
+    expect(saved?.lines[0]?.criteria.slice(0, 2)).toMatchObject([
+      { criterionId: c1, result: 'pass', justification: 'Rated 4 of 5 in 2026.' },
+      { criterionId: c2, result: null, justification: '' },
+    ]);
+    // The other employee is untouched.
+    expect(saved?.lines[1]?.criteria.every((c) => c.result === null)).toBe(true);
+
+    const raw = await rawResult(lineId, String(c1));
+    expect(raw?.justification?.toString('latin1')).not.toContain('Rated');
+    const context = {
+      table: 'increments.criterion_result',
+      column: 'justification',
+      rowId: String(raw?.id),
+    };
+    expect(testCipher.decrypt(raw?.justification ?? Buffer.alloc(0), context)).toBe(
+      'Rated 4 of 5 in 2026.',
+    );
+    expect((await rawResult(lineId, String(c2)))?.justification).toBeNull();
+  });
+
+  it('updates a result in place, keeping its row and clearing an emptied justification', async () => {
+    const { id, lineId, criteria } = await draftWithLine();
+    const c1 = String(criteria[0]);
+    await repo.saveDraft(alpha, id, {
+      version: 1,
+      proposals: [],
+      assessment: { lineId, results: [{ criterionId: c1, result: 'pass', justification: 'Yes' }] },
+    });
+    const before = await rawResult(lineId, c1);
+    await repo.saveDraft(alpha, id, {
+      version: 2,
+      proposals: [],
+      assessment: { lineId, results: [{ criterionId: c1, result: 'fail', justification: ' ' }] },
+    });
+    const after = await rawResult(lineId, c1);
+    expect(after).toEqual({ id: before?.id, result: 'fail', justification: null });
+    await repo.saveDraft(alpha, id, {
+      version: 3,
+      proposals: [],
+      assessment: {
+        lineId,
+        results: [{ criterionId: c1, result: 'pass', justification: 'Again' }],
+      },
+    });
+    expect((await repo.get(alpha, id))?.lines[0]?.criteria[0]).toMatchObject({
+      result: 'pass',
+      justification: 'Again',
+    });
+  });
+
+  it('refuses an unknown line or a criterion outside the request’s set, saving nothing', async () => {
+    const { id, lineId, criteria } = await draftWithLine();
+    const strangerLine = randomUUID();
+    expect(
+      await refusal(
+        repo.saveDraft(alpha, id, {
+          version: 1,
+          proposals: [{ lineId, kind: 'percent', value: '5' }],
+          assessment: { lineId: strangerLine, results: [] },
+        }),
+      ),
+    ).toMatchObject({ reason: 'line_not_found', subject: strangerLine });
+    const strangerCriterion = randomUUID();
+    expect(
+      await refusal(
+        repo.saveDraft(alpha, id, {
+          version: 1,
+          proposals: [{ lineId, kind: 'percent', value: '5' }],
+          assessment: {
+            lineId,
+            results: [
+              { criterionId: String(criteria[0]), result: 'pass', justification: 'x' },
+              { criterionId: strangerCriterion, result: 'pass', justification: 'x' },
+            ],
+          },
+        }),
+      ),
+    ).toMatchObject({ reason: 'criterion_not_found', subject: strangerCriterion });
+    const unchanged = await repo.get(alpha, id);
+    expect(unchanged?.version).toBe(1);
+    expect(unchanged?.lines[0]).toMatchObject({ proposedValue: null });
+    expect(unchanged?.lines[0]?.criteria[0]?.result).toBeNull();
+  });
+});
+
+describe('evidence [R1-04]', () => {
+  it('records files per criterion without changing the version', async () => {
+    const { id, lineId, criteria } = await draftWithLine();
+    const [c1, c2] = criteria.map(String);
+    const first = evidence(lineId, String(c1));
+    const record = await repo.addEvidence(alpha, id, first);
+    expect(record).toMatchObject({
+      id: first.id,
+      fileName: 'appraisal-2026.pdf',
+      mediaType: 'application/pdf',
+      sizeBytes: 2048,
+    });
+    expect(record.createdAt).toBeInstanceOf(Date);
+    await repo.addEvidence(alpha, id, evidence(lineId, String(c2), { fileName: 'b.png' }));
+    const request = await repo.get(alpha, id);
+    expect(request?.version).toBe(1);
+    expect(request?.lines[0]?.criteria[0]?.evidence.map((file) => file.id)).toEqual([first.id]);
+    expect(request?.lines[0]?.criteria[1]?.evidence.map((file) => file.fileName)).toEqual([
+      'b.png',
+    ]);
+  });
+
+  it(`caps a criterion at ${String(MAX_EVIDENCE_PER_CRITERION)} live files`, async () => {
+    const { id, lineId, criteria } = await draftWithLine();
+    const c1 = String(criteria[0]);
+    const added = [];
+    for (let n = 0; n < MAX_EVIDENCE_PER_CRITERION; n += 1) {
+      added.push(await repo.addEvidence(alpha, id, evidence(lineId, c1)));
+    }
+    expect(await refusal(repo.addEvidence(alpha, id, evidence(lineId, c1)))).toMatchObject({
+      reason: 'evidence_limit',
+      subject: c1,
+    });
+    // A removed file frees its slot.
+    await repo.removeEvidence(alpha, id, String(added[0]?.id));
+    await expect(repo.addEvidence(alpha, id, evidence(lineId, c1))).resolves.toMatchObject({
+      fileName: 'appraisal-2026.pdf',
+    });
+  });
+
+  it('refuses unknown requests, lines and criteria', async () => {
+    const { id, lineId, criteria } = await draftWithLine();
+    const c1 = String(criteria[0]);
+    expect(
+      await refusal(repo.addEvidence(alpha, randomUUID(), evidence(lineId, c1))),
+    ).toMatchObject({ reason: 'not_found' });
+    const strangerLine = randomUUID();
+    expect(await refusal(repo.addEvidence(alpha, id, evidence(strangerLine, c1)))).toMatchObject({
+      reason: 'line_not_found',
+      subject: strangerLine,
+    });
+    const strangerCriterion = randomUUID();
+    expect(
+      await refusal(repo.addEvidence(alpha, id, evidence(lineId, strangerCriterion))),
+    ).toMatchObject({ reason: 'criterion_not_found', subject: strangerCriterion });
+  });
+
+  it('soft-deletes a file: gone from the request and from download, kept in the table', async () => {
+    const { id, lineId, criteria } = await draftWithLine();
+    const file = evidence(lineId, String(criteria[0]));
+    await repo.addEvidence(alpha, id, file);
+    await expect(repo.getEvidence(alpha, id, file.id)).resolves.toEqual({
+      id: file.id,
+      requestStatus: 'draft',
+      objectKey: file.objectKey,
+      fileName: file.fileName,
+      mediaType: file.mediaType,
+      sizeBytes: file.sizeBytes,
+    });
+    await repo.removeEvidence(alpha, id, file.id);
+    expect((await repo.get(alpha, id))?.lines[0]?.criteria[0]?.evidence).toEqual([]);
+    await expect(repo.getEvidence(alpha, id, file.id)).resolves.toBeNull();
+    expect(await refusal(repo.removeEvidence(alpha, id, file.id))).toMatchObject({
+      reason: 'evidence_not_found',
+      subject: file.id,
+    });
+    await owner.query('BEGIN');
+    await owner.query("SELECT set_config('app.scope', 'group', true)");
+    const kept = await owner.query<{ deleted_by: string }>(
+      'SELECT deleted_by FROM increments.evidence_file WHERE id = $1',
+      [file.id],
+    );
+    await owner.query('COMMIT');
+    expect(kept.rows).toEqual([{ deleted_by: alpha.userId }]);
+  });
+
+  it('only finds a file through the request it belongs to', async () => {
+    const { id, lineId, criteria } = await draftWithLine();
+    const other = await draftWithLine();
+    const file = evidence(lineId, String(criteria[0]));
+    await repo.addEvidence(alpha, id, file);
+    await expect(repo.getEvidence(alpha, other.id, file.id)).resolves.toBeNull();
+    expect(await refusal(repo.removeEvidence(alpha, other.id, file.id))).toMatchObject({
+      reason: 'evidence_not_found',
+    });
+  });
+
+  it('hides files once their employee is removed from the request', async () => {
+    const { id, lineId, criteria } = await draftWithLine(['EMP-1101', 'EMP-1102']);
+    const file = evidence(lineId, String(criteria[0]));
+    await repo.addEvidence(alpha, id, file);
+    await repo.removeLine(alpha, id, lineId);
+    await expect(repo.getEvidence(alpha, id, file.id)).resolves.toBeNull();
+  });
+
+  it('keeps another subsidiary out, and lets Sirius read [R1-01, NFR-SEC-01]', async () => {
+    const { id, lineId, criteria } = await draftWithLine();
+    const file = evidence(lineId, String(criteria[0]));
+    await repo.addEvidence(alpha, id, file);
+    await expect(repo.getEvidence(beta, id, file.id)).resolves.toBeNull();
+    await expect(repo.getEvidence(sirius, id, file.id)).resolves.toMatchObject({ id: file.id });
+    expect(
+      await refusal(repo.addEvidence(beta, id, evidence(lineId, String(criteria[0])))),
+    ).toMatchObject({ reason: 'not_found' });
+    expect(await refusal(repo.removeEvidence(beta, id, file.id))).toMatchObject({
+      reason: 'not_found',
+    });
+    expect(
+      await refusal(
+        repo.saveDraft(beta, id, {
+          version: 1,
+          proposals: [],
+          assessment: { lineId, results: [] },
+        }),
+      ),
+    ).toMatchObject({ reason: 'not_found' });
+  });
+});
+
+describe('criteria and evidence at the database [R1-01, NFR-SEC-01]', () => {
+  it('refuses rows whose entity differs from their line’s', async () => {
+    const { lineId, criteria } = await draftWithLine();
+    await expect(
+      asOwner(
+        `INSERT INTO increments.criterion_result (line_id, entity_id, criterion_id, created_by, updated_by)
+         VALUES ($1, $2, $3, 't', 't')`,
+        [lineId, SUB_B.id, criteria[0]],
+      ),
+    ).rejects.toThrow(/foreign key/);
+    await owner.query('ROLLBACK');
+  });
+
+  it('refuses another subsidiary’s rows under Row-Level Security', async () => {
+    const { id, lineId, criteria } = await draftWithLine();
+    await repo.addEvidence(alpha, id, evidence(lineId, String(criteria[0])));
+    await repo.saveDraft(alpha, id, {
+      version: 1,
+      proposals: [],
+      assessment: {
+        lineId,
+        results: [{ criterionId: String(criteria[0]), result: 'pass', justification: 'ok' }],
+      },
+    });
+    const seen = await withScope(handle.db, beta, async (trx) => [
+      await trx
+        .selectFrom('increments.criterion_result')
+        .select('id')
+        .where('line_id', '=', lineId)
+        .execute(),
+      await trx
+        .selectFrom('increments.evidence_file')
+        .select('id')
+        .where('line_id', '=', lineId)
+        .execute(),
+    ]);
+    expect(seen).toEqual([[], []]);
+    await expect(
+      withScope(handle.db, beta, (trx) =>
+        trx
+          .insertInto('increments.evidence_file')
+          .values({ ...evidenceRow(lineId, String(criteria[0])), entity_id: SUB_A.id })
+          .execute(),
+      ),
+    ).rejects.toThrow(/row-level security/);
+  });
+
+  it('gives the app role no DELETE on results or evidence', async () => {
+    await expect(
+      withScope(handle.db, sirius, (trx) => trx.deleteFrom('increments.evidence_file').execute()),
+    ).rejects.toThrow(/permission denied/);
+    await expect(
+      withScope(handle.db, sirius, (trx) =>
+        trx.deleteFrom('increments.criterion_result').execute(),
+      ),
+    ).rejects.toThrow(/permission denied/);
+  });
+
+  it('accepts only server-generated object keys', async () => {
+    const { lineId, criteria } = await draftWithLine();
+    await expect(
+      withScope(handle.db, alpha, (trx) =>
+        trx
+          .insertInto('increments.evidence_file')
+          .values({
+            ...evidenceRow(lineId, String(criteria[0])),
+            object_key: 'evidence/../../etc/passwd',
+          })
+          .execute(),
+      ),
+    ).rejects.toThrow(/check constraint/);
+  });
+});
+
+function evidenceRow(lineId: string, criterionId: string) {
+  const file = evidence(lineId, criterionId);
+  return {
+    id: file.id,
+    line_id: lineId,
+    entity_id: SUB_A.id,
+    criterion_id: criterionId,
+    object_key: file.objectKey,
+    file_name: file.fileName,
+    media_type: file.mediaType,
+    size_bytes: file.sizeBytes,
+    sha256: file.sha256,
+    scan_engine: file.scanEngine,
+    scanned_at: file.scannedAt,
+    created_by: 'test',
+  };
+}

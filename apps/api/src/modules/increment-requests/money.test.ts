@@ -63,16 +63,18 @@ describe('proposalProblem', () => {
 describe('requestTotals', () => {
   it('sums per currency and averages the percentages: (8 + 6 + 7.3 + 5.5 + 5) / 5 = 6.36 → 6.4', () => {
     const lines = [
-      { currency: 'AED', figures: lineFigures('21500.00', 'percent', '8') },
-      { currency: 'AED', figures: lineFigures('16800.00', 'percent', '6') },
-      { currency: 'AED', figures: lineFigures('16800.00', 'percent', '7.3') },
-      { currency: 'AED', figures: lineFigures('16800.00', 'percent', '5.5') },
-      { currency: 'USD', figures: lineFigures('5000.00', 'amount', '250') },
-      { currency: 'AED', figures: null },
+      { currency: 'AED', figures: lineFigures('21500.00', 'percent', '8'), complete: true },
+      { currency: 'AED', figures: lineFigures('16800.00', 'percent', '6'), complete: false },
+      { currency: 'AED', figures: lineFigures('16800.00', 'percent', '7.3'), complete: true },
+      { currency: 'AED', figures: lineFigures('16800.00', 'percent', '5.5'), complete: false },
+      { currency: 'USD', figures: lineFigures('5000.00', 'amount', '250'), complete: false },
+      // Criteria done but no proposal: not ready.
+      { currency: 'AED', figures: null, complete: true },
     ];
     expect(requestTotals(lines)).toEqual({
       employees: 6,
       proposed: 5,
+      ready: 2,
       increaseByCurrency: [
         { currency: 'AED', amount: '4878.40' },
         { currency: 'USD', amount: '250.00' },
@@ -82,9 +84,10 @@ describe('requestTotals', () => {
   });
 
   it('has no average without proposals', () => {
-    expect(requestTotals([{ currency: 'AED', figures: null }])).toEqual({
+    expect(requestTotals([{ currency: 'AED', figures: null, complete: false }])).toEqual({
       employees: 1,
       proposed: 0,
+      ready: 0,
       increaseByCurrency: [],
       averagePercent: null,
     });

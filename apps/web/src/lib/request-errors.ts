@@ -10,6 +10,7 @@ export const REQUEST_ERROR_KEYS = [
   'request.errors.rowsInvalid',
   'request.errors.chooseEmployee',
   'request.errors.notFound',
+  'request.errors.justificationTooLong',
   'request.errors.generic',
 ] as const satisfies readonly MessageKey[];
 
@@ -27,7 +28,41 @@ export function errorKeyFor(code: ErrorCode, details: readonly ErrorDetail[]): R
     return 'request.errors.employeeNotFound';
   if (code === 'VALIDATION_FAILED' && has(details, 'cycleId')) return 'request.errors.cycleNotOpen';
   if (code === 'NOT_FOUND') return 'request.errors.notFound';
+  if (code === 'VALIDATION_FAILED' && details.some((d) => d.path.endsWith('.justification'))) {
+    return 'request.errors.justificationTooLong';
+  }
   return 'request.errors.generic';
+}
+
+/** Messages an evidence upload or removal can end with (R1-04). */
+export const EVIDENCE_ERROR_KEYS = [
+  'evidence.errors.tooLarge',
+  'evidence.errors.type',
+  'evidence.errors.infected',
+  'evidence.errors.limit',
+  'evidence.errors.required',
+  'evidence.errors.unavailable',
+  'evidence.errors.notFound',
+  'evidence.errors.generic',
+  'evidence.errors.removeFailed',
+] as const satisfies readonly MessageKey[];
+
+export type EvidenceErrorKey = (typeof EVIDENCE_ERROR_KEYS)[number];
+
+/** The message for an API refusal of an evidence upload. */
+export function evidenceErrorKey(
+  status: number,
+  code: ErrorCode,
+  details: readonly ErrorDetail[],
+): EvidenceErrorKey {
+  if (status === 413) return 'evidence.errors.tooLarge';
+  if (code === 'NOT_FOUND') return 'evidence.errors.notFound';
+  if (code === 'CONFLICT') return 'evidence.errors.limit';
+  const fileProblem = details.find((detail) => detail.path === 'file')?.code;
+  if (fileProblem === 'media_type') return 'evidence.errors.type';
+  if (fileProblem === 'infected') return 'evidence.errors.infected';
+  if (fileProblem === 'required') return 'evidence.errors.required';
+  return 'evidence.errors.generic';
 }
 
 /** The message for one proposal the API refused (`proposals.N.value`). */

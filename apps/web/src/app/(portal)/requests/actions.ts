@@ -1,21 +1,36 @@
 'use server';
 
-import { DecimalString, type ProposedKind } from '@peopleforge/contracts';
+import {
+  CriterionResultSchema,
+  DecimalString,
+  MAX_EVIDENCE_FILE_MB,
+  type CriterionInput,
+  type ProposedKind,
+} from '@peopleforge/contracts';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import type { MessageKey } from '@/i18n/translator';
-import { errorKeyFor, proposalErrorKey, type RequestErrorKey } from '@/lib/request-errors';
+import {
+  errorKeyFor,
+  evidenceErrorKey,
+  proposalErrorKey,
+  type EvidenceErrorKey,
+  type RequestErrorKey,
+} from '@/lib/request-errors';
 import type { ApiResult } from '@/server/api-client';
 import {
   addEmployee,
   createRequest,
   removeEmployee,
-  saveProposals,
+  removeEvidence,
+  saveDraftChanges,
+  uploadEvidence,
 } from '@/server/increment-requests';
 
 /**
- * Server Actions for the request editor (R1-02). POST-only with an Origin check (CSRF); every
- * field is re-validated here and again by the API, which also enforces the user's subsidiary.
+ * Server Actions for the request editor (R1-02, R1-03, R1-04). POST-only with an Origin check
+ * (CSRF); every field is re-validated here and again by the API, which also enforces the
+ * user's subsidiary.
  */
 
 const Id = z.uuid();
@@ -94,13 +109,50 @@ export interface ProposalRowState {
   error?: MessageKey;
 }
 
+/** What was typed for one criterion, kept when a save is refused. */
+export interface CriterionTypedState {
+  criterionId: string;
+  result: string;
+  justification: string;
+}
+
 export interface ProposalsFormState {
   error?: RequestErrorKey;
   /** What the user typed, per line, so a refused save keeps their input. */
   rows: ProposalRowState[];
+  /** The criteria typed for the employee being assessed, likewise. */
+  criteria?: { lineId: string; results: CriterionTypedState[] };
 }
 
-/** "Save draft": the whole table at once, all or nothing. */
+/** One employee's criteria from the form (fields `result:<id>`, `justification:<id>`). */
+function readAssessment(formData: FormData) {
+  const lineId = Id.safeParse(field(formData, 'assessmentLineId'));
+  if (!lineId.success) return undefined;
+  const typed: CriterionTypedState[] = [];
+  const results: CriterionInput[] = [];
+  for (const value of formData.getAll('criterionId')) {
+    const criterionId = Id.parse(value);
+    const result = field(formData, `result:${criterionId}`);
+    const justification = field(formData, `justification:${criterionId}`);
+    typed.push({ criterionId, result, justification });
+    results.push({
+      criterionId,
+      result: CriterionResultSchema.safeParse(result).data ?? null,
+      // The textarea's maxLength stops longer text; the API refuses anything that slips past.
+      justification: justification.normalize('NFC'),
+    });
+  }
+  return {
+    typed: { lineId: lineId.data, results: typed },
+    input: { lineId: lineId.data, results },
+  };
+}
+
+/**
+ * "Save draft": the whole table and the assessed employee's criteria at once, all or nothing.
+ * The pencil of a row submits the same form with `selectLine`, so moving to another employee
+ * never loses what was typed for the previous one.
+ */
 export async function saveDraft(
   _previous: ProposalsFormState,
   formData: FormData,
@@ -108,6 +160,9 @@ export async function saveDraft(
   const requestId = Id.parse(field(formData, 'requestId'));
   const version = z.coerce.number().int().min(1).parse(field(formData, 'version'));
   const lineIds = formData.getAll('lineId').map((value) => Id.parse(value));
+  const assessment = readAssessment(formData);
+  const next = Id.safeParse(field(formData, 'selectLine'));
+  const current = Id.safeParse(field(formData, 'employee'));
 
   const rows: ProposalRowState[] = [];
   const proposals: { lineId: string; kind: ProposedKind | null; value: string | null }[] = [];
@@ -127,14 +182,25 @@ export async function saveDraft(
     }
     rows.push(row);
   }
-  if (rows.some((row) => row.error !== undefined)) {
-    return { error: 'request.errors.rowsInvalid', rows };
-  }
+  const keep = (error: RequestErrorKey): ProposalsFormState => ({
+    error,
+    rows,
+    ...(assessment === undefined ? {} : { criteria: assessment.typed }),
+  });
+  if (rows.some((row) => row.error !== undefined)) return keep('request.errors.rowsInvalid');
 
-  const result = await saveProposals(requestId, { version, proposals });
-  if (result.kind === 'ok') redirect(`/requests/${requestId}?saved=1`);
+  const result = await saveDraftChanges(requestId, {
+    version,
+    proposals,
+    ...(assessment === undefined ? {} : { assessment: assessment.input }),
+  });
+  if (result.kind === 'ok') {
+    if (next.success) redirect(`/requests/${requestId}?employee=${next.data}#criteria`);
+    const employee = current.success ? `&employee=${current.data}` : '';
+    redirect(`/requests/${requestId}?saved=1${employee}`);
+  }
   if (result.kind === 'unauthenticated') redirect('/session-ended');
-  if (result.kind === 'unavailable') return { error: 'request.errors.generic', rows };
+  if (result.kind === 'unavailable') return keep('request.errors.generic');
 
   let rowErrors = false;
   for (const detail of result.details) {
@@ -146,8 +212,50 @@ export async function saveDraft(
       rowErrors = true;
     }
   }
-  return {
-    error: rowErrors ? 'request.errors.rowsInvalid' : errorKeyFor(result.code, result.details),
-    rows,
-  };
+  return keep(rowErrors ? 'request.errors.rowsInvalid' : errorKeyFor(result.code, result.details));
+}
+
+export type EvidenceActionResult = { ok: true } | { ok: false; error: EvidenceErrorKey };
+
+const MAX_BYTES = MAX_EVIDENCE_FILE_MB * 1024 * 1024;
+
+/**
+ * "Attach file" under a criterion (R1-04). Called from the client with the chosen file; the
+ * page refreshes afterwards. Size and type are judged again by the API (type from content).
+ */
+export async function uploadEvidenceAction(formData: FormData): Promise<EvidenceActionResult> {
+  const requestId = Id.parse(field(formData, 'requestId'));
+  const lineId = Id.parse(field(formData, 'lineId'));
+  const criterionId = Id.parse(field(formData, 'criterionId'));
+  const file = formData.get('file');
+  if (!(file instanceof File) || file.size === 0) {
+    return { ok: false, error: 'evidence.errors.required' };
+  }
+  if (file.size > MAX_BYTES) return { ok: false, error: 'evidence.errors.tooLarge' };
+  const upload = new FormData();
+  upload.set('lineId', lineId);
+  upload.set('criterionId', criterionId);
+  upload.set('file', file, file.name);
+  const result = await uploadEvidence(requestId, upload);
+  switch (result.kind) {
+    case 'ok':
+      return { ok: true };
+    case 'unauthenticated':
+      return redirect('/session-ended');
+    case 'unavailable':
+      return { ok: false, error: 'evidence.errors.unavailable' };
+    case 'error':
+      return { ok: false, error: evidenceErrorKey(result.status, result.code, result.details) };
+  }
+}
+
+/** The remove button of a file chip: a soft delete, refreshed by the caller. */
+export async function removeEvidenceAction(
+  requestIdInput: string,
+  evidenceIdInput: string,
+): Promise<EvidenceActionResult> {
+  const result = await removeEvidence(Id.parse(requestIdInput), Id.parse(evidenceIdInput));
+  if (result.kind === 'ok') return { ok: true };
+  if (result.kind === 'unauthenticated') return redirect('/session-ended');
+  return { ok: false, error: 'evidence.errors.removeFailed' };
 }

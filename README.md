@@ -7,7 +7,7 @@ Sirius Group HR Digital Transformation Programme — Phase 1, delivered by Infin
 
 Requirements: BRD `SIRIUS-HR-BRD-001` · Scope: SOW `SIRIUS-HR-SOW-P1-001` · Progress: [docs/traceability.md](docs/traceability.md)
 
-> **Current state:** foundation plus sign-in. You sign in with your organisation account (the local Keycloak stands in for Entra ID, pending Sirius IT, A6); the web app shows who you are as confirmed by the API. No business features yet: the data model and module design are awaiting go-ahead.
+> **Current state:** sign-in, and the first R1 slices: subsidiary HR raises a draft increment request, adds employees with a % or amount proposal (S2), and assesses each employee against the eligibility criteria with a justification and evidence files that are type-checked and malware-scanned (S3). Submitting to Sirius HR comes next (S4). The 5 criteria are placeholders until Sirius HR defines them (A1).
 
 ## Local setup (under 10 minutes)
 
@@ -34,7 +34,7 @@ pnpm dev            # web on http://localhost:3000, api on http://localhost:4000
 Check it works:
 
 ```bash
-curl localhost:4000/health/ready     # {"status":"ready","checks":{"database":"up"}}
+curl localhost:4000/health/ready     # {"status":"ready","checks":{"database":"up","object_store":"up","malware_scanner":"up"}}
 curl localhost:4000/api/v1/me        # 401 — no token
 
 # With a token from the local Keycloak (needs ~/sirius/local-infra running):
@@ -43,6 +43,19 @@ curl -H "Authorization: Bearer $TOKEN" localhost:4000/api/v1/me   # 200, reviewe
 ```
 
 Open http://localhost:3000: you are sent to the sign-in screen. Sign in as `pf.reviewer` / `LocalDev-2026` at Keycloak; you come back signed in. `pf.alpha.hr` sees only Subsidiary A and the New Request item; `pf.norole` shows the "no access" screen. Switch the language to العربية to see the RTL layout.
+
+### Evidence files locally
+
+The copied `apps/api/.env` stores evidence under `/tmp/peopleforge-evidence` and skips the malware scan (`MALWARE_SCANNER=none`; refused in UAT and production). To run the real path — an S3-compatible store and ClamAV — start both in Docker, then switch to the commented `s3`/`clamav` values in `apps/api/.env` and restart the API:
+
+```bash
+docker run -d --name peopleforge-s3 -p 9090:9090 \
+  -e COM_ADOBE_TESTING_S3MOCK_STORE_INITIAL_BUCKETS=peopleforge-evidence adobe/s3mock:5.1.0
+docker run -d --name peopleforge-clamav -p 3310:3310 clamav/clamav-debian:1.4
+docker logs -f peopleforge-clamav    # first start downloads signatures: wait for "socket found, clamd started"
+```
+
+MinIO isn't used: the project is archived and no longer publishes images (ADR-010). Uploading a PDF that contains the EICAR test string shows the malware refusal.
 
 ### Database integration tests
 

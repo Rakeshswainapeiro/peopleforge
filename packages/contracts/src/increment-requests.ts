@@ -23,6 +23,28 @@ export type RequestStatus = z.infer<typeof RequestStatusSchema>;
 /** Most employees one request can hold; keeps payloads and screens bounded (ADR-004 to confirm). */
 export const MAX_LINES_PER_REQUEST = 200;
 
+/** Longest justification per criterion (S3 assumption, confirm with Sirius HR). */
+export const MAX_JUSTIFICATION_LENGTH = 2000;
+
+/** Most live evidence files per employee and criterion (S3 assumption, confirm with Sirius HR). */
+export const MAX_EVIDENCE_PER_CRITERION = 5;
+
+/**
+ * Largest evidence file the API accepts, whatever a criterion allows (its limit can only be
+ * lower). Raising it means raising the API and web body limits too (DEPLOYMENT.md).
+ */
+export const MAX_EVIDENCE_FILE_MB = 10;
+
+export const CriterionResultSchema = z.enum(['pass', 'fail']);
+export type CriterionResult = z.infer<typeof CriterionResultSchema>;
+
+export const EvidencePolicySchema = z.enum(['required', 'optional', 'none']);
+export type EvidencePolicy = z.infer<typeof EvidencePolicySchema>;
+
+/** What still stops a criterion counting as complete for an employee (R1-06). */
+export const CriterionMissingSchema = z.enum(['result', 'justification', 'evidence']);
+export type CriterionMissing = z.infer<typeof CriterionMissingSchema>;
+
 // Inputs -----------------------------------------------------------------------------------
 
 export const CreateIncrementRequestSchema = z.strictObject({
@@ -47,12 +69,44 @@ export const ProposalInputSchema = z
     path: ['value'],
   });
 
-export const SetProposalsSchema = z.strictObject({
+export const CriterionInputSchema = z.strictObject({
+  criterionId: z.uuid(),
+  /** Null: not decided yet. */
+  result: CriterionResultSchema.nullable(),
+  /** Empty clears it. NFC-normalised, so Arabic text compares and counts consistently. */
+  justification: z
+    .string()
+    .transform((text) => text.normalize('NFC'))
+    .pipe(z.string().max(MAX_JUSTIFICATION_LENGTH)),
+});
+export type CriterionInput = z.infer<typeof CriterionInputSchema>;
+
+/** PUT …/{id}/draft: proposals for any employees, plus one employee's criteria (R1-02, R1-03). */
+export const SaveDraftSchema = z.strictObject({
   /** The version the client last read; a stale one is refused (optimistic locking). */
   version: z.number().int().min(1),
   proposals: z.array(ProposalInputSchema).max(MAX_LINES_PER_REQUEST),
+  assessment: z
+    .strictObject({
+      lineId: z.uuid(),
+      results: z
+        .array(CriterionInputSchema)
+        .max(10)
+        .refine(
+          (results) => new Set(results.map((r) => r.criterionId)).size === results.length,
+          'duplicate_criterion',
+        ),
+    })
+    .optional(),
 });
-export type SetProposals = z.infer<typeof SetProposalsSchema>;
+export type SaveDraft = z.infer<typeof SaveDraftSchema>;
+
+/** The text fields of POST …/{id}/evidence (multipart/form-data, beside the `file` part). */
+export const EvidenceUploadSchema = z.strictObject({
+  lineId: z.uuid(),
+  criterionId: z.uuid(),
+});
+export type EvidenceUpload = z.infer<typeof EvidenceUploadSchema>;
 
 export const PAGE_SIZES = [10, 25, 50] as const;
 
@@ -92,6 +146,39 @@ export const EmployeeOptionSchema = z.object({
 });
 export type EmployeeOption = z.infer<typeof EmployeeOptionSchema>;
 
+export const CriterionSchema = z.object({
+  id: z.uuid(),
+  code: z.string(),
+  name: LocalisedTextSchema,
+  description: LocalisedTextSchema,
+  justificationRequired: z.boolean(),
+  evidencePolicy: EvidencePolicySchema,
+  /** Media types accepted as evidence, checked against the file's content. */
+  allowedMediaTypes: z.array(z.string()),
+  /** Effective per-file limit: the criterion's, capped at MAX_EVIDENCE_FILE_MB. */
+  maxFileMb: z.number().int().min(1),
+});
+export type Criterion = z.infer<typeof CriterionSchema>;
+
+export const EvidenceFileSchema = z.object({
+  id: z.uuid(),
+  fileName: z.string(),
+  mediaType: z.string(),
+  sizeBytes: z.number().int().min(1),
+  createdAt: z.iso.datetime(),
+});
+export type EvidenceFile = z.infer<typeof EvidenceFileSchema>;
+
+export const CriterionAssessmentSchema = z.object({
+  criterionId: z.uuid(),
+  result: CriterionResultSchema.nullable(),
+  justification: z.string(),
+  evidence: z.array(EvidenceFileSchema),
+  /** Empty when the criterion is complete for this employee (R1-06). */
+  missing: z.array(CriterionMissingSchema),
+});
+export type CriterionAssessment = z.infer<typeof CriterionAssessmentSchema>;
+
 export const RequestLineSchema = z.object({
   id: z.uuid(),
   employeeId: z.uuid(),
@@ -107,6 +194,8 @@ export const RequestLineSchema = z.object({
   increase: DecimalString.nullable(),
   newSalary: DecimalString.nullable(),
   percent: DecimalString.nullable(),
+  /** One per criterion of the request, in the same order as `criteria`. */
+  criteria: z.array(CriterionAssessmentSchema),
 });
 export type RequestLine = z.infer<typeof RequestLineSchema>;
 
@@ -114,6 +203,8 @@ export const RequestTotalsSchema = z.object({
   employees: z.number().int().min(0),
   /** Employees with a proposal. */
   proposed: z.number().int().min(0),
+  /** Employees with a proposal and every criterion complete: ready to submit. */
+  ready: z.number().int().min(0),
   /** Monthly increase summed per currency (subsidiaries may pay in different currencies). */
   increaseByCurrency: z.array(z.object({ currency: z.string().length(3), amount: DecimalString })),
   /** Mean of the employees' increase percentages, 1 decimal; null without proposals. */
@@ -128,7 +219,7 @@ export const IncrementRequestSchema = z.object({
   entity: EntitySummarySchema,
   cycle: CycleSchema.pick({ id: true, name: true }),
   /** The eligibility criteria this request is assessed against (pinned at creation, R1-05). */
-  criteria: z.array(z.object({ id: z.uuid(), code: z.string(), name: LocalisedTextSchema })),
+  criteria: z.array(CriterionSchema),
   version: z.number().int().min(1),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),

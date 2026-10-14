@@ -23,6 +23,7 @@
     "seed": "node --env-file-if-exists=.env dist/cli/seed.js"
   },
   "dependencies": {
+    "@peopleforge/contracts": "workspace:*",
     "kysely": "0.29.6",
     "pg": "8.23.1",
     "zod": "4.6.5"

@@ -2,13 +2,13 @@ import { getProviderAccessToken } from '@sirius/auth-better';
 import { headers } from 'next/headers';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
-import { apiRequest, fetchMe } from './api-client';
+import { apiDownload, apiRequest, fetchMe } from './api-client';
 import { getAuth } from './auth';
-import { callApi, currentSession, currentViewer, requireViewer } from './session';
+import { callApi, currentSession, currentViewer, downloadFromApi, requireViewer } from './session';
 
 vi.mock('next/headers', () => ({ headers: vi.fn() }));
 vi.mock('@sirius/auth-better', () => ({ getProviderAccessToken: vi.fn() }));
-vi.mock('./api-client', () => ({ fetchMe: vi.fn(), apiRequest: vi.fn() }));
+vi.mock('./api-client', () => ({ fetchMe: vi.fn(), apiRequest: vi.fn(), apiDownload: vi.fn() }));
 vi.mock('./auth', () => ({ getAuth: vi.fn() }));
 vi.mock('next/navigation', () => ({
   redirect: vi.fn((url: string) => {
@@ -117,5 +117,20 @@ describe('callApi', () => {
   it('reports a session without a usable token as unauthenticated', async () => {
     vi.mocked(getProviderAccessToken).mockResolvedValue(null);
     await expect(callApi('/x', z.object({}))).resolves.toEqual({ kind: 'unauthenticated' });
+  });
+});
+
+describe('downloadFromApi', () => {
+  it('downloads with the user’s access token, or reports the session unusable', async () => {
+    vi.mocked(getProviderAccessToken).mockResolvedValue('eyJ.token');
+    vi.mocked(apiDownload).mockResolvedValue({ kind: 'not_found' });
+    await expect(downloadFromApi('/api/v1/f')).resolves.toEqual({ kind: 'not_found' });
+    expect(apiDownload).toHaveBeenCalledWith(
+      { apiUrl: 'http://api.test', timeoutMs: 2000 },
+      'eyJ.token',
+      '/api/v1/f',
+    );
+    vi.mocked(getProviderAccessToken).mockResolvedValue(null);
+    await expect(downloadFromApi('/x')).resolves.toEqual({ kind: 'unauthenticated' });
   });
 });

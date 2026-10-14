@@ -30,6 +30,7 @@ export {
   type CriterionState,
 } from './components/criteria-progress.js';
 export { EmptyState, type EmptyStateProps } from './components/empty-state.js';
+export { FileChip, type FileChipProps } from './components/file-chip.js';
 export {
   Field,
   Input,
@@ -54,6 +55,7 @@ export {
 export {
   SegmentedChoice,
   type ChoiceOption,
+  type ChoiceTone,
   type SegmentedChoiceProps,
 } from './components/segmented-choice.js';
 export { Skeleton, Spinner } from './components/spinner.js';

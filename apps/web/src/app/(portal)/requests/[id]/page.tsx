@@ -1,13 +1,26 @@
+import { MAX_JUSTIFICATION_LENGTH } from '@peopleforge/contracts';
 import { Alert, Button, Card, CardHeader, PageHeader } from '@peopleforge/ui';
 import { notFound, redirect } from 'next/navigation';
 import { z } from 'zod';
 import { AddEmployeeForm } from '@/components/requests/add-employee-form';
+import { CriteriaEditor } from '@/components/requests/criteria-editor';
+import { DraftForm } from '@/components/requests/draft-form';
 import { ProposalsTable } from '@/components/requests/proposals-table';
+import { ReadyPanel } from '@/components/requests/ready-panel';
 import { getRequestLocale } from '@/i18n/request-locale';
 import { createTranslator } from '@/i18n/translator';
 import { hasAnyPermission } from '@/lib/navigation';
 import { parseErrorKey } from '@/lib/request-errors';
-import { proposalRows, saveMessages, tableLabels, totalsView } from '@/lib/request-view';
+import {
+  criteriaCards,
+  criteriaLabels,
+  evidenceMessages,
+  proposalRows,
+  readyView,
+  saveMessages,
+  tableLabels,
+  totalsView,
+} from '@/lib/request-view';
 import { entityName, roleLabel } from '@/lib/viewer-display';
 import { getRequest, searchEmployees } from '@/server/increment-requests';
 import { requireViewer } from '@/server/session';
@@ -15,12 +28,16 @@ import { addEmployeeAction } from '../actions';
 
 interface RequestPageProps {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ saved?: string; error?: string }>;
+  searchParams: Promise<{ saved?: string; error?: string; employee?: string }>;
 }
 
-const FORM_ID = 'proposals-form';
+const FORM_ID = 'draft-form';
 
-/** A draft increment request: employees, proposed increments and totals (R1-02). */
+/**
+ * A draft increment request (Figma "New increment request"): 1. employees and proposed
+ * increments (R1-02), 2. the criteria of one employee at a time (R1-03, R1-04, R1-06),
+ * 3. who is ready to submit.
+ */
 export default async function RequestPage({ params, searchParams }: RequestPageProps) {
   const me = await requireViewer();
   if (me === null) return null;
@@ -42,9 +59,18 @@ export default async function RequestPage({ params, searchParams }: RequestPageP
   const entity = entityName(request.entity, locale);
   const totals = totalsView(request, locale, t);
   const error = parseErrorKey(query.error);
+  // The employee being assessed: the one asked for, else the first.
+  const selected = request.lines.find((line) => line.id === query.employee) ?? request.lines.at(0);
 
   return (
-    <>
+    <DraftForm
+      formId={FORM_ID}
+      requestId={request.id}
+      version={request.version}
+      employee={selected?.id}
+      editable={editable}
+      saveLabel={t('request.saveDraft')}
+    >
       <PageHeader
         eyebrow={t('request.draftEyebrow', {
           role: t(roleLabel(me.roles)),
@@ -88,12 +114,10 @@ export default async function RequestPage({ params, searchParams }: RequestPageP
         />
         <div className="px-6 pt-4 pb-6">
           <ProposalsTable
-            // A new version (after a save) starts the form afresh.
+            // A new version (after a save) starts the fields afresh.
             key={request.version}
-            formId={FORM_ID}
-            requestId={request.id}
-            version={request.version}
             editable={editable}
+            selectedLineId={selected?.id}
             rows={proposalRows(request, locale, t)}
             labels={tableLabels(t)}
             messages={saveMessages(t)}
@@ -120,6 +144,45 @@ export default async function RequestPage({ params, searchParams }: RequestPageP
           />
         </div>
       </Card>
-    </>
+      {editable && selected !== undefined ? (
+        <Card className="mt-6 scroll-mt-6" label={t('request.criteriaSection')}>
+          <div id="criteria" className="scroll-mt-6">
+            <CardHeader
+              title={t('request.criteriaSection')}
+              description={t('request.criteriaHint')}
+              actions={
+                <p className="text-sm font-semibold text-ink" data-testid="assessed-employee">
+                  {t('request.criteriaFor', {
+                    name: selected.fullName,
+                    employeeNumber: selected.employeeNumber,
+                  })}
+                </p>
+              }
+            />
+          </div>
+          <div className="px-6 pt-4 pb-6">
+            <CriteriaEditor
+              // Afresh after a save, and for each employee.
+              key={`${String(request.version)}:${selected.id}`}
+              requestId={request.id}
+              lineId={selected.id}
+              criteria={criteriaCards(request, selected, locale, t)}
+              labels={criteriaLabels(locale, t)}
+              maxJustification={MAX_JUSTIFICATION_LENGTH}
+              messages={evidenceMessages(t)}
+            />
+            <p className="mt-4 text-xs text-ink-subtle">{t('request.criteriaSaveHint')}</p>
+          </div>
+        </Card>
+      ) : null}
+      {editable ? (
+        <Card className="mt-6" label={t('request.readySection')}>
+          <CardHeader title={t('request.readySection')} />
+          <div className="px-6 pt-4 pb-6">
+            <ReadyPanel {...readyView(request, locale, t)} />
+          </div>
+        </Card>
+      ) : null}
+    </DraftForm>
   );
 }

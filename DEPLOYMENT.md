@@ -1,6 +1,6 @@
 # Deployment Guide — PeopleForge
 
-> **Status (2026-10-13): foundation + sign-in + core data model (slice S1).** Hosting, identity provider, email provider and malware scanner are pending Sirius IT (BRD assumption A6). Sections marked **TBC (A6)** are completed when ADR-001 is accepted. Everything else is current and must be kept in sync with the code: any change that adds an env var, service, port, migration or dependency updates this file in the same PR.
+> **Status (2026-10-14): slices S1–S3 (foundation, increment request drafts, criteria and evidence).** Hosting, identity provider, email provider, object store and malware scanner products are pending Sirius IT (BRD assumption A6). Sections marked **TBC (A6)** are completed when ADR-001 is accepted. Everything else is current and must be kept in sync with the code: any change that adds an env var, service, port, migration or dependency updates this file in the same PR.
 
 ## 1. Architecture overview
 
@@ -10,16 +10,16 @@ Browser ──HTTPS──▶ Load balancer / WAF ──▶ web (Next.js, :3000)
                                                  worker (queues, schedules) ──▶ same dependencies
 ```
 
-| Component        | Image                         | Port              | Depends on        | Status                 |
-| ---------------- | ----------------------------- | ----------------- | ----------------- | ---------------------- |
-| web              | `infra/docker/web.Dockerfile` | 3000              | api, PostgreSQL   | Built                  |
-| api              | `infra/docker/api.Dockerfile` | 4000              | PostgreSQL, IdP   | Built                  |
-| worker           | —                             | none (no inbound) | Redis, PostgreSQL | Planned (R1-13)        |
-| PostgreSQL 16+   | managed                       | 5432              | —                 | Required (ADR-002)     |
-| Redis            | managed                       | 6379              | —                 | Planned                |
-| Object storage   | S3-compatible                 | 443               | —                 | Planned (R1-04, R2-01) |
-| Email (SMTP/API) | provider                      | 587/443           | —                 | TBC (A6)               |
-| Malware scanner  | e.g. ClamAV sidecar           | 3310              | —                 | TBC (A6)               |
+| Component        | Image                               | Port                      | Depends on                                       | Status                                       |
+| ---------------- | ----------------------------------- | ------------------------- | ------------------------------------------------ | -------------------------------------------- |
+| web              | `infra/docker/web.Dockerfile`       | 3000                      | api, PostgreSQL                                  | Built                                        |
+| api              | `infra/docker/api.Dockerfile`       | 4000                      | PostgreSQL, IdP, object storage, malware scanner | Built                                        |
+| worker           | —                                   | none (no inbound)         | Redis, PostgreSQL                                | Planned (R1-13)                              |
+| PostgreSQL 16+   | managed                             | 5432                      | —                                                | Required (ADR-002)                           |
+| Redis            | managed                             | 6379                      | —                                                | Planned                                      |
+| Object storage   | S3-compatible, private bucket       | 443                       | —                                                | Required (R1-04; ADR-010) — product TBC (A6) |
+| Email (SMTP/API) | provider                            | 587/443                   | —                                                | TBC (A6)                                     |
+| Malware scanner  | ClamAV `clamd` (sidecar or service) | 3310 (TCP, internal only) | signature updates (freshclam)                    | Required (R1-04; ADR-010)                    |
 
 All components, backups and logs must run in the approved region (assumed UAE).
 
@@ -95,10 +95,25 @@ Validated at startup; the API exits with code 1 and lists the offending **key na
 | `DATABASE_POOL_MAX` | Connection pool size per replica | No | `10` | `10` | Deployment config |
 | `DATA_ENCRYPTION_KEYS` | Salary field keys, `id:base64-32-bytes,…` (ADR-008): the API encrypts and decrypts salaries and proposals. Must include every key the data was written with | Yes | — | `2026-10:…` | Secrets manager (KMS-backed, A6) |
 | `DATA_ENCRYPTION_ACTIVE_KEY` | Key ID used for new writes | Yes | — | `2026-10` | Secrets manager |
+| `OBJECT_STORE_DRIVER` | `s3` (any S3-compatible store), or `filesystem` for dev/test only. **`s3` only in `uat`/`prod`** | Yes | — | `s3` | Deployment config |
+| `OBJECT_STORE_DIR` | Directory for the `filesystem` driver (dev/test) | With `filesystem` | — | `/tmp/peopleforge-evidence` | Deployment config |
+| `OBJECT_STORE_TIMEOUT_MS` | Timeout per storage call (connect ≤ 3 s); the SDK retries up to 3 attempts with backoff, behind a circuit breaker | No | `10000` | `10000` | Deployment config |
+| `S3_ENDPOINT` | Endpoint of an S3-compatible store; empty for AWS S3 itself. **HTTPS-only in `uat`/`prod`** | No | — | `https://objects.<region-provider>` | Deployment config |
+| `S3_REGION` | Region of the bucket (must be the approved region) | With `s3` | — | `me-central-1` | Deployment config |
+| `S3_BUCKET` | Private bucket for evidence files: no public access, versioning on, default encryption on | With `s3` | — | `peopleforge-evidence-prod` | Deployment config |
+| `S3_ACCESS_KEY_ID` | Credentials limited to `s3:PutObject`, `GetObject`, `DeleteObject`, `ListBucket` (for `HeadBucket`) on that bucket | With `s3` | — | — | Secrets manager |
+| `S3_SECRET_ACCESS_KEY` | As above | With `s3` | — | — | Secrets manager |
+| `S3_FORCE_PATH_STYLE` | Path-style URLs; most S3-compatible stores need `true` | No | `true` | `true` | Deployment config |
+| `MALWARE_SCANNER` | `clamav`, or `none` for local development only (files recorded with engine `none`). **`clamav` only in `uat`/`prod`** | Yes | — | `clamav` | Deployment config |
+| `CLAMAV_HOST` | clamd host (TCP) | With `clamav` | — | `clamav` | Deployment config |
+| `CLAMAV_PORT` | clamd port | No | `3310` | `3310` | Deployment config |
+| `CLAMAV_TIMEOUT_MS` | Timeout per scan; a timeout refuses the upload with 503 (nothing is stored) | No | `15000` | `15000` | Deployment config |
 
-The API holds **no identity secret**: it only verifies tokens against the provider's published public keys. Its database password comes from the secrets manager. Redis and storage credentials will be added the same way.
+The API holds **no identity secret**: it only verifies tokens against the provider's published public keys. Its database password and storage credentials come from the secrets manager.
 
-**Readiness:** `/health/ready` includes a `database` check (one `SELECT 1`); a replica without a database connection is taken out of rotation.
+**Readiness:** `/health/ready` checks `database` (one `SELECT 1`), `object_store` (`HeadBucket`, or the directory for `filesystem`) and `malware_scanner` (clamd `PING`). A replica that can't reach any of them is taken out of rotation, because it couldn't accept evidence uploads (R1-04).
+
+**Uploads (R1-04, ADR-010):** evidence files reach the API as `multipart/form-data` of at most 10 MB per file (`MAX_EVIDENCE_FILE_MB`, a criterion can only lower it). They are held in memory — never on the API's disk — checked by content type, scanned by clamd, then written to the bucket under a random key. Size the API's memory for concurrent uploads (10 MB each, plus the copy sent to clamd). Any reverse proxy or ingress in front of **web** must accept request bodies of **11 MB** (e.g. nginx `client_max_body_size 11m;`), and in front of **api** likewise; Next.js itself is configured for 11 MB (`next.config.ts`). clamd's `StreamMaxLength` must be ≥ 10 MB (default 25 MB). Downloads stream through the API after an authorisation check: the bucket is never reachable from a browser. The web app waits up to 60 s for an upload's answer (send, check, scan); load balancer idle timeouts on the web and api paths must be at least that.
 
 **Network:** the API must reach `OIDC_ISSUER` over HTTPS (egress to `login.microsoftonline.com` for Entra ID). If it can't, signed-in requests get 503 and a warning is logged.
 
@@ -228,7 +243,7 @@ Recommended probes: liveness every 15 s, failure threshold 3; readiness every 5 
 TBC (A6), proposed targets for agreement:
 
 - PostgreSQL: continuous WAL archiving + daily snapshots, 35-day retention, in-region; quarterly restore test.
-- Object storage: versioning enabled; cross-zone replication within the region.
+- Object storage (evidence files, ADR-010): versioning enabled; cross-zone replication within the region; same retention as the database rows that reference them. Removing a file in the app is a soft delete: the object stays until the retention rule (Q10) is agreed and a purge job exists.
 - RPO ≤ 15 min, RTO ≤ 4 business hours.
 - DR runbook: `docs/runbooks/` (to be written with ADR-001 hosting). Salary data keys (ADR-008) must be restorable with the database: a backup without its keys is unreadable.
 
@@ -237,7 +252,8 @@ TBC (A6), proposed targets for agreement:
 - [ ] `GET /health/live` and `/health/ready` return 200 on every API replica.
 - [ ] `GET /api/v1/me` without a session returns 401 in the standard error shape with `X-Request-Id`.
 - [ ] Home page loads over HTTPS; response has `Content-Security-Policy` with a `nonce-` and `Strict-Transport-Security`.
-- [ ] `GET /health/ready` shows `"database":"up"`.
+- [ ] `GET /health/ready` shows `"database":"up"`, `"object_store":"up"` and `"malware_scanner":"up"`.
+- [ ] On a draft: attach a small PDF to a criterion → it appears and downloads; attaching the EICAR test file (inside a PDF) is refused by the malware scan.
 - [ ] As a Subsidiary HR test user: New Request → add an employee → the draft opens with their current salary; save a 5% proposal and see the new monthly salary.
 - [ ] Signing in as a Subsidiary HR test user shows only their subsidiary in the sidebar; a Sirius HR user sees "All subsidiaries".
 - [ ] Language switch to العربية sets `<html dir="rtl">`, and back.
@@ -251,16 +267,19 @@ TBC (A6), proposed targets for agreement:
 
 ## 12. Troubleshooting
 
-| Symptom                                                                                                                          | Likely cause                                                                                                                                                                   | Action                                                                                            |
-| -------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
-| API exits immediately with `Invalid or missing environment variables: …` (e.g. `DATA_ENCRYPTION_KEYS (Key k1 must be 32 bytes)`) | Config validation failed                                                                                                                                                       | Fix the listed keys (§4)                                                                          |
-| Browser shows CORS errors                                                                                                        | Web origin not in `CORS_ALLOWED_ORIGINS`                                                                                                                                       | Add the exact origin (scheme + host + port)                                                       |
-| All clients rate-limited at once                                                                                                 | `TRUST_PROXY_HOPS` wrong, so every request appears to come from the proxy IP                                                                                                   | Set it to the number of proxies in front of the API                                               |
-| Readiness flaps during deploys                                                                                                   | Grace period shorter than `SHUTDOWN_TIMEOUT_MS`                                                                                                                                | Increase the grace period                                                                         |
-| Outbound connections to `telemetry.vercel.com`                                                                                   | Telemetry not disabled in a custom image                                                                                                                                       | Set `NEXT_TELEMETRY_DISABLED=1`                                                                   |
-| Build fails with `ERR_PNPM_FETCH_401` / `404` on `@sirius/…`                                                                     | Registry token missing, wrong host in the token line, or package not published                                                                                                 | Check the `npmrc` build secret and `SIRIUS_REGISTRY` (§3); publish from js-platform               |
-| `/api/v1/*` returns 401 with a valid-looking token                                                                               | The API log line `Access token rejected` gives the reason: `wrong_audience` (token not issued for `OIDC_AUDIENCE`), `wrong_issuer`, `wrong_tenant`, `expired`, `bad_signature` | Fix the app registration or the `OIDC_*` values; never log the token itself                       |
-| Signed-in requests return 503 `SERVICE_UNAVAILABLE`                                                                              | The API can't load the identity provider's discovery document or keys                                                                                                          | Check egress/DNS to `OIDC_ISSUER`, and that `OIDC_ISSUER` matches the provider's `issuer` exactly |
-| `/health/ready` reports `"database":"down"`                                                                                      | Wrong `DATABASE_URL`, network policy, or the database is down                                                                                                                  | Check connectivity from the pod; the password is in the secrets manager                           |
-| Subsidiary HR user signs in but sees "No subsidiary assigned"                                                                    | No row in `core.user_entity` for their Entra object ID                                                                                                                         | Assign them (admin screen, later slice); locally: the seed assigns `pf.alpha.hr`/`pf.beta.hr`     |
-| `/api/v1/*` returns 401 without a token                                                                                          | Expected: every `/api/v1` route needs `Authorization: Bearer <access token>`                                                                                                   | Sign in through the web app, or use `scripts/token.sh` in local-infra                             |
+| Symptom                                                                                                                          | Likely cause                                                                                                                                                                   | Action                                                                                                        |
+| -------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
+| API exits immediately with `Invalid or missing environment variables: …` (e.g. `DATA_ENCRYPTION_KEYS (Key k1 must be 32 bytes)`) | Config validation failed                                                                                                                                                       | Fix the listed keys (§4)                                                                                      |
+| Browser shows CORS errors                                                                                                        | Web origin not in `CORS_ALLOWED_ORIGINS`                                                                                                                                       | Add the exact origin (scheme + host + port)                                                                   |
+| All clients rate-limited at once                                                                                                 | `TRUST_PROXY_HOPS` wrong, so every request appears to come from the proxy IP                                                                                                   | Set it to the number of proxies in front of the API                                                           |
+| Readiness flaps during deploys                                                                                                   | Grace period shorter than `SHUTDOWN_TIMEOUT_MS`                                                                                                                                | Increase the grace period                                                                                     |
+| Outbound connections to `telemetry.vercel.com`                                                                                   | Telemetry not disabled in a custom image                                                                                                                                       | Set `NEXT_TELEMETRY_DISABLED=1`                                                                               |
+| Build fails with `ERR_PNPM_FETCH_401` / `404` on `@sirius/…`                                                                     | Registry token missing, wrong host in the token line, or package not published                                                                                                 | Check the `npmrc` build secret and `SIRIUS_REGISTRY` (§3); publish from js-platform                           |
+| `/api/v1/*` returns 401 with a valid-looking token                                                                               | The API log line `Access token rejected` gives the reason: `wrong_audience` (token not issued for `OIDC_AUDIENCE`), `wrong_issuer`, `wrong_tenant`, `expired`, `bad_signature` | Fix the app registration or the `OIDC_*` values; never log the token itself                                   |
+| Signed-in requests return 503 `SERVICE_UNAVAILABLE`                                                                              | The API can't load the identity provider's discovery document or keys                                                                                                          | Check egress/DNS to `OIDC_ISSUER`, and that `OIDC_ISSUER` matches the provider's `issuer` exactly             |
+| `/health/ready` reports `"database":"down"`                                                                                      | Wrong `DATABASE_URL`, network policy, or the database is down                                                                                                                  | Check connectivity from the pod; the password is in the secrets manager                                       |
+| `/health/ready` reports `"object_store":"down"`                                                                                  | Bucket missing, wrong `S3_*` values, credentials without `ListBucket`, or the store unreachable                                                                                | Check the API log line `Dependency unavailable` (it names the SDK error, e.g. `NoSuchBucket`, `AccessDenied`) |
+| `/health/ready` reports `"malware_scanner":"down"`, or uploads fail with "Files can't be handled right now"                      | clamd not running, still loading signatures (first start takes minutes), or `CLAMAV_HOST`/`CLAMAV_PORT` wrong                                                                  | `echo PING \| nc <host> 3310` should answer `PONG`; wait for freshclam on first start                         |
+| An upload fails with "That file is too large" below 10 MB, or the browser shows a network error                                  | A proxy in front of web or api limits request bodies                                                                                                                           | Raise it to 11 MB (§4, Uploads)                                                                               |
+| Subsidiary HR user signs in but sees "No subsidiary assigned"                                                                    | No row in `core.user_entity` for their Entra object ID                                                                                                                         | Assign them (admin screen, later slice); locally: the seed assigns `pf.alpha.hr`/`pf.beta.hr`                 |
+| `/api/v1/*` returns 401 without a token                                                                                          | Expected: every `/api/v1` route needs `Authorization: Bearer <access token>`                                                                                                   | Sign in through the web app, or use `scripts/token.sh` in local-infra                                         |

@@ -1,5 +1,6 @@
 import type { FieldCryptoError } from '@peopleforge/db';
 import { createFieldCipher, parseKeyRing, type FieldCipher } from '@peopleforge/db';
+import { integrationsEnvIssues, integrationsEnvShape } from '@peopleforge/integrations';
 import { identityEnvShape } from '@sirius/identity';
 import { LOG_LEVELS } from '@sirius/utils';
 import { z } from 'zod';
@@ -14,6 +15,9 @@ const EnvSchema = z
     // OIDC_ISSUER, OIDC_AUDIENCE, OIDC_TENANT_ID, OIDC_ALLOW_HTTP, OIDC_TIMEOUT_MS — shared
     // with every Sirius API (@sirius/identity).
     ...identityEnvShape,
+    // OBJECT_STORE_*, S3_*, MALWARE_SCANNER, CLAMAV_* — evidence files (R1-04), shared with the
+    // worker (@peopleforge/integrations).
+    ...integrationsEnvShape,
     APP_ENV: z.enum(APP_ENVS),
     // The app role (data access only, no DDL): migrations use the owner, never the API (ADR-002).
     DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/ }),
@@ -41,9 +45,14 @@ const EnvSchema = z
     SHUTDOWN_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(120_000).default(25_000),
   })
   .superRefine((env, ctx) => {
+    const strict = env.APP_ENV === 'uat' || env.APP_ENV === 'prod';
+    // Local-disk storage and unscanned uploads are for development only.
+    for (const issue of integrationsEnvIssues(env, strict)) {
+      ctx.addIssue({ code: 'custom', path: [issue.key], message: issue.message });
+    }
     // UAT and production must only ever accept HTTPS origins from an explicit allow-list,
     // and must only talk to the identity provider over HTTPS.
-    if (env.APP_ENV === 'uat' || env.APP_ENV === 'prod') {
+    if (strict) {
       if (env.OIDC_ALLOW_HTTP || !env.OIDC_ISSUER.startsWith('https://')) {
         ctx.addIssue({ code: 'custom', path: ['OIDC_ISSUER'], message: 'https only' });
       }

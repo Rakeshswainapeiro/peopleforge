@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: PeopleForge API
-  version: 0.4.0
+  version: 0.5.0
   description: >
     Phase 1 API (BRD SIRIUS-HR-BRD-001). Every /api/v1 route requires an access token from the
     Sirius identity provider (Microsoft Entra ID; Keycloak locally) sent as
@@ -211,15 +211,19 @@ paths:
                       - { $ref: '#/components/schemas/IncrementRequest' }
                       - { type: 'null' }
         '404': { $ref: '#/components/responses/NotFound' }
-  /api/v1/increment-requests/{id}/proposals:
+  /api/v1/increment-requests/{id}/draft:
     put:
       tags: [increment-requests]
-      summary: Save proposed increments for the draft's employees, all or nothing
+      summary: Save draft — proposals, and optionally one employee's criteria, all or nothing (R1-02, R1-03)
       description: >
-        `version` must be the version last read (409 if the draft changed). A value is a decimal
-        string with up to 2 decimals: a percentage (above 0, at most 100) or a monthly amount (above
-        0, at most the current salary). `kind` and `value` both null clear a proposal. Refusals name
-        the field, e.g. `proposals.2.value` with code `over_limit` or `not_positive`.
+        `version` must be the version last read (409 if the draft changed). A proposal value is a
+        decimal string with up to 2 decimals: a percentage (above 0, at most 100) or a monthly
+        amount (above 0, at most the current salary); `kind` and `value` both null clear it.
+        `assessment` saves one employee's criteria: a result (`pass`, `fail` or null) and a
+        justification (≤ 2,000 characters; empty clears it) per criterion of the request's set.
+        Refusals name the field, e.g. `proposals.2.value` (`over_limit`, `not_positive`),
+        `assessment.lineId` or `assessment.results.1.criterionId` (`not_found`).
+        Replaces `PUT …/proposals` (never released).
       parameters: [{ $ref: '#/components/parameters/RequestId' }]
       requestBody:
         required: true
@@ -242,6 +246,24 @@ paths:
                       lineId: { type: string, format: uuid }
                       kind: { type: [string, 'null'], enum: [percent, amount, null] }
                       value: { $ref: '#/components/schemas/NullableDecimal' }
+                assessment:
+                  type: object
+                  additionalProperties: false
+                  required: [lineId, results]
+                  properties:
+                    lineId: { type: string, format: uuid }
+                    results:
+                      type: array
+                      maxItems: 10
+                      description: Each criterion at most once
+                      items:
+                        type: object
+                        additionalProperties: false
+                        required: [criterionId, result, justification]
+                        properties:
+                          criterionId: { type: string, format: uuid }
+                          result: { type: [string, 'null'], enum: [pass, fail, null] }
+                          justification: { type: string, maxLength: 2000 }
       responses:
         '200':
           description: The updated request
@@ -251,6 +273,75 @@ paths:
         '400': { $ref: '#/components/responses/ValidationFailed' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/increment-requests/{id}/evidence:
+    post:
+      tags: [increment-requests]
+      summary: Attach an evidence file to one employee's criterion (R1-04, ADR-010)
+      description: >
+        Needs `increment_request:create`; drafts only. The file is checked in this order and
+        stored only if every check passes: employee and criterion in the request, criterion
+        accepts files, at most 5 live files, size (at most 10 MB or the criterion's lower
+        limit; 413), type detected from the content and in the criterion's list
+        (`file`/`media_type`), malware scan (`file`/`infected`). Scanner or storage unavailable:
+        503, nothing stored. Doesn't change the request's `version`.
+      parameters: [{ $ref: '#/components/parameters/RequestId' }]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [lineId, criterionId, file]
+              properties:
+                lineId: { type: string, format: uuid }
+                criterionId: { type: string, format: uuid }
+                file:
+                  { type: string, format: binary, description: 'One file; the name may be UTF-8' }
+      responses:
+        '201':
+          description: The recorded file
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EvidenceFile' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '503': { $ref: '#/components/responses/IdentityProviderUnavailable' }
+  /api/v1/increment-requests/{id}/evidence/{evidenceId}:
+    get:
+      tags: [increment-requests]
+      summary: Download an evidence file (always an attachment; re-checks access every time)
+      parameters:
+        - { $ref: '#/components/parameters/RequestId' }
+        - { name: evidenceId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: >
+            The file, with its detected `Content-Type`, `Content-Disposition: attachment`
+            (`filename*` in UTF-8), `Cache-Control: private, no-store` and
+            `X-Content-Type-Options: nosniff`
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '503': { $ref: '#/components/responses/IdentityProviderUnavailable' }
+    delete:
+      tags: [increment-requests]
+      summary: Remove an evidence file from a draft (soft delete)
+      parameters:
+        - { $ref: '#/components/parameters/RequestId' }
+        - { name: evidenceId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '204': { description: Removed }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
 security:
   - bearer: []
 components:
@@ -270,7 +361,7 @@ components:
       schema: { type: string }
   responses:
     IdentityProviderUnavailable:
-      description: A dependency is unavailable (identity provider signing keys or the database); retry later
+      description: A dependency is unavailable (identity provider signing keys, the database, object storage or the malware scanner); retry later
       content:
         application/json:
           schema: { $ref: '#/components/schemas/ApiError' }
@@ -296,7 +387,12 @@ components:
         application/json:
           schema: { $ref: '#/components/schemas/ApiError' }
     Conflict:
-      description: Stale `version`, duplicate employee, or no active criteria set
+      description: Stale `version`, duplicate employee, no active criteria set, or the criterion's file limit reached (`file`/`limit`)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiError' }
+    PayloadTooLarge:
+      description: Body or file over the limit
       content:
         application/json:
           schema: { $ref: '#/components/schemas/ApiError' }
@@ -351,6 +447,7 @@ components:
           increase,
           newSalary,
           percent,
+          criteria,
         ]
       properties:
         id: { type: string, format: uuid }
@@ -365,9 +462,69 @@ components:
         increase: { $ref: '#/components/schemas/NullableDecimal' }
         newSalary: { $ref: '#/components/schemas/NullableDecimal' }
         percent: { $ref: '#/components/schemas/NullableDecimal' }
+        criteria:
+          type: array
+          description: One per criterion of the request, in the same order as the request's `criteria`
+          items: { $ref: '#/components/schemas/CriterionAssessment' }
+    Criterion:
+      type: object
+      required:
+        [
+          id,
+          code,
+          name,
+          description,
+          justificationRequired,
+          evidencePolicy,
+          allowedMediaTypes,
+          maxFileMb,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: string, example: C1 }
+        name: { $ref: '#/components/schemas/LocalisedText' }
+        description: { $ref: '#/components/schemas/LocalisedText' }
+        justificationRequired: { type: boolean }
+        evidencePolicy: { type: string, enum: [required, optional, none] }
+        allowedMediaTypes: { type: array, items: { type: string }, example: [application/pdf] }
+        maxFileMb: { type: integer, description: "Effective limit: the criterion's, capped at 10" }
+    EvidenceFile:
+      type: object
+      required: [id, fileName, mediaType, sizeBytes, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        fileName: { type: string }
+        mediaType: { type: string }
+        sizeBytes: { type: integer, minimum: 1 }
+        createdAt: { type: string, format: date-time }
+    CriterionAssessment:
+      type: object
+      required: [criterionId, result, justification, evidence, missing]
+      properties:
+        criterionId: { type: string, format: uuid }
+        result: { type: [string, 'null'], enum: [pass, fail, null] }
+        justification: { type: string }
+        evidence: { type: array, items: { $ref: '#/components/schemas/EvidenceFile' } }
+        missing:
+          type: array
+          description: What still stops the criterion counting as complete (R1-06); empty when complete
+          items: { type: string, enum: [result, justification, evidence] }
     IncrementRequest:
       type: object
-      required: [id, reference, status, entity, cycle, version, createdAt, updatedAt, lines, totals]
+      required:
+        [
+          id,
+          reference,
+          status,
+          entity,
+          cycle,
+          criteria,
+          version,
+          createdAt,
+          updatedAt,
+          lines,
+          totals,
+        ]
       properties:
         id: { type: string, format: uuid }
         reference: { type: string, example: INC-2026-0001 }
@@ -379,16 +536,23 @@ components:
           properties:
             id: { type: string, format: uuid }
             name: { $ref: '#/components/schemas/LocalisedText' }
+        criteria:
+          type: array
+          description: The criteria set pinned when the request was created (R1-05), in display order
+          items: { $ref: '#/components/schemas/Criterion' }
         version: { type: integer, minimum: 1 }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
         lines: { type: array, items: { $ref: '#/components/schemas/RequestLine' } }
         totals:
           type: object
-          required: [employees, proposed, increaseByCurrency, averagePercent]
+          required: [employees, proposed, ready, increaseByCurrency, averagePercent]
           properties:
             employees: { type: integer }
             proposed: { type: integer }
+            ready:
+              type: integer
+              description: Employees with a proposal and every criterion complete
             increaseByCurrency:
               type: array
               items:

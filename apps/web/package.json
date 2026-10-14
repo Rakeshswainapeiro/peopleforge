@@ -34,6 +34,7 @@
   },
   "devDependencies": {
     "@next/eslint-plugin-next": "16.3.8",
+    "@peopleforge/integrations": "workspace:*",
     "@playwright/test": "1.63.0",
     "@sirius/config": "0.1.0",
     "@sirius/identity": "0.2.0",

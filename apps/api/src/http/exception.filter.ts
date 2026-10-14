@@ -51,8 +51,10 @@ function mapHttpException(error: HttpException): Mapped {
       return { status: 401, code: 'UNAUTHENTICATED' };
     case 403: // Forbidden
       return { status: 403, code: 'FORBIDDEN' };
-    case 400: // Bad Request
+    case 400: // Bad Request (e.g. a malformed multipart upload)
       return { status: 400, code: 'VALIDATION_FAILED' };
+    case 413: // Payload Too Large (an upload over the multipart file limit)
+      return { status: 413, code: 'PAYLOAD_TOO_LARGE' };
     case 503: // Service Unavailable (e.g. identity provider unreachable)
       return { status: 503, code: 'SERVICE_UNAVAILABLE' };
     default:

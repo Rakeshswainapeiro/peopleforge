@@ -14,3 +14,4 @@ export interface ShutdownState {
 
 export const ENTITY_DIRECTORY = Symbol('ENTITY_DIRECTORY');
 export const INCREMENT_REQUEST_SERVICE = Symbol('INCREMENT_REQUEST_SERVICE');
+export const EVIDENCE_SERVICE = Symbol('EVIDENCE_SERVICE');

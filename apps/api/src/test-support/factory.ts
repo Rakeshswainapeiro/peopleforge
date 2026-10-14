@@ -3,6 +3,7 @@ import type { NestExpressApplication } from '@nestjs/platform-express';
 import { pino, type Logger } from 'pino';
 import { ApiErrorSchema, type ApiError } from '@sirius/shared-types';
 import type { EntityDirectory, IncrementRequestRepository } from '@peopleforge/db';
+import type { MalwareScanner, ObjectStore } from '@peopleforge/integrations';
 import type { Principal } from '../auth/principal.js';
 import type { AppDependencies } from '../bootstrap/app.module.js';
 import { createApp } from '../bootstrap/create-app.js';
@@ -36,6 +37,10 @@ export function testEnv(overrides: Record<string, string> = {}): Env {
     DATABASE_URL: 'postgres://peopleforge_app@localhost:5432/peopleforge_test',
     DATA_ENCRYPTION_KEYS: `test-1:${Buffer.alloc(32, 7).toString('base64')}`,
     DATA_ENCRYPTION_ACTIVE_KEY: 'test-1',
+    // Never touched by these settings alone: tests inject their own store and scanner.
+    OBJECT_STORE_DRIVER: 'filesystem',
+    OBJECT_STORE_DIR: '/nonexistent/peopleforge-test',
+    MALWARE_SCANNER: 'none',
     ...overrides,
   });
 }
@@ -82,9 +87,27 @@ export function unusedRepository(): IncrementRequestRepository {
     list: fail,
     addLine: fail,
     removeLine: fail,
-    setProposals: fail,
+    saveDraft: fail,
+    addEvidence: fail,
+    removeEvidence: fail,
+    getEvidence: fail,
   };
 }
+
+/** Object store and scanner for tests that never reach them: any call fails loudly. */
+const unexpected = (): Promise<never> =>
+  Promise.reject(new Error('dependency not expected in this test'));
+export const unusedObjectStore: ObjectStore = {
+  put: unexpected,
+  get: unexpected,
+  remove: unexpected,
+  ping: unexpected,
+};
+export const unusedScanner: MalwareScanner = {
+  engine: 'unused',
+  scan: unexpected,
+  ping: unexpected,
+};
 
 /** A directory whose database is down. */
 export const brokenDirectory: EntityDirectory = {
@@ -115,6 +138,8 @@ export async function buildApp(
       resolvePrincipal: anonymous,
       directory: fakeDirectory(),
       incrementRequests: unusedRepository(),
+      objectStore: unusedObjectStore,
+      malwareScanner: unusedScanner,
       readinessChecks: [],
       isShuttingDown: () => false,
       ...overrides,

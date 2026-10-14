@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
-import { apiRequest, fetchMe } from './api-client';
+import { apiDownload, apiRequest, fetchMe } from './api-client';
 
 const ME = {
   userId: 'oid-1',
@@ -113,5 +113,69 @@ describe('apiRequest', () => {
   ])('treats %s as unavailable', async (_label, response) => {
     const { config } = api(response);
     await expect(apiRequest(config, 't', '/x', schema)).resolves.toEqual({ kind: 'unavailable' });
+  });
+});
+
+describe('apiRequest bodies', () => {
+  it('sends a multipart form as is, letting fetch set the boundary', async () => {
+    const { fetchImpl, config } = api(Response.json({ id: 'x' }));
+    const form = new FormData();
+    form.set('lineId', 'l');
+    await apiRequest(config, 't', '/p', z.object({ id: z.string() }), { method: 'POST', form });
+    const [, init] = fetchImpl.mock.calls[0] ?? [];
+    expect(init?.body).toBe(form);
+    expect(new Headers(init?.headers).has('content-type')).toBe(false);
+  });
+
+  it('lets a call take longer than the configured timeout', async () => {
+    const timeout = vi.spyOn(AbortSignal, 'timeout');
+    const { config } = api(Response.json({ id: 'x' }));
+    await apiRequest(config, 't', '/p', z.object({ id: z.string() }), { timeoutMs: 60_000 });
+    expect(timeout).toHaveBeenCalledWith(60_000);
+    timeout.mockRestore();
+  });
+
+  it('accepts 204 No Content as null', async () => {
+    const { config } = api(new Response(null, { status: 204 }));
+    await expect(apiRequest(config, 't', '/p', z.null(), { method: 'DELETE' })).resolves.toEqual({
+      kind: 'ok',
+      data: null,
+    });
+  });
+});
+
+describe('apiDownload', () => {
+  it('returns the raw response for streaming, with the access token sent', async () => {
+    const response = new Response('%PDF', { headers: { 'content-type': 'application/pdf' } });
+    const { fetchImpl, config } = api(response);
+    await expect(apiDownload(config, 'eyJ.token', '/f')).resolves.toEqual({ kind: 'ok', response });
+    const [url, init] = fetchImpl.mock.calls[0] ?? [];
+    expect(url).toBe('http://api.test/f');
+    expect(new Headers(init?.headers).get('authorization')).toBe('Bearer eyJ.token');
+  });
+
+  it.each([
+    [401, 'unauthenticated'],
+    [404, 'not_found'],
+    [403, 'not_found'],
+    [400, 'not_found'],
+    [503, 'unavailable'],
+  ])('maps %i to %s', async (status, kind) => {
+    const { config } = api(new Response('{}', { status }));
+    await expect(apiDownload(config, 't', '/f')).resolves.toEqual({ kind });
+  });
+
+  it('reports network failures as unavailable, and uses the global fetch by default', async () => {
+    const { config } = api(new TypeError('fetch failed'));
+    await expect(apiDownload(config, 't', '/f')).resolves.toEqual({ kind: 'unavailable' });
+    const spy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response(null, { status: 404 }));
+    await expect(
+      apiDownload({ apiUrl: 'http://api.test', timeoutMs: 1000 }, 't', '/f'),
+    ).resolves.toEqual({
+      kind: 'not_found',
+    });
+    spy.mockRestore();
   });
 });

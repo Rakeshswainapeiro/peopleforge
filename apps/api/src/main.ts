@@ -5,6 +5,7 @@ import {
   createIncrementRequestRepository,
   type FieldCipher,
 } from '@peopleforge/db';
+import { malwareScannerFromEnv, objectStoreFromEnv } from '@peopleforge/integrations';
 import { verifierFromEnv } from '@sirius/identity';
 import { createLogger } from '@sirius/utils';
 import { tokenResolver } from './auth/token-resolver.js';
@@ -34,6 +35,8 @@ async function start(): Promise<void> {
     poolMax: env.DATABASE_POOL_MAX,
   });
   const directory = createEntityDirectory(database.db);
+  const objectStore = objectStoreFromEnv(env);
+  const malwareScanner = malwareScannerFromEnv(env);
 
   const app = await createApp({
     env,
@@ -42,7 +45,14 @@ async function start(): Promise<void> {
     resolvePrincipal: tokenResolver({ verifier: verifierFromEnv(env), logger, directory }),
     directory,
     incrementRequests: createIncrementRequestRepository(database.db, cipher),
-    readinessChecks: [{ name: 'database', check: () => database.ping() }],
+    objectStore,
+    malwareScanner,
+    // Uploads need both: without them the API is not ready to serve R1-04.
+    readinessChecks: [
+      { name: 'database', check: () => database.ping() },
+      { name: 'object_store', check: () => objectStore.ping() },
+      { name: 'malware_scanner', check: () => malwareScanner.ping() },
+    ],
     isShuttingDown: () => isShuttingDown(),
   });
 

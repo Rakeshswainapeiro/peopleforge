@@ -4,15 +4,26 @@ import {
   addEmployee,
   createRequest,
   removeEmployee,
-  saveProposals,
+  removeEvidence,
+  saveDraftChanges,
+  uploadEvidence,
 } from '@/server/increment-requests';
-import { addEmployeeAction, removeEmployeeAction, saveDraft, startRequest } from './actions';
+import {
+  addEmployeeAction,
+  removeEmployeeAction,
+  removeEvidenceAction,
+  saveDraft,
+  startRequest,
+  uploadEvidenceAction,
+} from './actions';
 
 vi.mock('@/server/increment-requests', () => ({
   addEmployee: vi.fn(),
   createRequest: vi.fn(),
   removeEmployee: vi.fn(),
-  saveProposals: vi.fn(),
+  saveDraftChanges: vi.fn(),
+  uploadEvidence: vi.fn(),
+  removeEvidence: vi.fn(),
 }));
 vi.mock('next/navigation', () => ({
   redirect: vi.fn((url: string) => {
@@ -38,8 +49,15 @@ function form(fields: Record<string, string | string[]>): FormData {
 const ok = { kind: 'ok', data: { id: REQUEST } } as unknown as ApiResult<never>;
 
 beforeEach(() => {
-  for (const mock of [addEmployee, createRequest, removeEmployee, saveProposals])
-    vi.mocked(mock).mockResolvedValue(ok);
+  for (const mock of [
+    addEmployee,
+    createRequest,
+    removeEmployee,
+    saveDraftChanges,
+    uploadEvidence,
+    removeEvidence,
+  ])
+    vi.mocked(mock).mockResolvedValue(ok as never);
 });
 
 describe('startRequest', () => {
@@ -157,7 +175,7 @@ describe('saveDraft', () => {
     await expect(saveDraft({ rows: [] }, table({ [LINE_1]: ['amount', '1,720'] }))).rejects.toThrow(
       'NEXT_REDIRECT',
     );
-    expect(vi.mocked(saveProposals).mock.calls).toEqual([
+    expect(vi.mocked(saveDraftChanges).mock.calls).toEqual([
       [
         REQUEST,
         {
@@ -184,11 +202,11 @@ describe('saveDraft', () => {
         { lineId: LINE_2, kind: 'percent', value: '5' },
       ],
     });
-    expect(saveProposals).not.toHaveBeenCalled();
+    expect(saveDraftChanges).not.toHaveBeenCalled();
   });
 
   it('maps the API’s per-row refusals back to the rows', async () => {
-    vi.mocked(saveProposals).mockResolvedValue({
+    vi.mocked(saveDraftChanges).mockResolvedValue({
       kind: 'error',
       status: 400,
       code: 'VALIDATION_FAILED',
@@ -219,15 +237,169 @@ describe('saveDraft', () => {
     ],
     [{ kind: 'unavailable' }, 'request.errors.generic'],
   ])('reports %j', async (result, error) => {
-    vi.mocked(saveProposals).mockResolvedValue(result as ApiResult<never>);
+    vi.mocked(saveDraftChanges).mockResolvedValue(result as ApiResult<never>);
     const state = await saveDraft({ rows: [] }, table({ [LINE_1]: ['percent', '5'] }));
     expect(state.error).toBe(error);
   });
 
   it('ends a session the API no longer accepts', async () => {
-    vi.mocked(saveProposals).mockResolvedValue({ kind: 'unauthenticated' });
+    vi.mocked(saveDraftChanges).mockResolvedValue({ kind: 'unauthenticated' });
     await expect(saveDraft({ rows: [] }, table({ [LINE_1]: ['percent', '5'] }))).rejects.toThrow(
       'NEXT_REDIRECT /session-ended',
     );
+  });
+
+  const C1 = '44444444-4444-4444-8444-444444444440';
+  const C2 = '44444444-4444-4444-8444-444444444441';
+  const withCriteria = (extra: Record<string, string | string[]> = {}) => {
+    const data = table({ [LINE_1]: ['percent', '5'] });
+    const fields: Record<string, string | string[]> = {
+      assessmentLineId: LINE_1,
+      criterionId: [C1, C2],
+      [`result:${C1}`]: 'pass',
+      [`justification:${C1}`]: 'cafe\u0301 rated 4',
+      [`justification:${C2}`]: '',
+      ...extra,
+    };
+    for (const [name, value] of Object.entries(fields)) {
+      for (const item of Array.isArray(value) ? value : [value]) data.append(name, item);
+    }
+    return data;
+  };
+
+  it('saves the assessed employee’s criteria with the proposals, staying on them [R1-03]', async () => {
+    await expect(saveDraft({ rows: [] }, withCriteria({ employee: LINE_1 }))).rejects.toThrow(
+      `NEXT_REDIRECT /requests/${REQUEST}?saved=1&employee=${LINE_1}`,
+    );
+    expect(saveDraftChanges).toHaveBeenCalledWith(REQUEST, {
+      version: 3,
+      proposals: [{ lineId: LINE_1, kind: 'percent', value: '5' }],
+      assessment: {
+        lineId: LINE_1,
+        results: [
+          { criterionId: C1, result: 'pass', justification: 'café rated 4' },
+          { criterionId: C2, result: null, justification: '' },
+        ],
+      },
+    });
+  });
+
+  it('opens the next employee’s criteria after saving from a row’s pencil', async () => {
+    await expect(saveDraft({ rows: [] }, withCriteria({ selectLine: LINE_2 }))).rejects.toThrow(
+      `NEXT_REDIRECT /requests/${REQUEST}?employee=${LINE_2}#criteria`,
+    );
+  });
+
+  it('keeps the typed criteria when the save is refused', async () => {
+    vi.mocked(saveDraftChanges).mockResolvedValue({
+      kind: 'error',
+      status: 400,
+      code: 'VALIDATION_FAILED',
+      details: [{ path: 'assessment.results.0.justification', code: 'too_big' }],
+    });
+    const state = await saveDraft({ rows: [] }, withCriteria({ [`result:${C2}`]: 'maybe' }));
+    expect(state.error).toBe('request.errors.justificationTooLong');
+    expect(state.criteria).toEqual({
+      lineId: LINE_1,
+      results: [
+        { criterionId: C1, result: 'pass', justification: 'cafe\u0301 rated 4' },
+        { criterionId: C2, result: 'maybe', justification: '' },
+      ],
+    });
+    const invalid = await saveDraft(
+      { rows: [] },
+      withCriteria({ [`value:${LINE_1}`]: 'abc', [`kind:${LINE_1}`]: 'percent' }),
+    );
+    expect(invalid.criteria?.lineId).toBe(LINE_1);
+  });
+
+  it('refuses a tampered criterion ID', async () => {
+    await expect(saveDraft({ rows: [] }, withCriteria({ criterionId: '../x' }))).rejects.toThrow();
+    expect(saveDraftChanges).not.toHaveBeenCalled();
+  });
+});
+
+describe('uploadEvidenceAction [R1-04]', () => {
+  const C1 = '44444444-4444-4444-8444-444444444440';
+  const upload = () => form({ requestId: REQUEST, lineId: LINE_1, criterionId: C1 });
+  const withFile = (file: File | string) => {
+    const data = upload();
+    data.set('file', file);
+    return data;
+  };
+
+  it('sends the file with its line and criterion', async () => {
+    const file = new File(['%PDF-1.7'], 'تقييم.pdf', { type: 'application/pdf' });
+    await expect(uploadEvidenceAction(withFile(file))).resolves.toEqual({ ok: true });
+    const [requestId, sent] = vi.mocked(uploadEvidence).mock.calls[0] ?? [];
+    expect(requestId).toBe(REQUEST);
+    expect(sent?.get('lineId')).toBe(LINE_1);
+    expect(sent?.get('criterionId')).toBe(C1);
+    expect((sent?.get('file') as File).name).toBe('تقييم.pdf');
+  });
+
+  it('needs a file within the size limit before calling the API', async () => {
+    await expect(uploadEvidenceAction(upload())).resolves.toEqual({
+      ok: false,
+      error: 'evidence.errors.required',
+    });
+    await expect(uploadEvidenceAction(withFile(new File([], 'empty.pdf')))).resolves.toMatchObject({
+      error: 'evidence.errors.required',
+    });
+    const big = new File([new Uint8Array(10 * 1024 * 1024 + 1)], 'big.pdf');
+    await expect(uploadEvidenceAction(withFile(big))).resolves.toMatchObject({
+      error: 'evidence.errors.tooLarge',
+    });
+    expect(uploadEvidence).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [{ kind: 'unavailable' }, 'evidence.errors.unavailable'],
+    [
+      {
+        kind: 'error',
+        status: 400,
+        code: 'VALIDATION_FAILED',
+        details: [{ path: 'file', code: 'infected' }],
+      },
+      'evidence.errors.infected',
+    ],
+  ])('explains %j', async (result, error) => {
+    vi.mocked(uploadEvidence).mockResolvedValue(result as ApiResult<never>);
+    await expect(uploadEvidenceAction(withFile(new File(['x'], 'a.pdf')))).resolves.toEqual({
+      ok: false,
+      error,
+    });
+  });
+
+  it('ends a session the API no longer accepts', async () => {
+    vi.mocked(uploadEvidence).mockResolvedValue({ kind: 'unauthenticated' });
+    await expect(uploadEvidenceAction(withFile(new File(['x'], 'a.pdf')))).rejects.toThrow(
+      'NEXT_REDIRECT /session-ended',
+    );
+  });
+});
+
+describe('removeEvidenceAction', () => {
+  const EVIDENCE = '55555555-5555-4555-8555-555555555551';
+
+  it('removes the file', async () => {
+    await expect(removeEvidenceAction(REQUEST, EVIDENCE)).resolves.toEqual({ ok: true });
+    expect(removeEvidence).toHaveBeenCalledWith(REQUEST, EVIDENCE);
+  });
+
+  it('reports a failure and ends a dead session', async () => {
+    vi.mocked(removeEvidence).mockResolvedValue({ kind: 'unavailable' });
+    await expect(removeEvidenceAction(REQUEST, EVIDENCE)).resolves.toEqual({
+      ok: false,
+      error: 'evidence.errors.removeFailed',
+    });
+    vi.mocked(removeEvidence).mockResolvedValue({ kind: 'unauthenticated' });
+    await expect(removeEvidenceAction(REQUEST, EVIDENCE)).rejects.toThrow('NEXT_REDIRECT');
+  });
+
+  it('refuses tampered IDs', async () => {
+    await expect(removeEvidenceAction(REQUEST, '../x')).rejects.toThrow();
+    expect(removeEvidence).not.toHaveBeenCalled();
   });
 });

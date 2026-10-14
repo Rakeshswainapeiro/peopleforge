@@ -1,6 +1,6 @@
-# Schemas `core` and `increments` (slices S1–S2)
+# Schemas `core` and `increments` (slices S1–S3)
 
-Migrations: `packages/db/migrations/core/0001_core_schema`, `0002_placeholder_configuration`, `0003_increment_requests` (up/down), recorded in `migrations.core`. Decisions: ADR-002 (data access, RLS), ADR-008 (salary encryption). Design: `docs/design/r1-increment-portal.md` §3a.
+Migrations: `packages/db/migrations/core/0001_core_schema`, `0002_placeholder_configuration`, `0003_increment_requests`, `0004_criteria_evidence` (up/down), recorded in `migrations.core`. Decisions: ADR-002 (data access, RLS), ADR-008 (field encryption), ADR-010 (evidence files). Design: `docs/design/r1-increment-portal.md` §3a.
 
 Every table here also carries `created_at`, `created_by`, `updated_at`, `updated_by` (UTC timestamps, user IDs), and `version` (optimistic locking) where rows are edited. `created_by`/`updated_by` is `seed` for migration and seed rows.
 
@@ -18,6 +18,10 @@ erDiagram
   EMPLOYEE ||--o{ REQUEST_LINE : "proposed in"
   INCREMENT_REQUEST ||--o{ IDEMPOTENCY_KEY : "created by"
   INCREMENT_CYCLE ||--|| REQUEST_SEQUENCE : numbers
+  REQUEST_LINE ||--o{ CRITERION_RESULT : "assessed by"
+  CRITERION ||--o{ CRITERION_RESULT : "applied in"
+  REQUEST_LINE ||--o{ EVIDENCE_FILE : "evidenced by"
+  CRITERION ||--o{ EVIDENCE_FILE : "supports"
   ENTITY { uuid id PK; text code UK; jsonb name; char3 default_currency }
   USER_ENTITY { text user_id PK; uuid entity_id PK,FK }
   EMPLOYEE { uuid id PK; uuid entity_id FK; text employee_number; text full_name; text grade; bytea monthly_salary; char3 currency }
@@ -28,6 +32,8 @@ erDiagram
   REQUEST_LINE { uuid id PK; uuid request_id FK; uuid entity_id FK; uuid employee_id FK; text grade; bytea current_salary; char3 currency; text proposed_kind; bytea proposed_value }
   IDEMPOTENCY_KEY { text user_id PK; text key PK; uuid request_id FK }
   REQUEST_SEQUENCE { uuid cycle_id PK; int last_number }
+  CRITERION_RESULT { uuid id PK; uuid line_id FK; uuid entity_id FK; uuid criterion_id FK; text result; bytea justification }
+  EVIDENCE_FILE { uuid id PK; uuid line_id FK; uuid entity_id FK; uuid criterion_id FK; text object_key UK; text file_name; text media_type; int size_bytes; char64 sha256; text scan_engine }
 ```
 
 ## Data dictionary
@@ -124,6 +130,38 @@ Unique `(id, entity_id)` exists so lines can reference the pair.
 
 Derived values (increase, new salary, percentage, totals) are computed by the API on read with decimal arithmetic and are **not stored** (no stale copies). Rules: `apps/api/src/modules/increment-requests/money.ts`.
 
+Unique `(id, entity_id)` (`request_line_id_entity_key`, migration 0004) exists so criterion results and evidence can reference the pair.
+
+### `increments.criterion_result` — an employee's result on one criterion (R1-03, R1-06)
+
+| Column                 | Type    | Null | Meaning                                                                                                                                                                                                       | Sensitivity    |
+| ---------------------- | ------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
+| `id`                   | `uuid`  | No   | Primary key (chosen by the API: part of the justification's associated data); kept when the result is updated                                                                                                 | Internal       |
+| `line_id`, `entity_id` | `uuid`  | No   | → `request_line (id, entity_id)`: a result can't sit in another subsidiary                                                                                                                                    | Internal       |
+| `criterion_id`         | `uuid`  | No   | → `criterion`; the API accepts only criteria of the request's pinned set                                                                                                                                      | Internal       |
+| `result`               | `text`  | Yes  | `pass` or `fail`; null until chosen                                                                                                                                                                           | Confidential   |
+| `justification`        | `bytea` | Yes  | AES-256-GCM ciphertext of the text (≤ 2,000 characters, NFC), AD `increments.criterion_result:justification:<id>`; null when empty. Encrypted because it can describe appraisals, disciplinary records or pay | **Restricted** |
+
+Unique `(line_id, criterion_id)`: one row per employee and criterion, created on the first save and updated in place (history arrives with the audit trail, R1-15). Saved together with the proposals by "Save draft", under the request's version check. Whether a criterion is complete is derived on read (`apps/api/src/modules/increment-requests/criteria.ts`): a result, a justification when the criterion requires one, and at least one live file when its evidence policy is `required` — the same for Pass and Fail.
+
+### `increments.evidence_file` — a file supporting one criterion for one employee (R1-04, ADR-010)
+
+| Column                    | Type                 | Null | Meaning                                                                                       | Sensitivity  |
+| ------------------------- | -------------------- | ---- | --------------------------------------------------------------------------------------------- | ------------ |
+| `id`                      | `uuid`               | No   | Primary key, chosen by the API; also the last part of the object key                          | Internal     |
+| `line_id`, `entity_id`    | `uuid`               | No   | → `request_line (id, entity_id)`                                                              | Internal     |
+| `criterion_id`            | `uuid`               | No   | → `criterion`                                                                                 | Internal     |
+| `object_key`              | `text`               | No   | Unique; `evidence/<entity-id>/<file-id>` (checked by regex): server-generated, never the name | Internal     |
+| `file_name`               | `text`               | No   | Display name, sanitised (no path, controls or quotes), 1–150 characters, NFC                  | Confidential |
+| `media_type`              | `text`               | No   | Detected from the content (magic bytes) and in the criterion's allow-list                     | Internal     |
+| `size_bytes`              | `integer`            | No   | 1 B – 50 MB (the API accepts ≤ 10 MB)                                                         | Internal     |
+| `sha256`                  | `char(64)`           | No   | Hex digest of the content (integrity, duplicate detection later)                              | Internal     |
+| `scan_engine`             | `text`               | No   | `clamav` (or `none` in local development only)                                                | Internal     |
+| `scanned_at`              | `timestamptz`        | No   | When the clean scan finished; infected files are never recorded                               | Internal     |
+| `deleted_at`/`deleted_by` | `timestamptz`/`text` | Yes  | Soft delete (both or neither); the object stays in storage until retention (Q10)              | Internal     |
+
+The file itself is in the private bucket (**Restricted**: personal documents), encrypted at rest by the store. At most 5 live files per employee and criterion, counted under the request's row lock. Adding or removing a file doesn't change the request's `version`, so a form being edited isn't invalidated.
+
 ### `increments.idempotency_key` and `increments.request_sequence`
 
 - `idempotency_key (user_id, key) → request_id`: the first creation with a key claims it, in the same transaction. A repeat or concurrent call returns the same draft. The foreign key is `DEFERRABLE INITIALLY DEFERRED`, because the key is claimed before the request row exists.
@@ -133,20 +171,20 @@ Derived values (increase, new salary, percentage, totals) are computed by the AP
 
 Session settings, set per transaction by `withScope` (`set_config(…, true)`): `app.user_id`, `app.scope` (`group` | `entity`), `app.entity_ids` (comma-separated UUIDs). Missing settings mean no access.
 
-| Table                                                                                                    | Policy                                                                                                                      |
-| -------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `core.entity`                                                                                            | Read: `core.can_access_entity(id)`. Insert/update: group scope only                                                         |
-| `core.user_entity`                                                                                       | Read: group scope, or the caller's own rows. Insert/delete: group scope only                                                |
-| `core.employee`                                                                                          | All commands: `core.can_access_entity(entity_id)` (USING and WITH CHECK, so rows can't move)                                |
-| `increments.increment_request`, `increments.request_line`                                                | All commands: `core.can_access_entity(entity_id)`                                                                           |
-| `increments.idempotency_key`                                                                             | Own rows only: `user_id = core.current_user_id()`                                                                           |
-| `core.increment_cycle`, `increments.criteria_set`, `increments.criterion`, `increments.request_sequence` | No RLS: configuration (or a counter) readable by every signed-in user; configuration writes need `criteria:configure` (API) |
+| Table                                                                                                                | Policy                                                                                                                      |
+| -------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `core.entity`                                                                                                        | Read: `core.can_access_entity(id)`. Insert/update: group scope only                                                         |
+| `core.user_entity`                                                                                                   | Read: group scope, or the caller's own rows. Insert/delete: group scope only                                                |
+| `core.employee`                                                                                                      | All commands: `core.can_access_entity(entity_id)` (USING and WITH CHECK, so rows can't move)                                |
+| `increments.increment_request`, `increments.request_line`, `increments.criterion_result`, `increments.evidence_file` | All commands: `core.can_access_entity(entity_id)`                                                                           |
+| `increments.idempotency_key`                                                                                         | Own rows only: `user_id = core.current_user_id()`                                                                           |
+| `core.increment_cycle`, `increments.criteria_set`, `increments.criterion`, `increments.request_sequence`             | No RLS: configuration (or a counter) readable by every signed-in user; configuration writes need `criteria:configure` (API) |
 
 RLS is `FORCE`d, so the owner is bound too (the seed sets group scope explicitly). Proven in `packages/db/src/rls.test.ts`.
 
 **Grants to the app role:**
 
-- `SELECT, INSERT, UPDATE` on entity, cycle, employee, the criteria tables, `increment_request`, `request_line` and `request_sequence`.
+- `SELECT, INSERT, UPDATE` on entity, cycle, employee, the criteria tables, `increment_request`, `request_line`, `request_sequence`, `criterion_result` and `evidence_file`.
 - `SELECT, INSERT` on `idempotency_key`.
 - `SELECT, INSERT, DELETE` on `user_entity`. No `DELETE` on business tables (soft delete), no DDL, no `BYPASSRLS`.
 
@@ -166,6 +204,12 @@ RLS is `FORCE`d, so the owner is bound too (the seed sets group scope explicitly
 | `increment_request.reference` unique                                                       | Lookup by reference, uniqueness                             |
 | `request_line_employee_uidx (request_id, employee_id)` (live)                              | An employee once per request (backstop to the locked check) |
 | `request_line_entity_idx (entity_id)`                                                      | RLS filter and per-subsidiary queries                       |
+| `request_line_id_entity_key (id, entity_id)` unique                                        | Target of the result and evidence composite foreign keys    |
+| `criterion_result (line_id, criterion_id)` unique                                          | One result per employee and criterion; loading a request    |
+| `criterion_result_entity_idx (entity_id)`                                                  | RLS filter                                                  |
+| `evidence_file.object_key` unique                                                          | One record per stored object                                |
+| `evidence_file_line_idx (line_id, criterion_id, created_at)` (live)                        | Files of a request in order; the 5-file count               |
+| `evidence_file_entity_idx (entity_id)`                                                     | RLS filter                                                  |
 
 ## Retention (proposal, confirm with Sirius under NFR-PRIV-01)
 
@@ -176,3 +220,5 @@ RLS is `FORCE`d, so the owner is bound too (the seed sets group scope explicitly
 | Interim employee directory      | Superseded by R2 records; soft-deleted rows purged after the retention period agreed for HR records |
 | Increment requests and lines    | To agree with Sirius (Q10); proposal: decided requests 7 years, abandoned drafts 1 year             |
 | Idempotency keys                | 30 days (purge job, with the session purge)                                                         |
+| Criterion results               | With their request                                                                                  |
+| Evidence files (rows + objects) | With their request; removed files (soft-deleted) purged after the agreed period (Q10)               |

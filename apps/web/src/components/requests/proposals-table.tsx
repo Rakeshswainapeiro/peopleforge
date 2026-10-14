@@ -2,7 +2,6 @@
 
 import {
   Alert,
-  Button,
   CellStack,
   CriteriaProgress,
   type CriterionState,
@@ -20,12 +19,8 @@ import {
   focusRing,
   transition,
 } from '@peopleforge/ui';
-import { useActionState } from 'react';
-import {
-  removeEmployeeAction,
-  saveDraft,
-  type ProposalsFormState,
-} from '@/app/(portal)/requests/actions';
+import { removeEmployeeAction } from '@/app/(portal)/requests/actions';
+import { useDraftForm } from './draft-form';
 
 /** One employee row, already formatted and labelled by the server (i18n stays server-side). */
 export interface ProposalRowView {
@@ -39,7 +34,7 @@ export interface ProposalRowView {
   criteriaLabel: string;
   kind: 'percent' | 'amount';
   value: string;
-  labels: { proposedAs: string; value: string; remove: string };
+  labels: { proposedAs: string; value: string; remove: string; assess: string };
 }
 
 export interface ProposalsTableLabels {
@@ -54,15 +49,13 @@ export interface ProposalsTableLabels {
   colActions: string;
   percentOption: string;
   valuePlaceholder: string;
-  save: string;
   saving: string;
 }
 
 export interface ProposalsTableProps {
-  formId: string;
-  requestId: string;
-  version: number;
   editable: boolean;
+  /** The employee whose criteria are open below the table. */
+  selectedLineId?: string | undefined;
   rows: readonly ProposalRowView[];
   labels: ProposalsTableLabels;
   /** Translated texts for the error keys the save can return, as [key, text] pairs. */
@@ -71,38 +64,26 @@ export interface ProposalsTableProps {
   footer: React.ReactNode;
 }
 
-const INITIAL: ProposalsFormState = { rows: [] };
-
 /**
- * Figma "1. Employees and proposed increment" table. The whole table is one form saved by
- * "Save draft" (all or nothing); a refused save keeps what was typed and marks the rows.
+ * Figma "1. Employees and proposed increment" table. Its fields belong to the page's draft
+ * form (`DraftForm`), saved by "Save draft" all or nothing; a refused save keeps what was
+ * typed and marks the rows. The pencil saves too, then opens that employee's criteria.
  */
 export function ProposalsTable({
-  formId,
-  requestId,
-  version,
   editable,
+  selectedLineId,
   rows,
   labels,
   messages,
   footer,
 }: ProposalsTableProps) {
-  const [state, formAction, pending] = useActionState(saveDraft, INITIAL);
+  const { formId, state, pending } = useDraftForm();
   const texts = new Map(messages);
   const message = (key: string | undefined) =>
     key === undefined ? undefined : (texts.get(key) ?? key);
 
   return (
-    <form id={formId} action={formAction} noValidate>
-      <input type="hidden" name="requestId" value={requestId} />
-      <input type="hidden" name="version" value={version} />
-      {/* Enter in a field submits with the form's first submit button: make that "Save draft",
-          never a row's remove button. Hidden from assistive tech: the visible one is in the header. */}
-      {editable ? (
-        <Button type="submit" className="sr-only" tabIndex={-1} aria-hidden="true">
-          {labels.save}
-        </Button>
-      ) : null}
+    <div>
       {state.error === undefined ? null : (
         <Alert role="alert" tone="danger" title={message(state.error)} className="mb-4" />
       )}
@@ -127,9 +108,9 @@ export function ProposalsTable({
             // a form to its default values once its action finishes).
             const key = `${row.lineId}:${typed?.kind ?? ''}:${typed?.value ?? ''}`;
             return (
-              <Tr key={row.lineId}>
+              <Tr key={row.lineId} selected={row.lineId === selectedLineId}>
                 <Td>
-                  <input type="hidden" name="lineId" value={row.lineId} />
+                  <input type="hidden" name="lineId" value={row.lineId} form={formId} />
                   <CellStack primary={row.fullName} secondary={row.employeeNumber} />
                 </Td>
                 <Td>{row.grade}</Td>
@@ -139,6 +120,7 @@ export function ProposalsTable({
                     <SegmentedChoice
                       key={key}
                       name={`kind:${row.lineId}`}
+                      form={formId}
                       legend={row.labels.proposedAs}
                       defaultValue={typed?.kind ?? row.kind}
                       size="md"
@@ -157,6 +139,7 @@ export function ProposalsTable({
                       <Input
                         key={key}
                         name={`value:${row.lineId}`}
+                        form={formId}
                         aria-label={row.labels.value}
                         defaultValue={typed?.value ?? row.value}
                         inputMode="decimal"
@@ -185,9 +168,28 @@ export function ProposalsTable({
                   />
                 </Td>
                 {editable ? (
-                  <Td className="text-end">
+                  <Td className="whitespace-nowrap text-end">
+                    {/* Saves the draft (nothing typed is lost), then opens this employee's
+                        criteria: the action reads `selectLine`. */}
                     <button
                       type="submit"
+                      form={formId}
+                      name="selectLine"
+                      value={row.lineId}
+                      aria-label={row.labels.assess}
+                      aria-current={row.lineId === selectedLineId || undefined}
+                      title={row.labels.assess}
+                      className={cn(
+                        'inline-flex size-9 items-center justify-center rounded-control text-ink hover:bg-brand-50 hover:text-brand-600 aria-[current=true]:bg-brand-50 aria-[current=true]:text-brand-600',
+                        transition,
+                        focusRing,
+                      )}
+                    >
+                      <Icon name="pencil" className="size-5" />
+                    </button>
+                    <button
+                      type="submit"
+                      form={formId}
                       formAction={removeEmployeeAction.bind(null, row.lineId)}
                       aria-label={row.labels.remove}
                       title={row.labels.remove}
@@ -215,6 +217,6 @@ export function ProposalsTable({
           </span>
         ) : null}
       </div>
-    </form>
+    </div>
   );
 }

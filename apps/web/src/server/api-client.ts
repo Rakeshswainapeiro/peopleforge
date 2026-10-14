@@ -26,8 +26,13 @@ export type ApiResult<T> =
 
 export interface ApiRequestInit {
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
+  /** Sent as JSON. */
   body?: unknown;
+  /** Sent as multipart/form-data (file uploads); fetch sets the boundary. */
+  form?: FormData;
   idempotencyKey?: string;
+  /** Overrides the configured timeout, e.g. for an upload that is scanned before the answer. */
+  timeoutMs?: number;
 }
 
 /**
@@ -48,16 +53,18 @@ export async function apiRequest<T>(
   };
   if (init.body !== undefined) headers['content-type'] = 'application/json';
   if (init.idempotencyKey !== undefined) headers['idempotency-key'] = init.idempotencyKey;
+  const payload = init.form ?? (init.body === undefined ? undefined : JSON.stringify(init.body));
   try {
     const response = await fetchImpl(`${config.apiUrl}${path}`, {
       method: init.method ?? 'GET',
       headers,
-      ...(init.body === undefined ? {} : { body: JSON.stringify(init.body) }),
-      signal: AbortSignal.timeout(config.timeoutMs),
+      ...(payload === undefined ? {} : { body: payload }),
+      signal: AbortSignal.timeout(init.timeoutMs ?? config.timeoutMs),
       cache: 'no-store',
     });
     if (response.status === 401) return { kind: 'unauthenticated' };
-    const body: unknown = await response.json();
+    // 204 No Content (e.g. a removed file) has no body: it is validated as null.
+    const body: unknown = response.status === 204 ? null : await response.json();
     if (response.ok) {
       const parsed = schema.safeParse(body);
       return parsed.success ? { kind: 'ok', data: parsed.data } : { kind: 'unavailable' };
@@ -72,6 +79,39 @@ export async function apiRequest<T>(
     };
   } catch {
     // Timeouts, connection failures and non-JSON bodies.
+    return { kind: 'unavailable' };
+  }
+}
+
+export type DownloadResult =
+  | { kind: 'ok'; response: Response }
+  | { kind: 'unauthenticated' }
+  | { kind: 'not_found' }
+  | { kind: 'unavailable' };
+
+/**
+ * A file from the API (evidence downloads, ADR-010), as the raw response so the body streams
+ * through to the browser instead of being buffered here.
+ */
+export async function apiDownload(
+  config: ApiClientConfig,
+  accessToken: string,
+  path: string,
+): Promise<DownloadResult> {
+  const fetchImpl = config.fetch ?? fetch;
+  try {
+    const response = await fetchImpl(`${config.apiUrl}${path}`, {
+      headers: { authorization: `Bearer ${accessToken}` },
+      signal: AbortSignal.timeout(config.timeoutMs),
+      cache: 'no-store',
+    });
+    if (response.ok) return { kind: 'ok', response };
+    await response.body?.cancel();
+    if (response.status === 401) return { kind: 'unauthenticated' };
+    // 400 (malformed ID), 403 and 404 all mean "no such file for you".
+    if (response.status < 500) return { kind: 'not_found' };
+    return { kind: 'unavailable' };
+  } catch {
     return { kind: 'unavailable' };
   }
 }

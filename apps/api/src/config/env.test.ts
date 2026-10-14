@@ -12,6 +12,15 @@ const DATABASE = {
   DATA_ENCRYPTION_KEYS: `k1:${KEY}`,
   DATA_ENCRYPTION_ACTIVE_KEY: 'k1',
 };
+const FILES = {
+  OBJECT_STORE_DRIVER: 's3',
+  S3_REGION: 'me-central-1',
+  S3_BUCKET: 'peopleforge-evidence',
+  S3_ACCESS_KEY_ID: 'id',
+  S3_SECRET_ACCESS_KEY: 'secret',
+  MALWARE_SCANNER: 'clamav',
+  CLAMAV_HOST: 'clamd.internal',
+};
 const LOCAL_IDENTITY = {
   OIDC_ISSUER: 'http://keycloak.sirius.test:8180/realms/sirius',
   OIDC_AUDIENCE: 'peopleforge-api',
@@ -20,8 +29,31 @@ const LOCAL_IDENTITY = {
 };
 
 describe('loadEnv', () => {
+  it('requires evidence storage and scanning settings [R1-04]', () => {
+    expect(() => loadEnv({ APP_ENV: 'dev', ...IDENTITY, ...DATABASE })).toThrow(
+      'Invalid or missing environment variables: MALWARE_SCANNER, OBJECT_STORE_DRIVER',
+    );
+    expect(() =>
+      loadEnv({ APP_ENV: 'dev', ...IDENTITY, ...DATABASE, ...FILES, CLAMAV_HOST: undefined }),
+    ).toThrow('Invalid or missing environment variables: CLAMAV_HOST');
+  });
+
+  it.each(['uat', 'prod'])('refuses local-disk storage and unscanned uploads in %s', (appEnv) => {
+    expect(() =>
+      loadEnv({
+        APP_ENV: appEnv,
+        ...IDENTITY,
+        ...DATABASE,
+        CORS_ALLOWED_ORIGINS: 'https://hr.example.ae',
+        OBJECT_STORE_DRIVER: 'filesystem',
+        OBJECT_STORE_DIR: '/var/lib/peopleforge',
+        MALWARE_SCANNER: 'none',
+      }),
+    ).toThrow('Invalid or missing environment variables: MALWARE_SCANNER, OBJECT_STORE_DRIVER');
+  });
+
   it('applies defaults for optional settings', () => {
-    const env = loadEnv({ APP_ENV: 'dev', ...IDENTITY, ...DATABASE });
+    const env = loadEnv({ APP_ENV: 'dev', ...IDENTITY, ...DATABASE, ...FILES });
     expect(env).toMatchObject({
       APP_ENV: 'dev',
       PORT: 4000,
@@ -46,6 +78,7 @@ describe('loadEnv', () => {
       APP_ENV: 'dev',
       ...IDENTITY,
       ...DATABASE,
+      ...FILES,
       CORS_ALLOWED_ORIGINS: ' http://localhost:3000/ , https://hr.example.ae ,',
     });
     expect(env.CORS_ALLOWED_ORIGINS).toEqual(['http://localhost:3000', 'https://hr.example.ae']);
@@ -53,7 +86,13 @@ describe('loadEnv', () => {
 
   it('fails fast listing only the invalid key names, never their values', () => {
     const attempt = () =>
-      loadEnv({ APP_ENV: 'staging', ...IDENTITY, ...DATABASE, PORT: 'secret-value-99999' });
+      loadEnv({
+        APP_ENV: 'staging',
+        ...IDENTITY,
+        ...DATABASE,
+        ...FILES,
+        PORT: 'secret-value-99999',
+      });
     expect(attempt).toThrow(ConfigError);
     try {
       attempt();
@@ -71,13 +110,14 @@ describe('loadEnv', () => {
         APP_ENV: 'dev',
         ...IDENTITY,
         ...DATABASE,
+        ...FILES,
         CORS_ALLOWED_ORIGINS: 'javascript:alert(1)',
       }),
     ).toThrow(ConfigError);
   });
 
   it.each(['uat', 'prod'])('requires a CORS allow-list in %s', (appEnv) => {
-    expect(() => loadEnv({ APP_ENV: appEnv, ...IDENTITY, ...DATABASE })).toThrow(
+    expect(() => loadEnv({ APP_ENV: appEnv, ...IDENTITY, ...DATABASE, ...FILES })).toThrow(
       /CORS_ALLOWED_ORIGINS/,
     );
   });
@@ -88,6 +128,7 @@ describe('loadEnv', () => {
         APP_ENV: appEnv,
         ...IDENTITY,
         ...DATABASE,
+        ...FILES,
         CORS_ALLOWED_ORIGINS: 'http://hr.example.ae',
       }),
     ).toThrow(/CORS_ALLOWED_ORIGINS/);
@@ -98,29 +139,37 @@ describe('loadEnv', () => {
       APP_ENV: 'prod',
       ...IDENTITY,
       ...DATABASE,
+      ...FILES,
       CORS_ALLOWED_ORIGINS: 'https://hr.example.ae',
     });
     expect(env.CORS_ALLOWED_ORIGINS).toEqual(['https://hr.example.ae']);
   });
 
   it('requires the identity provider settings', () => {
-    expect(() => loadEnv({ APP_ENV: 'dev' })).toThrow(
+    expect(() => loadEnv({ APP_ENV: 'dev', ...FILES })).toThrow(
       'Invalid or missing environment variables: DATABASE_URL, DATA_ENCRYPTION_ACTIVE_KEY, DATA_ENCRYPTION_KEYS, OIDC_AUDIENCE, OIDC_ISSUER, OIDC_TENANT_ID',
     );
   });
 
   it('accepts the local Keycloak over plain HTTP in dev', () => {
-    const env = loadEnv({ APP_ENV: 'dev', ...LOCAL_IDENTITY, ...DATABASE });
+    const env = loadEnv({ APP_ENV: 'dev', ...LOCAL_IDENTITY, ...DATABASE, ...FILES });
     expect(env.OIDC_ALLOW_HTTP).toBe(true);
   });
 
   it.each(['uat', 'prod'])('refuses a plain-HTTP identity provider in %s', (appEnv) => {
     const origins = { CORS_ALLOWED_ORIGINS: 'https://hr.example.ae' };
-    expect(() => loadEnv({ APP_ENV: appEnv, ...LOCAL_IDENTITY, ...DATABASE, ...origins })).toThrow(
-      /OIDC_ISSUER/,
-    );
     expect(() =>
-      loadEnv({ APP_ENV: appEnv, ...IDENTITY, ...DATABASE, OIDC_ALLOW_HTTP: 'true', ...origins }),
+      loadEnv({ APP_ENV: appEnv, ...LOCAL_IDENTITY, ...DATABASE, ...FILES, ...origins }),
+    ).toThrow(/OIDC_ISSUER/);
+    expect(() =>
+      loadEnv({
+        APP_ENV: appEnv,
+        ...IDENTITY,
+        ...DATABASE,
+        ...FILES,
+        OIDC_ALLOW_HTTP: 'true',
+        ...origins,
+      }),
     ).toThrow(/OIDC_ISSUER/);
   });
 });

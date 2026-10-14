@@ -42,6 +42,11 @@ export class ConflictError extends DomainError {
   readonly status = 409;
 }
 
+export class PayloadTooLargeError extends DomainError {
+  readonly code = 'PAYLOAD_TOO_LARGE' as const;
+  readonly status = 413;
+}
+
 /** A dependency (database, identity provider) is down: clients may retry later. */
 export class DependencyUnavailableError extends DomainError {
   readonly code = 'SERVICE_UNAVAILABLE' as const;

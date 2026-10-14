@@ -11,7 +11,15 @@ export {
 export {
   createIncrementRequestRepository,
   RequestDataError,
+  type CriterionAssessmentRecord,
+  type CriterionInput,
+  type CriterionRecord,
   type CycleRecord,
+  type DraftChanges,
+  type EvidenceLocation,
+  type EvidencePolicy,
+  type EvidenceRecord,
+  type NewEvidence,
   type EmployeeOption,
   type IncrementRequestRecord,
   type IncrementRequestRepository,
@@ -27,6 +35,12 @@ export {
   type MigrationCommand,
   type MigrationOptions,
 } from './migrator.js';
-export type { Database, LocalisedText, ProposedKind, RequestStatus } from './schema.js';
+export type {
+  CriterionResultValue,
+  Database,
+  LocalisedText,
+  ProposedKind,
+  RequestStatus,
+} from './schema.js';
 export { ScopeError, withScope, type Scope } from './scope.js';
 export { SEED_ASSIGNMENTS, SEED_ENTITIES, SeedRefusedError, seedDevelopmentData } from './seed.js';

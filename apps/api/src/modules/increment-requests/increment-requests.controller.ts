@@ -17,7 +17,7 @@ import {
   CreateIncrementRequestSchema,
   EmployeeSearchQuerySchema,
   ListIncrementRequestsQuerySchema,
-  SetProposalsSchema,
+  SaveDraftSchema,
   type Cycle,
   type EmployeeOption,
   type IncrementRequest,
@@ -32,7 +32,7 @@ import { API_V1 } from '../../bootstrap/routes.js';
 import { INCREMENT_REQUEST_SERVICE } from '../../bootstrap/tokens.js';
 import type { IncrementRequestService } from './increment-request.service.js';
 
-const Id = z.uuid();
+export const Id = z.uuid();
 /** Client-generated, e.g. a UUID; unique per user. */
 const IdempotencyKey = z.string().regex(/^[A-Za-z0-9_-]{8,128}$/u);
 
@@ -98,17 +98,17 @@ export class IncrementRequestsController {
     return this.service.removeLine(principal.require(req), Id.parse(id), Id.parse(lineId));
   }
 
-  @Put(':id/proposals')
+  @Put(':id/draft')
   @RequirePermission('increment_request:create')
-  setProposals(
+  saveDraft(
     @Req() req: IncomingMessage,
     @Param('id') id: string,
     @Body() body: unknown,
   ): Promise<IncrementRequest> {
-    return this.service.setProposals(
+    return this.service.saveDraft(
       principal.require(req),
       Id.parse(id),
-      SetProposalsSchema.parse(body),
+      SaveDraftSchema.parse(body),
     );
   }
 }

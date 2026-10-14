@@ -35,3 +35,15 @@ export function formatPercent(value: string, locale: Locale): string {
 export function trimDecimal(value: string): string {
   return value.includes('.') ? value.replace(/0+$/u, '').replace(/\.$/u, '') : value;
 }
+
+/** File sizes by the locale's units: "2 KB", "1.5 MB" (1 KB = 1,024 bytes, as file managers show). */
+export function formatFileSize(bytes: number, locale: Locale): string {
+  const kb = bytes / 1024;
+  const [unit, amount] =
+    kb < 1024 ? (['kilobyte', Math.max(kb, 1)] as const) : (['megabyte', kb / 1024] as const);
+  return new Intl.NumberFormat(locale, {
+    style: 'unit',
+    unit,
+    maximumFractionDigits: amount < 10 ? 1 : 0,
+  }).format(amount);
+}

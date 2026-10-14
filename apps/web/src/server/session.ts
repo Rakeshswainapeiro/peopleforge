@@ -4,9 +4,11 @@ import { redirect } from 'next/navigation';
 import { cache } from 'react';
 import type { z } from 'zod';
 import {
+  apiDownload,
   apiRequest,
   fetchMe,
   type ApiClientConfig,
+  type DownloadResult,
   type ApiRequestInit,
   type ApiResult,
   type Me,
@@ -61,6 +63,13 @@ export async function callApi<T>(
   const bearer = await getProviderAccessToken(getAuth(), await headers());
   if (bearer === null) return { kind: 'unauthenticated' };
   return apiRequest(apiConfig(), bearer, path, schema, init);
+}
+
+/** Downloads a file from the API as the signed-in user (the token stays server-side). */
+export async function downloadFromApi(path: string): Promise<DownloadResult> {
+  const bearer = await getProviderAccessToken(getAuth(), await headers());
+  if (bearer === null) return { kind: 'unauthenticated' };
+  return apiDownload(apiConfig(), bearer, path);
 }
 
 /**

@@ -55,13 +55,14 @@ The hex values were sampled from the Figma exports. Replace them with the Figma 
 | `Field`, `Input`, `Select`, `Textarea`                   | Search, Period, Status, Justification, Value                                                                                                                                                     |
 | `ProgressSteps`                                          | Progress: Added → Submitted → Review → Decision                                                                                                                                                  |
 | `EmptyState`, `Spinner`, `Skeleton`                      | Empty lists, loading                                                                                                                                                                             |
-| `SegmentedChoice`                                        | "% \| AED" proposed-as switch (native radios)                                                                                                                                                    |
+| `SegmentedChoice`                                        | "% \| AED" proposed-as switch and the criterion "✓ Pass \| ✗ Fail" toggle (native radios; `tone` success/danger with an icon, never colour alone; `form` to join a form elsewhere on the page)   |
+| `FileChip`                                               | An attached evidence file: paperclip, name (download link), type · size, remove button                                                                                                           |
 | `CriteriaProgress`                                       | Criteria cell: ✓ / ✗ / ○ per criterion and "n/5 complete" (request table, dashboard by employee)                                                                                                 |
 | `Icon`                                                   | Outline icon set (24 px grid), directional ones mirror in RTL                                                                                                                                    |
 
 Still to build, as their slices need them:
 
-- Criteria card (pass/fail toggle, justification, evidence) and file attach: S3.
+- The criteria card itself is composed in the web app (`components/requests/criteria-editor.tsx`) from `Badge`, `SegmentedChoice`, `Field`/`Textarea` and `FileChip`; promote it to the package when the review screens (S5) reuse it.
 - Employee picker (combobox, with a headless primitive): S2.
 - Dialog / confirm.
 - Toast.

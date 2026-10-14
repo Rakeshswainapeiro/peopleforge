@@ -26,6 +26,12 @@ export default defineConfig({
   ],
   webServer: [
     {
+      command: 'node e2e/support/fake-clamd.ts',
+      port: E2E.clamavPort,
+      reuseExistingServer: !process.env.CI,
+      timeout: 30_000,
+    },
+    {
       command: 'node e2e/support/oidc-provider.ts',
       url: `${ISSUER}/.well-known/openid-configuration`,
       reuseExistingServer: !process.env.CI,
@@ -49,6 +55,12 @@ export default defineConfig({
         // Same test-only key the global setup seeds salaries with (ADR-008).
         DATA_ENCRYPTION_KEYS: E2E.dataEncryptionKeys,
         DATA_ENCRYPTION_ACTIVE_KEY: E2E.dataEncryptionActiveKey,
+        // Evidence (R1-04): local files and the fake clamd, so uploads are really scanned.
+        OBJECT_STORE_DRIVER: 'filesystem',
+        OBJECT_STORE_DIR: E2E.evidenceDir,
+        MALWARE_SCANNER: 'clamav',
+        CLAMAV_HOST: '127.0.0.1',
+        CLAMAV_PORT: String(E2E.clamavPort),
       },
     },
     {

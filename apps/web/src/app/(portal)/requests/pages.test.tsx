@@ -1,10 +1,11 @@
-import type { IncrementRequest, Me } from '@peopleforge/contracts';
+import type { Me } from '@peopleforge/contracts';
 import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getRequestLocale } from '@/i18n/request-locale';
 import type { ApiResult } from '@/server/api-client';
 import { getRequest, openCycles, searchEmployees } from '@/server/increment-requests';
 import { requireViewer } from '@/server/session';
+import { draftRequest, EVIDENCE_ID, LINE_2 } from '@/test-support/requests';
 import RequestPage from './[id]/page';
 import NewRequestPage from './new/page';
 
@@ -20,6 +21,8 @@ vi.mock('./actions', () => ({
   addEmployeeAction: vi.fn(),
   removeEmployeeAction: vi.fn(),
   saveDraft: vi.fn(),
+  uploadEvidenceAction: vi.fn(),
+  removeEvidenceAction: vi.fn(),
 }));
 vi.mock('next/navigation', () => ({
   notFound: vi.fn(() => {
@@ -28,6 +31,7 @@ vi.mock('next/navigation', () => ({
   redirect: vi.fn((url: string) => {
     throw new Error(`NEXT_REDIRECT ${url}`);
   }),
+  useRouter: () => ({ refresh: vi.fn() }),
 }));
 
 const SUB_A = '00000000-0000-4000-8000-0000000e000a';
@@ -55,43 +59,7 @@ const cycle = (id = CYCLE, name = 'Increment cycle 2026') => ({
   status: 'open' as const,
 });
 
-const DRAFT: IncrementRequest = {
-  id: REQUEST,
-  reference: 'INC-2026-0007',
-  status: 'draft',
-  entity: { id: SUB_A, code: 'SUB-A', name: { en: 'Subsidiary A' } },
-  cycle: { id: CYCLE, name: { en: 'Increment cycle 2026' } },
-  criteria: ['C1', 'C2', 'C3', 'C4', 'C5'].map((code, index) => ({
-    id: `44444444-4444-4444-8444-44444444444${String(index)}`,
-    code,
-    name: { en: `[Placeholder] ${code}` },
-  })),
-  version: 2,
-  createdAt: '2026-10-14T07:00:00.000Z',
-  updatedAt: '2026-10-14T07:00:00.000Z',
-  lines: [
-    {
-      id: '22222222-2222-4222-8222-222222222221',
-      employeeId: '33333333-3333-4333-8333-333333333331',
-      employeeNumber: 'EMP-1101',
-      fullName: 'Aisha Rahman',
-      grade: 'G5',
-      currency: 'AED',
-      currentSalary: '14200.00',
-      proposedKind: 'percent',
-      proposedValue: '6.00',
-      increase: '852.00',
-      newSalary: '15052.00',
-      percent: '6.00',
-    },
-  ],
-  totals: {
-    employees: 1,
-    proposed: 1,
-    increaseByCurrency: [{ currency: 'AED', amount: '852.00' }],
-    averagePercent: '6.0',
-  },
-};
+const DRAFT = draftRequest({ reference: 'INC-2026-0007' });
 
 const employees = {
   kind: 'ok' as const,
@@ -204,12 +172,49 @@ describe('Increment request page [R1-02]', () => {
       ),
     ).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'Criteria' })).toBeInTheDocument();
+    expect(screen.getByText('2/5 complete')).toBeInTheDocument();
     expect(screen.getByText('0/5 complete')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Save draft' })).toBeInTheDocument();
-    expect(screen.getByTestId('total-increase')).toHaveTextContent(/^AED\s852 \/ month$/u);
-    expect(screen.getByTestId('average-percent')).toHaveTextContent('6%');
+    expect(screen.getByTestId('total-increase')).toHaveTextContent(/^AED\s1,720 \/ month$/u);
+    expect(screen.getByTestId('average-percent')).toHaveTextContent('8%');
     expect(screen.getByRole('option', { name: 'Yusuf Karim · EMP-1102 · G6' })).toBeInTheDocument();
     expect(searchEmployees).toHaveBeenCalledWith(SUB_A, REQUEST);
+  });
+
+  it('assesses the first employee by default, with a card per criterion [R1-03, R1-04]', async () => {
+    render(await requestPage());
+    expect(screen.getByTestId('assessed-employee')).toHaveTextContent('Omar Haddad · EMP-3318');
+    const section = screen.getByRole('region', { name: '2. Eligibility criteria' });
+    expect(section.querySelectorAll('article')).toHaveLength(5);
+    expect(screen.getByRole('group', { name: 'Result for C1' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Download appraisal-2026.pdf' })).toHaveAttribute(
+      'href',
+      `/requests/${DRAFT.id}/evidence/${EVIDENCE_ID}`,
+    );
+    expect(
+      screen.getByText('To complete: add a justification, attach evidence'),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Assess criteria for Omar Haddad' })).toHaveAttribute(
+      'aria-current',
+      'true',
+    );
+  });
+
+  it('assesses the employee named in the URL, falling back to the first', async () => {
+    render(await requestPage(REQUEST, { employee: LINE_2 }));
+    expect(screen.getByTestId('assessed-employee')).toHaveTextContent('Neha Iyer · EMP-3324');
+    render(await requestPage(REQUEST, { employee: 'someone-else' }));
+    expect(screen.getAllByTestId('assessed-employee')[1]).toHaveTextContent('Omar Haddad');
+  });
+
+  it('lists who is ready to submit, with Submit disabled until S4', async () => {
+    render(await requestPage());
+    expect(screen.getByTestId('ready-summary')).toHaveTextContent('0 of 2 employees ready');
+    expect(screen.getByText('Still needed: 3 criteria')).toBeInTheDocument();
+    expect(screen.getByText('Still needed: a proposed increment, 5 criteria')).toBeInTheDocument();
+    const submit = screen.getByRole('button', { name: 'Submit to Sirius HR' });
+    expect(submit).toBeDisabled();
+    expect(submit).toHaveAccessibleDescription('Complete every employee to submit.');
   });
 
   it('confirms a save and shows a known error', async () => {
@@ -233,6 +238,8 @@ describe('Increment request page [R1-02]', () => {
     });
     render(await requestPage());
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: '2. Eligibility criteria' })).toBeNull();
+    expect(screen.queryByRole('region', { name: '3. Ready to submit?' })).toBeNull();
     expect(searchEmployees).not.toHaveBeenCalled();
   });
 

@@ -6,7 +6,7 @@ import type {
   IncrementRequestPage,
   RemoveLineResult,
   RequestStatus,
-  SetProposals,
+  SaveDraft,
 } from '@peopleforge/contracts';
 import {
   RequestDataError,
@@ -21,6 +21,7 @@ import {
   NotFoundError,
   ValidationError,
 } from '../../errors/domain-errors.js';
+import { assessmentOf, effectiveMaxFileMb, missingFor } from './criteria.js';
 import { lineFigures, proposalProblem, requestTotals, toMoney } from './money.js';
 
 /** Most employees one search returns; the picker narrows by typing. */
@@ -51,10 +52,19 @@ export function toDomainError(error: RequestDataError): DomainError {
       return new ConflictError('No active criteria set', [
         { path: 'criteria', code: 'none_active' },
       ]);
+    case 'criterion_not_found':
+      return new ValidationError('Unknown criterion', [{ path: 'criterionId', code: 'not_found' }]);
+    case 'evidence_limit':
+      return new ConflictError('Too many files for this criterion', [
+        { path: 'file', code: 'limit' },
+      ]);
+    case 'evidence_not_found':
+      return new NotFoundError('Evidence not found');
   }
 }
 
-async function guard<T>(work: Promise<T>): Promise<T> {
+/** Runs a data-layer call, turning its expected refusals into API errors. */
+export async function guard<T>(work: Promise<T>): Promise<T> {
   try {
     return await work;
   } catch (error: unknown) {
@@ -89,9 +99,27 @@ function isDraft(status: string): boolean {
   return status === 'draft';
 }
 
+/** Whether the caller may see a request in this status (their scope is enforced by RLS). */
+export function canSee(caller: Principal, status: string): boolean {
+  return !isDraft(status) || seesDrafts(caller);
+}
+
 function toDto(record: IncrementRequestRecord): IncrementRequest {
   const lines = record.lines.map((line) => {
     const figures = lineFigures(line.currentSalary, line.proposedKind, line.proposedValue);
+    const criteria = record.criteria.map((criterion) => {
+      const assessment = assessmentOf(criterion, line.criteria);
+      return {
+        criterionId: criterion.id,
+        result: assessment.result,
+        justification: assessment.justification,
+        evidence: assessment.evidence.map((file) => ({
+          ...file,
+          createdAt: file.createdAt.toISOString(),
+        })),
+        missing: missingFor(criterion, assessment),
+      };
+    });
     return {
       line: {
         id: line.id,
@@ -106,8 +134,13 @@ function toDto(record: IncrementRequestRecord): IncrementRequest {
         increase: figures?.increase ?? null,
         newSalary: figures?.newSalary ?? null,
         percent: figures?.percent ?? null,
+        criteria,
       },
-      totalsInput: { currency: line.currency, figures },
+      totalsInput: {
+        currency: line.currency,
+        figures,
+        complete: criteria.every((criterion) => criterion.missing.length === 0),
+      },
     };
   });
   return {
@@ -116,7 +149,10 @@ function toDto(record: IncrementRequestRecord): IncrementRequest {
     status: record.status,
     entity: record.entity,
     cycle: record.cycle,
-    criteria: record.criteria,
+    criteria: record.criteria.map((criterion) => ({
+      ...criterion,
+      maxFileMb: effectiveMaxFileMb(criterion),
+    })),
     version: record.version,
     createdAt: record.createdAt.toISOString(),
     updatedAt: record.updatedAt.toISOString(),
@@ -168,7 +204,7 @@ export class IncrementRequestService {
 
   async get(caller: Principal, id: string): Promise<IncrementRequest> {
     const record = await this.repository.get(scopeOf(caller), id);
-    if (record === null || (isDraft(record.status) && !seesDrafts(caller))) {
+    if (record === null || !canSee(caller, record.status)) {
       throw new NotFoundError('Increment request not found');
     }
     return toDto(record);
@@ -209,15 +245,28 @@ export class IncrementRequestService {
       : { discarded, request: await this.get(caller, id) };
   }
 
-  /** Saves the proposed increments (the "Save draft" table), all or nothing. */
-  async setProposals(
-    caller: Principal,
-    id: string,
-    input: SetProposals,
-  ): Promise<IncrementRequest> {
+  /**
+   * "Save draft": the proposed increments and, optionally, one employee's criteria (R1-02,
+   * R1-03), all or nothing.
+   */
+  async saveDraft(caller: Principal, id: string, input: SaveDraft): Promise<IncrementRequest> {
     const current = await this.get(caller, id);
     const salaries = new Map(current.lines.map((line) => [line.id, line.currentSalary]));
-    const problems = input.proposals.flatMap((proposal, index) => {
+    const criterionIds = new Set(current.criteria.map((criterion) => criterion.id));
+    const assessmentProblems =
+      input.assessment === undefined
+        ? []
+        : [
+            ...(salaries.has(input.assessment.lineId)
+              ? []
+              : [{ path: 'assessment.lineId', code: 'not_found' }]),
+            ...input.assessment.results.flatMap((result, index) =>
+              criterionIds.has(result.criterionId)
+                ? []
+                : [{ path: `assessment.results.${String(index)}.criterionId`, code: 'not_found' }],
+            ),
+          ];
+    const proposalProblems = input.proposals.flatMap((proposal, index) => {
       const salary = salaries.get(proposal.lineId);
       if (salary === undefined)
         return [{ path: `proposals.${String(index)}.lineId`, code: 'not_found' }];
@@ -225,15 +274,17 @@ export class IncrementRequestService {
       const problem = proposalProblem(salary, proposal.kind, proposal.value);
       return problem === null ? [] : [{ path: `proposals.${String(index)}.value`, code: problem }];
     });
-    if (problems.length > 0) throw new ValidationError('Invalid proposals', problems);
+    const problems = [...proposalProblems, ...assessmentProblems];
+    if (problems.length > 0) throw new ValidationError('Invalid draft', problems);
     await guard(
-      this.repository.setProposals(scopeOf(caller), id, {
+      this.repository.saveDraft(scopeOf(caller), id, {
         version: input.version,
         proposals: input.proposals.map((proposal) => ({
           lineId: proposal.lineId,
           kind: proposal.kind,
           value: proposal.value === null ? null : toMoney(proposal.value),
         })),
+        assessment: input.assessment,
       }),
     );
     return this.get(caller, id);

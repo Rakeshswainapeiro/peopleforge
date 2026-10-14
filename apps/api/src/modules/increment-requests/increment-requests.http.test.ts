@@ -7,6 +7,7 @@ import type { Principal } from '../../auth/principal.js';
 import { anonymous, buildApp, errorOf, resolveAs, SUB_A } from '../../test-support/factory.js';
 import {
   alphaHr,
+  CRITERION_1,
   CYCLE_ID,
   EMPLOYEE_1,
   executive,
@@ -36,7 +37,7 @@ describe('increment request routes [R1-02, NFR-SEC-01]', () => {
     ['GET', `${base}/${REQUEST_ID}`],
     ['POST', `${base}/${REQUEST_ID}/lines`],
     ['DELETE', `${base}/${REQUEST_ID}/lines/${LINE_1}`],
-    ['PUT', `${base}/${REQUEST_ID}/proposals`],
+    ['PUT', `${base}/${REQUEST_ID}/draft`],
     ['GET', '/api/v1/increment-cycles/open'],
     ['GET', `/api/v1/employees?entityId=${SUB_A}`],
   ])('refuses %s %s without a session (401)', async (method, path) => {
@@ -51,7 +52,7 @@ describe('increment request routes [R1-02, NFR-SEC-01]', () => {
     ['POST', base],
     ['POST', `${base}/${REQUEST_ID}/lines`],
     ['DELETE', `${base}/${REQUEST_ID}/lines/${LINE_1}`],
-    ['PUT', `${base}/${REQUEST_ID}/proposals`],
+    ['PUT', `${base}/${REQUEST_ID}/draft`],
     ['GET', `/api/v1/employees?entityId=${SUB_A}`],
   ])('refuses executives %s %s: no individual salaries (403)', async (method, path) => {
     const server = (await app(executive)).getHttpServer();
@@ -63,7 +64,7 @@ describe('increment request routes [R1-02, NFR-SEC-01]', () => {
     ['POST', base],
     ['POST', `${base}/${REQUEST_ID}/lines`],
     ['DELETE', `${base}/${REQUEST_ID}/lines/${LINE_1}`],
-    ['PUT', `${base}/${REQUEST_ID}/proposals`],
+    ['PUT', `${base}/${REQUEST_ID}/draft`],
   ])('lets Sirius reviewers read but not %s %s (403)', async (method, path) => {
     const server = (await app(reviewer)).getHttpServer();
     await request(server)[method.toLowerCase() as 'get'](path).expect(403);
@@ -128,19 +129,42 @@ describe('increment request routes [R1-02, NFR-SEC-01]', () => {
       .expect(201);
     await request(server).delete(`${base}/${REQUEST_ID}/lines/${LINE_1}`).expect(200);
     await request(server)
-      .put(`${base}/${REQUEST_ID}/proposals`)
+      .put(`${base}/${REQUEST_ID}/draft`)
       .send({ version: 3, proposals: [{ lineId: LINE_1, kind: 'percent', value: '8' }] })
       .expect(200);
     expect(repository.addLine).toHaveBeenCalledOnce();
     expect(repository.removeLine).toHaveBeenCalledOnce();
-    expect(repository.setProposals).toHaveBeenCalledOnce();
+    expect(repository.saveDraft).toHaveBeenCalledOnce();
+  });
+
+  it('saves one employee’s criteria with the draft and bounds the justification [R1-03]', async () => {
+    const repository = workingRepository();
+    const server = (await app(alphaHr, repository)).getHttpServer();
+    const assessment = (justification: string) => ({
+      lineId: LINE_1,
+      results: [{ criterionId: CRITERION_1, result: 'fail', justification }],
+    });
+    await request(server)
+      .put(`${base}/${REQUEST_ID}/draft`)
+      .send({ version: 3, proposals: [], assessment: assessment('Below the minimum rating.') })
+      .expect(200);
+    expect(repository.saveDraft).toHaveBeenCalledWith(expect.anything(), REQUEST_ID, {
+      version: 3,
+      proposals: [],
+      assessment: assessment('Below the minimum rating.'),
+    });
+    const res = await request(server)
+      .put(`${base}/${REQUEST_ID}/draft`)
+      .send({ version: 3, proposals: [], assessment: assessment('x'.repeat(2001)) })
+      .expect(400);
+    expect(errorOf(res).details?.[0]?.path).toBe('assessment.results.0.justification');
   });
 
   it('refuses a proposal value that is not a plain decimal (no floats, no exponents)', async () => {
     const server = (await app(alphaHr)).getHttpServer();
     for (const value of [8, '1e3', '-5', '8.123']) {
       const res = await request(server)
-        .put(`${base}/${REQUEST_ID}/proposals`)
+        .put(`${base}/${REQUEST_ID}/draft`)
         .send({ version: 3, proposals: [{ lineId: LINE_1, kind: 'percent', value }] })
         .expect(400);
       expect(errorOf(res).details?.[0]?.path).toBe('proposals.0.value');

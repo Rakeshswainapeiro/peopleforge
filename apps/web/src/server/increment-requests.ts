@@ -1,20 +1,22 @@
 import {
   CycleSchema,
   EmployeeOptionSchema,
+  EvidenceFileSchema,
   IncrementRequestPageSchema,
   IncrementRequestSchema,
   RemoveLineResultSchema,
   type CreateIncrementRequest,
   type Cycle,
   type EmployeeOption,
+  type EvidenceFile,
   type IncrementRequest,
   type IncrementRequestPage,
   type RemoveLineResult,
-  type SetProposals,
+  type SaveDraft,
 } from '@peopleforge/contracts';
 import { z } from 'zod';
-import type { ApiResult } from './api-client';
-import { callApi } from './session';
+import type { ApiResult, DownloadResult } from './api-client';
+import { callApi, downloadFromApi } from './session';
 
 /** Typed calls to the increment request API (R1-02). IDs are validated before use in a path. */
 const BASE = '/api/v1/increment-requests';
@@ -71,9 +73,35 @@ export function removeEmployee(id: string, lineId: string): Promise<ApiResult<Re
   });
 }
 
-export function saveProposals(
+/** Proposals and, optionally, one employee's criteria (R1-02, R1-03). */
+export function saveDraftChanges(
   id: string,
-  body: SetProposals,
+  body: SaveDraft,
 ): Promise<ApiResult<IncrementRequest>> {
-  return callApi(requestPath(id, '/proposals'), IncrementRequestSchema, { method: 'PUT', body });
+  return callApi(requestPath(id, '/draft'), IncrementRequestSchema, { method: 'PUT', body });
+}
+
+/**
+ * Up to 10 MB sent, then content-checked and malware-scanned before the API answers (clamd's
+ * own timeout is 15 s): far longer than an ordinary call.
+ */
+export const UPLOAD_TIMEOUT_MS = 60_000;
+
+/** One evidence file for one employee and criterion (R1-04): `lineId`, `criterionId`, `file`. */
+export function uploadEvidence(id: string, form: FormData): Promise<ApiResult<EvidenceFile>> {
+  return callApi(requestPath(id, '/evidence'), EvidenceFileSchema, {
+    method: 'POST',
+    form,
+    timeoutMs: UPLOAD_TIMEOUT_MS,
+  });
+}
+
+export function removeEvidence(id: string, evidenceId: string): Promise<ApiResult<null>> {
+  return callApi(requestPath(id, `/evidence/${Id.parse(evidenceId)}`), z.null(), {
+    method: 'DELETE',
+  });
+}
+
+export function downloadEvidence(id: string, evidenceId: string): Promise<DownloadResult> {
+  return downloadFromApi(requestPath(id, `/evidence/${Id.parse(evidenceId)}`));
 }

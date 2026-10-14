@@ -5,7 +5,9 @@ import {
   EmployeeSearchQuerySchema,
   IncrementRequestSchema,
   ListIncrementRequestsQuerySchema,
-  SetProposalsSchema,
+  EvidenceUploadSchema,
+  MAX_JUSTIFICATION_LENGTH,
+  SaveDraftSchema,
 } from './increment-requests.js';
 
 const ID = '00000000-0000-4000-8000-0000000e000a';
@@ -45,11 +47,10 @@ describe('CreateIncrementRequestSchema', () => {
   });
 });
 
-describe('SetProposalsSchema', () => {
+describe('SaveDraftSchema', () => {
   it('takes a kind and a value together, or neither', () => {
     const parse = (kind: unknown, value: unknown) =>
-      SetProposalsSchema.safeParse({ version: 1, proposals: [{ lineId: ID, kind, value }] })
-        .success;
+      SaveDraftSchema.safeParse({ version: 1, proposals: [{ lineId: ID, kind, value }] }).success;
     expect(parse('percent', '8')).toBe(true);
     expect(parse(null, null)).toBe(true);
     expect(parse('amount', null)).toBe(false);
@@ -58,8 +59,57 @@ describe('SetProposalsSchema', () => {
   });
 
   it('requires a positive whole version', () => {
-    expect(SetProposalsSchema.safeParse({ version: 0, proposals: [] }).success).toBe(false);
-    expect(SetProposalsSchema.safeParse({ version: 1.5, proposals: [] }).success).toBe(false);
+    expect(SaveDraftSchema.safeParse({ version: 0, proposals: [] }).success).toBe(false);
+    expect(SaveDraftSchema.safeParse({ version: 1.5, proposals: [] }).success).toBe(false);
+  });
+
+  const OTHER = '00000000-0000-4000-8000-0000000e000b';
+  const withResults = (results: unknown) =>
+    SaveDraftSchema.safeParse({ version: 1, proposals: [], assessment: { lineId: ID, results } });
+
+  it('takes one employee’s criteria, normalising justifications to NFC [R1-03]', () => {
+    const parsed = SaveDraftSchema.parse({
+      version: 1,
+      proposals: [],
+      assessment: {
+        lineId: ID,
+        results: [
+          { criterionId: ID, result: 'pass', justification: 'cafe\u0301' },
+          { criterionId: OTHER, result: null, justification: '' },
+        ],
+      },
+    });
+    expect(parsed.assessment?.results.map((r) => r.justification)).toEqual(['café', '']);
+    expect(SaveDraftSchema.parse({ version: 1, proposals: [] }).assessment).toBeUndefined();
+  });
+
+  it('bounds justifications and refuses unknown results or duplicate criteria', () => {
+    const text = (length: number) => [
+      { criterionId: ID, result: 'fail', justification: 'ج'.repeat(length) },
+    ];
+    expect(withResults(text(MAX_JUSTIFICATION_LENGTH)).success).toBe(true);
+    expect(withResults(text(MAX_JUSTIFICATION_LENGTH + 1)).success).toBe(false);
+    expect(withResults([{ criterionId: ID, result: 'maybe', justification: '' }]).success).toBe(
+      false,
+    );
+    const twice = { criterionId: ID, result: null, justification: '' };
+    expect(withResults([twice, twice]).success).toBe(false);
+    expect(
+      withResults([{ criterionId: ID, result: null, justification: '', extra: 1 }]).success,
+    ).toBe(false);
+  });
+});
+
+describe('EvidenceUploadSchema', () => {
+  it('needs the employee line and criterion, nothing else', () => {
+    expect(EvidenceUploadSchema.parse({ lineId: ID, criterionId: ID })).toEqual({
+      lineId: ID,
+      criterionId: ID,
+    });
+    expect(EvidenceUploadSchema.safeParse({ lineId: ID }).success).toBe(false);
+    expect(
+      EvidenceUploadSchema.safeParse({ lineId: ID, criterionId: ID, entityId: ID }).success,
+    ).toBe(false);
   });
 });
 
@@ -101,7 +151,18 @@ describe('IncrementRequestSchema', () => {
       status: 'draft',
       entity: { id: ID, code: 'SUB-A', name: { en: 'Subsidiary A' } },
       cycle: { id: ID, name: { en: 'Increment cycle 2026' } },
-      criteria: [{ id: ID, code: 'C1', name: { en: '[Placeholder] Performance rating' } }],
+      criteria: [
+        {
+          id: ID,
+          code: 'C1',
+          name: { en: '[Placeholder] Performance rating' },
+          description: { en: 'Latest appraisal meets the minimum rating.' },
+          justificationRequired: true,
+          evidencePolicy: 'required',
+          allowedMediaTypes: ['application/pdf'],
+          maxFileMb: 10,
+        },
+      ],
       version: 2,
       createdAt: '2026-10-14T07:00:00.000Z',
       updatedAt: '2026-10-14T07:05:00.000Z',
@@ -119,11 +180,29 @@ describe('IncrementRequestSchema', () => {
           increase: '1720.00',
           newSalary: '23220.00',
           percent: '8.00',
+          criteria: [
+            {
+              criterionId: ID,
+              result: 'pass',
+              justification: 'Rated 4 of 5.',
+              evidence: [
+                {
+                  id: ID,
+                  fileName: 'appraisal.pdf',
+                  mediaType: 'application/pdf',
+                  sizeBytes: 2048,
+                  createdAt: '2026-10-14T07:01:00.000Z',
+                },
+              ],
+              missing: [],
+            },
+          ],
         },
       ],
       totals: {
         employees: 1,
         proposed: 1,
+        ready: 1,
         increaseByCurrency: [{ currency: 'AED', amount: '1720.00' }],
         averagePercent: '8.0',
       },

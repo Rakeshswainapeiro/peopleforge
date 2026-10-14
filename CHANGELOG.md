@@ -4,6 +4,23 @@ All notable changes are recorded here. Format: [Keep a Changelog](https://keepac
 
 ## [Unreleased]
 
+### Added — slice S3: criteria and evidence (R1-03, R1-04, R1-06)
+
+- **Section 2 "Eligibility criteria"**, one employee at a time: Pass or Fail, a justification (up to 2,000 characters) and evidence files for each criterion. "Save draft" saves them together with the proposed increments. The row's pencil saves and opens the next employee, so nothing typed is lost. Fail needs the same justification and evidence as Pass.
+- **Evidence files:** up to 5 per criterion, up to 10 MB each. The type is judged by content against the criterion's list, and every file goes through a ClamAV scan before it is stored. Infected and disguised files are refused. Files go to private S3-compatible storage under random keys. Choosing a file uploads it at once; files can be removed (soft delete), and downloads go through the API as attachments (ADR-010).
+- **Completeness everywhere:** the Criteria column shows ✓/✗ once a criterion is complete and ○ before, with "n/5 complete". Each criterion shows "Complete" or "To complete: …".
+- **Section 3 "Ready to submit?":** who is ready and what each other employee still needs. "Submit to Sirius HR" stays disabled until S4.
+- `@peopleforge/integrations`: S3 object store (filesystem for dev/test), ClamAV adapter, content-type detection, file-name sanitising, circuit breaker, shared env schema. A protocol-level fake clamd is included for tests.
+- Migration `0004_criteria_evidence`: `increments.criterion_result` (justification encrypted) and `increments.evidence_file`, both with Row-Level Security.
+- API: `PUT /api/v1/increment-requests/{id}/draft`, `POST …/evidence` (multipart), `GET` and `DELETE …/evidence/{evidenceId}`. Readiness now also checks object storage and the malware scanner. New env vars `OBJECT_STORE_*`, `S3_*`, `MALWARE_SCANNER`, `CLAMAV_*` (DEPLOYMENT.md §4).
+- Design system: `SegmentedChoice` tones and icons (Pass/Fail) and a `form` attribute; `FileChip`.
+
+### Changed
+
+- `PUT …/proposals` is replaced by `PUT …/draft` (it was never released). The request response now carries the criteria configuration, each line's `criteria` with `missing`, and `totals.ready`.
+- The draft page has one "Save draft" form whose fields sit in different cards (the `form` attribute), so the Add-employee form stays separate.
+- Uploads through the web app may take up to 60 s (sent, checked, scanned); proxies must accept 11 MB bodies.
+
 ### Fixed
 
 - **An empty draft stayed under "Needs your action".** Removing a draft's last employee now discards the draft (soft delete). The user returns to Home with "Draft discarded: it had no employees left." A draft must also be created with at least one employee (`employeeIds` minItems 1). `DELETE …/lines/{lineId}` returns `{ discarded, request }`.

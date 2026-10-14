@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatMoney, formatPercent, trimDecimal } from './format';
+import { formatFileSize, formatMoney, formatPercent, trimDecimal } from './format';
 
 describe('formatMoney', () => {
   it('shows whole amounts without cents and keeps cents when present', () => {
@@ -33,5 +33,20 @@ describe('trimDecimal', () => {
     ['100.00', '100'],
   ])('%s → %s', (value, expected) => {
     expect(trimDecimal(value)).toBe(expected);
+  });
+});
+
+describe('formatFileSize', () => {
+  it('uses kilobytes below a megabyte, never showing less than 1', () => {
+    expect(formatFileSize(10, 'en')).toBe('1 kB');
+    expect(formatFileSize(2048, 'en')).toBe('2 kB');
+    expect(formatFileSize(1536, 'en')).toBe('1.5 kB');
+    expect(formatFileSize(240 * 1024, 'en')).toBe('240 kB');
+  });
+
+  it('uses megabytes above, in the locale’s numerals', () => {
+    expect(formatFileSize(1.5 * 1024 * 1024, 'en')).toBe('1.5 MB');
+    expect(formatFileSize(10 * 1024 * 1024, 'en')).toBe('10 MB');
+    expect(formatFileSize(1024 * 1024, 'ar')).not.toBe('1 MB');
   });
 });

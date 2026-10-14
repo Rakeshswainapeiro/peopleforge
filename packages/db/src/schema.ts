@@ -134,6 +134,40 @@ export interface RequestLineTable {
   deleted_at: Date | null;
 }
 
+export type CriterionResultValue = 'pass' | 'fail';
+
+export interface CriterionResultTable {
+  id: string;
+  line_id: string;
+  entity_id: string;
+  criterion_id: string;
+  result: CriterionResultValue | null;
+  /** Ciphertext of the justification text (ADR-008); null when empty. */
+  justification: Buffer | null;
+  created_at: Timestamp;
+  created_by: string;
+  updated_at: Timestamp;
+  updated_by: string;
+}
+
+export interface EvidenceFileTable {
+  id: string;
+  line_id: string;
+  entity_id: string;
+  criterion_id: string;
+  object_key: string;
+  file_name: string;
+  media_type: string;
+  size_bytes: number;
+  sha256: string;
+  scan_engine: string;
+  scanned_at: Date;
+  created_at: Timestamp;
+  created_by: string;
+  deleted_at: Date | null;
+  deleted_by: string | null;
+}
+
 export interface IdempotencyKeyTable {
   user_id: string;
   key: string;
@@ -153,4 +187,6 @@ export interface Database {
   'increments.increment_request': IncrementRequestTable;
   'increments.request_line': RequestLineTable;
   'increments.idempotency_key': IdempotencyKeyTable;
+  'increments.criterion_result': CriterionResultTable;
+  'increments.evidence_file': EvidenceFileTable;
 }

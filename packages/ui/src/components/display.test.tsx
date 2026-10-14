@@ -7,6 +7,7 @@ import { BrandMark, Wordmark } from './brand.js';
 import { Card, CardBody, CardHeader, StatCard } from './card.js';
 import { CriteriaProgress } from './criteria-progress.js';
 import { EmptyState } from './empty-state.js';
+import { FileChip } from './file-chip.js';
 import { PageHeader } from './page-header.js';
 import { ProgressSteps } from './progress-steps.js';
 import { Skeleton, Spinner } from './spinner.js';
@@ -259,5 +260,30 @@ describe('CriteriaProgress', () => {
     expect(screen.getByText('5/5 complete')).toHaveClass('text-brand-600');
     render(<CriteriaProgress label="0/0" stateLabels={stateLabels} results={[]} />);
     expect(screen.getByText('0/0')).toHaveClass('text-ink');
+  });
+});
+
+describe('FileChip', () => {
+  it('links the file for download and shows its details and action', () => {
+    render(
+      <FileChip
+        name="appraisal-2026.pdf"
+        meta="PDF · 2 KB"
+        href="/requests/r/evidence/e"
+        downloadLabel="Download appraisal-2026.pdf"
+        action={<button type="button">Remove</button>}
+        className="x"
+      />,
+    );
+    const link = screen.getByRole('link', { name: 'Download appraisal-2026.pdf' });
+    expect(link).toHaveAttribute('href', '/requests/r/evidence/e');
+    expect(link).toHaveAttribute('download');
+    expect(screen.getByText('PDF · 2 KB')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Remove' })).toBeInTheDocument();
+  });
+
+  it('works without an action', () => {
+    render(<FileChip name="a.png" meta="PNG" href="/x" downloadLabel="Download a.png" />);
+    expect(screen.queryByRole('button')).toBeNull();
   });
 });

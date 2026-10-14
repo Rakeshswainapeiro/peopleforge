@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { APP_FILTER } from '@nestjs/core';
 import type { EntityDirectory, IncrementRequestRepository } from '@peopleforge/db';
+import type { MalwareScanner, ObjectStore } from '@peopleforge/integrations';
 import { AuthenticateMiddleware, SiriusAuthModule } from '@sirius/auth-nest';
 import type { IncomingMessage } from 'node:http';
 import type { Logger } from 'pino';
@@ -16,6 +17,8 @@ import { HealthController } from '../health/health.controller.js';
 import type { ReadinessCheck } from '../health/readiness.js';
 import { ApiExceptionFilter } from '../http/exception.filter.js';
 import { JsonBodyMiddleware } from '../http/json-body.middleware.js';
+import { EvidenceController } from '../modules/evidence/evidence.controller.js';
+import { EvidenceService } from '../modules/evidence/evidence.service.js';
 import { MeController } from '../modules/identity/me.controller.js';
 import { API_V1 } from './routes.js';
 import { IncrementRequestService } from '../modules/increment-requests/increment-request.service.js';
@@ -27,6 +30,7 @@ import {
 import {
   ENTITY_DIRECTORY,
   ENV,
+  EVIDENCE_SERVICE,
   INCREMENT_REQUEST_SERVICE,
   LOGGER,
   READINESS_CHECKS,
@@ -45,6 +49,9 @@ export interface AppDependencies {
   directory: EntityDirectory;
   /** Increment request data access under Row-Level Security (packages/db, R1-02). */
   incrementRequests: IncrementRequestRepository;
+  /** Private storage for evidence files (ADR-010) and the scan every upload must pass (R1-04). */
+  objectStore: ObjectStore;
+  malwareScanner: MalwareScanner;
   readinessChecks: readonly ReadinessCheck[];
   isShuttingDown: () => boolean;
 }
@@ -57,6 +64,7 @@ export interface AppDependencies {
 @Module({})
 export class AppModule implements NestModule {
   static register(deps: AppDependencies): DynamicModule {
+    const requests = new IncrementRequestService(deps.incrementRequests);
     return {
       module: AppModule,
       imports: [
@@ -71,14 +79,22 @@ export class AppModule implements NestModule {
         IncrementRequestsController,
         IncrementCyclesController,
         EmployeesController,
+        EvidenceController,
       ],
       providers: [
         { provide: ENV, useValue: deps.env },
         { provide: LOGGER, useValue: deps.logger },
         { provide: ENTITY_DIRECTORY, useValue: deps.directory },
+        { provide: INCREMENT_REQUEST_SERVICE, useValue: requests },
         {
-          provide: INCREMENT_REQUEST_SERVICE,
-          useValue: new IncrementRequestService(deps.incrementRequests),
+          provide: EVIDENCE_SERVICE,
+          useValue: new EvidenceService({
+            requests,
+            repository: deps.incrementRequests,
+            store: deps.objectStore,
+            scanner: deps.malwareScanner,
+            logger: deps.logger,
+          }),
         },
         { provide: READINESS_CHECKS, useValue: deps.readinessChecks },
         { provide: SHUTDOWN_STATE, useValue: { isShuttingDown: deps.isShuttingDown } },

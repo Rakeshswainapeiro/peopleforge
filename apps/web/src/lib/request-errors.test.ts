@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { errorKeyFor, parseErrorKey, proposalErrorKey } from './request-errors';
+import { errorKeyFor, evidenceErrorKey, parseErrorKey, proposalErrorKey } from './request-errors';
 
 describe('errorKeyFor', () => {
   it.each([
@@ -9,6 +9,11 @@ describe('errorKeyFor', () => {
     ['VALIDATION_FAILED', 'employeeId', 'request.errors.employeeNotFound'],
     ['VALIDATION_FAILED', 'cycleId', 'request.errors.cycleNotOpen'],
     ['VALIDATION_FAILED', 'entityId', 'request.errors.generic'],
+    [
+      'VALIDATION_FAILED',
+      'assessment.results.0.justification',
+      'request.errors.justificationTooLong',
+    ],
     ['NOT_FOUND', '', 'request.errors.notFound'],
     ['FORBIDDEN', '', 'request.errors.generic'],
   ] as const)('%s on %s → %s', (code, path, expected) => {
@@ -29,5 +34,22 @@ describe('parseErrorKey', () => {
     expect(parseErrorKey('request.errors.stale')).toBe('request.errors.stale');
     expect(parseErrorKey('<script>')).toBeUndefined();
     expect(parseErrorKey(undefined)).toBeUndefined();
+  });
+});
+
+describe('evidenceErrorKey [R1-04]', () => {
+  it.each([
+    [413, 'PAYLOAD_TOO_LARGE', '', '', 'evidence.errors.tooLarge'],
+    [404, 'NOT_FOUND', '', '', 'evidence.errors.notFound'],
+    [409, 'CONFLICT', 'file', 'limit', 'evidence.errors.limit'],
+    [400, 'VALIDATION_FAILED', 'file', 'media_type', 'evidence.errors.type'],
+    [400, 'VALIDATION_FAILED', 'file', 'infected', 'evidence.errors.infected'],
+    [400, 'VALIDATION_FAILED', 'file', 'required', 'evidence.errors.required'],
+    [400, 'VALIDATION_FAILED', 'file', 'other', 'evidence.errors.generic'],
+    [400, 'VALIDATION_FAILED', 'criterionId', 'no_evidence', 'evidence.errors.generic'],
+  ] as const)('%i %s %s %s → %s', (status, code, path, detail, expected) => {
+    expect(evidenceErrorKey(status, code, path === '' ? [] : [{ path, code: detail }])).toBe(
+      expected,
+    );
   });
 });

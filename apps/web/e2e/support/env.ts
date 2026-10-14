@@ -7,6 +7,10 @@ export const E2E = {
   webPort: 3100,
   apiPort: 4100,
   oidcPort: 18190,
+  /** The fake clamd (real protocol, flags EICAR) standing in for ClamAV. */
+  clamavPort: 13310,
+  /** Evidence files: the filesystem store, dev/test only (the API refuses it in UAT/prod). */
+  evidenceDir: process.env.E2E_EVIDENCE_DIR ?? '/tmp/peopleforge-e2e-evidence',
   tenantId: '5a1f0c2e-7b3d-4e8a-9c21-5e7f0000c0de',
   clientId: 'peopleforge-web',
   clientSecret: 'e2e-only-client-secret',

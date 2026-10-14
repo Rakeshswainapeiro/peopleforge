@@ -238,6 +238,30 @@ describe('SegmentedChoice', () => {
     expect(segment.className).not.toMatch(/(^|\s)hover:bg-/u);
   });
 
+  it('colours a chosen Pass or Fail by tone, with an icon beside the text (R1-06)', async () => {
+    render(
+      <>
+        <form id="outside" aria-label="outside" />
+        <SegmentedChoice
+          name="result"
+          legend="Result for C1"
+          form="outside"
+          options={[
+            { value: 'pass', label: 'Pass', tone: 'success', icon: 'check' },
+            { value: 'fail', label: 'Fail', tone: 'danger', icon: 'x' },
+          ]}
+        />
+      </>,
+    );
+    expect(screen.getByText('Pass')).toHaveClass('peer-checked:bg-success-600');
+    expect(screen.getByText('Fail')).toHaveClass('peer-checked:bg-danger-600');
+    expect(screen.getByText('Fail').querySelector('svg')).not.toBeNull();
+    await userEvent.click(screen.getByText('Fail'));
+    // Posts with the form named by `form`, though it sits outside it.
+    const form = screen.getByRole<HTMLFormElement>('form', { name: 'outside' });
+    expect(new FormData(form).get('result')).toBe('fail');
+  });
+
   it('can be medium sized and start with nothing chosen', () => {
     render(
       <SegmentedChoice name="k" legend="L" size="md" options={[{ value: 'a', label: 'A' }]} />,
