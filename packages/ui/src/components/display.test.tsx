@@ -11,6 +11,7 @@ import { FileChip } from './file-chip.js';
 import { PageHeader } from './page-header.js';
 import { ProgressSteps } from './progress-steps.js';
 import { Skeleton, Spinner } from './spinner.js';
+import { StatusMark } from './status-mark.js';
 
 describe('Badge', () => {
   it.each([
@@ -285,5 +286,26 @@ describe('FileChip', () => {
   it('works without an action', () => {
     render(<FileChip name="a.png" meta="PNG" href="/x" downloadLabel="Download a.png" />);
     expect(screen.queryByRole('button')).toBeNull();
+  });
+});
+
+describe('StatusMark', () => {
+  it.each([
+    ['pass', 'bg-success-50'],
+    ['fail', 'bg-danger-50'],
+    ['pending', 'bg-surface-muted'],
+    ['warning', 'bg-warning-50'],
+  ] as const)('draws %s with a shape and a colour', (state, box) => {
+    const { container } = render(<StatusMark state={state} title="C1" />);
+    const mark = container.firstChild as HTMLElement;
+    expect(mark).toHaveClass(box, 'size-5');
+    expect(mark).toHaveAttribute('aria-hidden', 'true');
+    expect(mark).toHaveAttribute('title', 'C1');
+    expect(mark.querySelector('svg')).not.toBeNull();
+  });
+
+  it('has a medium size for cards', () => {
+    const { container } = render(<StatusMark state="pass" size="md" className="x" />);
+    expect(container.firstChild).toHaveClass('size-6', 'x');
   });
 });

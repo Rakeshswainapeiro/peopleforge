@@ -183,7 +183,9 @@ describe('Increment request page [R1-02]', () => {
 
   it('assesses the first employee by default, with a card per criterion [R1-03, R1-04]', async () => {
     render(await requestPage());
-    expect(screen.getByTestId('assessed-employee')).toHaveTextContent('Omar Haddad · EMP-3318');
+    expect(
+      screen.getByRole('heading', { level: 2, name: '2. Eligibility criteria for Omar Haddad' }),
+    ).toBeInTheDocument();
     const section = screen.getByRole('region', { name: '2. Eligibility criteria' });
     expect(section.querySelectorAll('article')).toHaveLength(5);
     expect(screen.getByRole('group', { name: 'Result for C1' })).toBeInTheDocument();
@@ -192,7 +194,7 @@ describe('Increment request page [R1-02]', () => {
       `/requests/${DRAFT.id}/evidence/${EVIDENCE_ID}`,
     );
     expect(
-      screen.getByText('To complete: add a justification, attach evidence'),
+      screen.getByText('To complete: add a justification, attach evidence.'),
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Assess criteria for Omar Haddad' })).toHaveAttribute(
       'aria-current',
@@ -202,19 +204,25 @@ describe('Increment request page [R1-02]', () => {
 
   it('assesses the employee named in the URL, falling back to the first', async () => {
     render(await requestPage(REQUEST, { employee: LINE_2 }));
-    expect(screen.getByTestId('assessed-employee')).toHaveTextContent('Neha Iyer · EMP-3324');
+    expect(
+      screen.getByRole('heading', { level: 2, name: '2. Eligibility criteria for Neha Iyer' }),
+    ).toBeInTheDocument();
     render(await requestPage(REQUEST, { employee: 'someone-else' }));
-    expect(screen.getAllByTestId('assessed-employee')[1]).toHaveTextContent('Omar Haddad');
+    expect(
+      screen.getByRole('heading', { level: 2, name: '2. Eligibility criteria for Omar Haddad' }),
+    ).toBeInTheDocument();
   });
 
   it('lists who is ready to submit, with Submit disabled until S4', async () => {
     render(await requestPage());
-    expect(screen.getByTestId('ready-summary')).toHaveTextContent('0 of 2 employees ready');
-    expect(screen.getByText('Still needed: 3 criteria')).toBeInTheDocument();
-    expect(screen.getByText('Still needed: a proposed increment, 5 criteria')).toBeInTheDocument();
+    expect(screen.getByTestId('ready-note')).toHaveTextContent(
+      '2 of 2 employees still have incomplete criteria. Submit unlocks when every employee is 5/5.',
+    );
+    expect(screen.getByText('3 criteria incomplete')).toBeInTheDocument();
+    expect(screen.getByText('5 criteria incomplete · no proposed increment')).toBeInTheDocument();
     const submit = screen.getByRole('button', { name: 'Submit to Sirius HR' });
     expect(submit).toBeDisabled();
-    expect(submit).toHaveAccessibleDescription('Complete every employee to submit.');
+    expect(submit).toHaveAccessibleDescription(/^On submit the request is routed to Sirius HR/u);
   });
 
   it('confirms a save and shows a known error', async () => {

@@ -33,7 +33,10 @@ export interface EvidenceFilesLabels {
   /** Accessible name of the file input, e.g. "Attach a file for C1". */
   attachFor: string;
   uploading: string;
-  noFiles: string;
+  /** "PDF, JPG, PNG, XLSX · max 10 MB". */
+  rules: string;
+  /** Read by screen readers for the red asterisk, e.g. "Evidence required". */
+  required: string;
 }
 
 export interface EvidenceFilesProps {
@@ -44,6 +47,8 @@ export interface EvidenceFilesProps {
   /** The file picker's filter, e.g. "application/pdf,image/png". The API checks the content. */
   accept: string;
   maxBytes: number;
+  /** Evidence is required for this criterion: the rules carry a red asterisk. */
+  required: boolean;
   /** False once the criterion holds the most files allowed. */
   canAdd: boolean;
   labels: EvidenceFilesLabels;
@@ -52,9 +57,10 @@ export interface EvidenceFilesProps {
 }
 
 /**
- * Files under one criterion (R1-04). Choosing a file uploads it at once (scanned before it's
- * kept) and refreshes the page; nothing typed elsewhere is lost, because an upload doesn't
- * change the draft's version. Removing works the same way.
+ * Figma: "Attach File · PDF, JPG, PNG, XLSX · max 10 MB *" under a criterion (R1-04), with the
+ * attached files above it. Choosing a file uploads it at once (scanned before it's kept) and
+ * refreshes the page; nothing typed elsewhere is lost, because an upload doesn't change the
+ * draft's version. Removing works the same way.
  */
 export function EvidenceFiles({
   requestId,
@@ -63,6 +69,7 @@ export function EvidenceFiles({
   files,
   accept,
   maxBytes,
+  required,
   canAdd,
   labels,
   messages,
@@ -109,10 +116,8 @@ export function EvidenceFiles({
   }
 
   return (
-    <div className="flex flex-col gap-2">
-      {files.length === 0 ? (
-        <p className="text-xs text-ink-subtle">{labels.noFiles}</p>
-      ) : (
+    <div className="flex flex-col gap-3">
+      {files.length === 0 ? null : (
         <ul className="flex flex-wrap gap-2">
           {files.map((file) => (
             <li key={file.id} className="min-w-0 max-w-full">
@@ -144,39 +149,53 @@ export function EvidenceFiles({
           ))}
         </ul>
       )}
-      {canAdd ? (
-        <div className="flex items-center gap-3">
-          {/* The native file input takes focus and opens the picker with the keyboard; it is
-              visually hidden and drawn as the button-like label that follows it. */}
-          <input
-            id={inputId}
-            type="file"
-            accept={accept}
-            aria-label={labels.attachFor}
-            onChange={upload}
-            disabled={pending}
-            className="peer sr-only"
-          />
-          <label
-            htmlFor={inputId}
-            aria-hidden="true"
-            className={cn(
-              buttonClasses({ variant: 'outline', size: 'sm' }),
-              'cursor-pointer peer-disabled:pointer-events-none peer-disabled:opacity-60',
-              'peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-brand-500',
-            )}
-          >
-            <Icon name="paperclip" className="size-4" />
-            {labels.attach}
-          </label>
-          {pending ? (
-            <span role="status" className="flex items-center gap-2 text-xs text-ink-muted">
-              <Spinner />
-              {labels.uploading}
-            </span>
+      <div className="flex flex-wrap items-center gap-3">
+        {canAdd ? (
+          <>
+            {/* The native file input takes focus and opens the picker with the keyboard; it is
+                visually hidden and drawn as the dashed button-like label that follows it. */}
+            <input
+              id={inputId}
+              type="file"
+              accept={accept}
+              aria-label={labels.attachFor}
+              onChange={upload}
+              disabled={pending}
+              className="peer sr-only"
+            />
+            <label
+              htmlFor={inputId}
+              aria-hidden="true"
+              className={cn(
+                buttonClasses({ variant: 'dashed', size: 'lg' }),
+                'text-lg peer-disabled:pointer-events-none peer-disabled:opacity-60',
+                'peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-brand-500',
+              )}
+            >
+              <Icon name="paperclip" className="size-5" />
+              {labels.attach}
+            </label>
+          </>
+        ) : null}
+        <p className="text-xs text-ink-muted">
+          {labels.rules}
+          {required ? (
+            <>
+              {' '}
+              <span aria-hidden="true" className="text-danger-600">
+                *
+              </span>
+              <span className="sr-only">{labels.required}</span>
+            </>
           ) : null}
-        </div>
-      ) : null}
+        </p>
+        {pending ? (
+          <span role="status" className="flex items-center gap-2 text-xs text-ink-muted">
+            <Spinner />
+            {labels.uploading}
+          </span>
+        ) : null}
+      </div>
       {error === undefined ? null : <Alert role="alert" tone="danger" title={error} />}
     </div>
   );

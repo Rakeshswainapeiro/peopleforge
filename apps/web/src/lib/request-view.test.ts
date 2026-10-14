@@ -1,4 +1,4 @@
-import type { CriterionMissing, IncrementRequest } from '@peopleforge/contracts';
+import type { CriterionMissing, IncrementRequest, RequestLine } from '@peopleforge/contracts';
 import { describe, expect, it } from 'vitest';
 import { createTranslator } from '@/i18n/translator';
 import { draftRequest, LINE_1, must, notStarted, REQUEST_ID } from '@/test-support/requests';
@@ -88,8 +88,7 @@ describe('criteriaCards [R1-03, R1-04, R1-06]', () => {
       resultLegend: 'Result for C1',
     });
     expect(c1?.evidence).toMatchObject({
-      policyLabel: 'Required',
-      rules: 'PDF, PNG, JPEG, Excel · up to 10 MB each · at most 5 files',
+      required: true,
       accept:
         'application/pdf,image/png,image/jpeg,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       maxBytes: 10 * 1024 * 1024,
@@ -103,11 +102,17 @@ describe('criteriaCards [R1-03, R1-04, R1-06]', () => {
           removeLabel: 'Remove appraisal-2026.pdf',
         },
       ],
-      labels: { attach: 'Attach file', attachFor: 'Attach a file for C1' },
+      labels: {
+        attach: 'Attach File',
+        attachFor: 'Attach a file for C1',
+        // Figma: "PDF, JPG, PNG, XLSX · max 10 MB *".
+        rules: 'PDF, PNG, JPG, XLSX · max 10 MB',
+        required: 'Evidence required',
+      },
     });
     expect(c2?.evidence?.files[0]?.meta).toBe('PNG · 3 MB');
-    expect(c3?.missingText).toBe('To complete: add a justification, attach evidence');
-    expect(c5?.evidence?.policyLabel).toBe('Optional');
+    expect(c3?.missingText).toBe('To complete: add a justification, attach evidence.');
+    expect(c5?.evidence?.required).toBe(false);
   });
 
   it('stops offering uploads at the limit, and shows types without a name as they are', () => {
@@ -127,9 +132,9 @@ describe('criteriaCards [R1-03, R1-04, R1-06]', () => {
     expect(second?.evidence?.canAdd).toBe(false);
     const csvOnly = request();
     must(csvOnly.criteria[0]).allowedMediaTypes = ['text/csv'];
-    expect(criteriaCards(csvOnly, must(csvOnly.lines[0]), 'en', t)[0]?.evidence?.rules).toMatch(
-      /^text\/csv · /u,
-    );
+    expect(
+      criteriaCards(csvOnly, must(csvOnly.lines[0]), 'en', t)[0]?.evidence?.labels.rules,
+    ).toMatch(/^text\/csv · /u);
   });
 
   it('treats a criterion the API left out as not started (version skew)', () => {
@@ -140,7 +145,7 @@ describe('criteriaCards [R1-03, R1-04, R1-06]', () => {
       result: null,
       justification: '',
       complete: false,
-      missingText: 'To complete: choose Pass or Fail, add a justification, attach evidence',
+      missingText: 'To complete: choose Pass or Fail, add a justification, attach evidence.',
     });
     expect(second?.evidence?.files).toEqual([]);
   });
@@ -154,55 +159,75 @@ describe('criteriaCards [R1-03, R1-04, R1-06]', () => {
   });
 
   it('labels the editor and translates evidence messages', () => {
-    expect(criteriaLabels('en', t)).toMatchObject({
+    expect(criteriaLabels(t)).toEqual({
       pass: 'Pass',
       fail: 'Fail',
-      justificationHint: 'Up to 2,000 characters.',
-      incomplete: 'Not complete yet',
+      justification: 'Justification',
+      justificationPlaceholder: 'Why does this employee pass or fail this criterion?',
     });
     expect(new Map(evidenceMessages(t)).get('evidence.errors.infected')).toMatch(/malware/u);
   });
 });
 
 describe('readyView', () => {
-  it('says who is ready and what the others still need', () => {
-    const draft = request();
-    expect(readyView(draft, 'en', t)).toMatchObject({
-      summary: '0 of 2 employees ready',
+  const allComplete = (line: RequestLine) =>
+    line.criteria.map((c) => ({ ...c, missing: [] as CriterionMissing[] }));
+
+  it('lists each employee as in the Figma, and why submitting is blocked', () => {
+    expect(readyView(request(), 'en', t)).toEqual({
       items: [
-        { lineId: LINE_1, ready: false, status: 'Still needed: 3 criteria' },
-        { ready: false, status: 'Still needed: a proposed increment, 5 criteria' },
+        { lineId: LINE_1, fullName: 'Omar Haddad', ready: false, status: '3 criteria incomplete' },
+        {
+          lineId: must(request().lines[1]).id,
+          fullName: 'Neha Iyer',
+          ready: false,
+          status: '5 criteria incomplete · no proposed increment',
+        },
       ],
+      note: '2 of 2 employees still have incomplete criteria. Submit unlocks when every employee is 5/5.',
       submitLabel: 'Submit to Sirius HR',
-      caption: 'Complete every employee to submit.',
+      caption:
+        'On submit the request is routed to Sirius HR, its status becomes Submitted, and both sides get an email and in-app notification.',
     });
   });
 
-  it('marks complete employees ready, and says submitting comes later when all are', () => {
+  it('says one criterion in the singular', () => {
     const draft = request();
-    const [omar] = draft.lines;
-    const complete = (omar?.criteria ?? []).map((c) => ({
-      ...c,
-      missing: [] as CriterionMissing[],
-    }));
-    const ready = request({
-      lines: [
-        {
-          ...must(omar),
-          criteria: complete.slice(0, 4).concat([{ ...must(complete[4]), missing: ['result'] }]),
-        },
-      ],
-      totals: { ...draft.totals, employees: 1, ready: 1 },
-    });
-    expect(readyView(ready, 'en', t).items[0]?.status).toBe('Still needed: 1 criterion');
-    const allDone = request({
-      lines: [{ ...must(omar), criteria: complete }],
-      totals: { ...draft.totals, employees: 1, ready: 1 },
-    });
-    expect(readyView(allDone, 'en', t)).toMatchObject({
-      items: [{ ready: true, status: 'Ready' }],
-      caption: 'Submitting to Sirius HR is not available yet.',
-    });
+    const omar = must(draft.lines[0]);
+    const criteria = allComplete(omar);
+    criteria[4] = { ...must(criteria[4]), missing: ['result'] };
+    const one = request({ lines: [{ ...omar, criteria }] });
+    expect(readyView(one, 'en', t).items[0]?.status).toBe('1 criterion incomplete');
+  });
+
+  it('points at missing proposals once every criterion is complete', () => {
+    const draft = request();
+    const omar = must(draft.lines[0]);
+    const neha = must(draft.lines[1]);
+    const view = readyView(
+      request({
+        lines: [
+          { ...omar, criteria: allComplete(omar) },
+          { ...neha, criteria: allComplete(neha) },
+        ],
+      }),
+      'en',
+      t,
+    );
+    expect(view.items.map((item) => [item.ready, item.status])).toEqual([
+      [true, 'All 5 criteria complete'],
+      [false, 'no proposed increment'],
+    ]);
+    expect(view.note).toBe(
+      '1 of 2 employees have no proposed increment yet. Submit unlocks when every employee has one.',
+    );
+  });
+
+  it('says when everyone is ready', () => {
+    const omar = must(request().lines[0]);
+    expect(
+      readyView(request({ lines: [{ ...omar, criteria: allComplete(omar) }] }), 'en', t).note,
+    ).toBe('Every employee is ready to submit.');
   });
 });
 

@@ -4,6 +4,10 @@ All notable changes are recorded here. Format: [Keep a Changelog](https://keepac
 
 ## [Unreleased]
 
+### Fixed
+
+- **Sections 2 and 3 didn't match the Figma.** Section 2 is now titled "2. Eligibility criteria for {name}". Each criterion card has a result mark (✓/✗/○), Pass/Fail at the top right, the placeholder "Why does this employee pass or fail this criterion?", a dashed **Attach File** button followed by "PDF, JPG, PNG, XLSX · max 10 MB *", and an amber outline until the criterion is complete. The extra badges and hints are gone. Section 3 lists "All 5 criteria complete" / "5 criteria incomplete" with a mark per employee, the grey note "n of m employees still have incomplete criteria…", a full-width **Submit to Sirius HR** and the Figma caption. Design system: `StatusMark` (shared with `CriteriaProgress`) and the `dashed` button variant.
+
 ### Added — slice S3: criteria and evidence (R1-03, R1-04, R1-06)
 
 - **Section 2 "Eligibility criteria"**, one employee at a time: Pass or Fail, a justification (up to 2,000 characters) and evidence files for each criterion. "Save draft" saves them together with the proposed increments. The row's pencil saves and opens the next employee, so nothing typed is lost. Fail needs the same justification and evidence as Pass.

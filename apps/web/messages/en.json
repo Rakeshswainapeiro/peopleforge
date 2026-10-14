@@ -193,51 +193,44 @@
     "discarded": "Draft discarded: it had no employees left.",
     "assess": "Assess criteria for {name}",
     "criteriaSection": "2. Eligibility criteria",
-    "criteriaFor": "{name} · {employeeNumber}",
-    "criteriaHint": "Choose Pass or Fail for each criterion, explain why, and attach what Sirius HR needs to verify it. Fail needs the same explanation and evidence as Pass.",
-    "criteriaSaveHint": "Save draft saves this employee’s criteria together with the proposed increments.",
     "resultFor": "Result for {code}",
     "pass": "Pass",
     "fail": "Fail",
     "justification": "Justification",
-    "justificationHint": "Up to {max} characters.",
-    "evidence": "Evidence",
-    "evidenceRequired": "Required",
-    "evidenceOptional": "Optional",
-    "evidenceRules": "{types} · up to {size} each · at most {count} files",
-    "noEvidenceNeeded": "No files needed for this criterion.",
-    "attachFile": "Attach file",
+    "attachFile": "Attach File",
     "attachFor": "Attach a file for {code}",
     "uploading": "Uploading and scanning…",
     "removeFile": "Remove {file}",
     "downloadFile": "Download {file}",
-    "noFiles": "No files attached yet.",
-    "toComplete": "To complete: {items}",
+    "toComplete": "To complete: {items}.",
     "missing": {
       "result": "choose Pass or Fail",
       "justification": "add a justification",
       "evidence": "attach evidence"
     },
-    "criterionComplete": "Complete",
     "readySection": "3. Ready to submit?",
-    "readySummary": "{ready} of {total} employees ready",
-    "ready": "Ready",
-    "stillNeeded": "Still needed: {items}",
-    "needsProposal": "a proposed increment",
-    "needsCriteria": {
-      "one": "{count} criterion",
-      "other": "{count} criteria"
-    },
-    "submitNote": "Every employee needs a proposed increment and all criteria complete before the request goes to Sirius HR. Once submitted, the draft can no longer be edited.",
     "submit": "Submit to Sirius HR",
-    "submitBlocked": "Complete every employee to submit.",
-    "submitUnavailable": "Submitting to Sirius HR is not available yet.",
     "fileTypes": {
       "pdf": "PDF",
-      "jpeg": "JPEG",
+      "jpeg": "JPG",
       "png": "PNG",
-      "xlsx": "Excel"
-    }
+      "xlsx": "XLSX"
+    },
+    "criteriaTitle": "2. Eligibility criteria for {name}",
+    "criteriaHint": "Pass or fail, a justification, and evidence where Sirius HR requires it. Criteria names come from Criteria settings.",
+    "justificationPlaceholder": "Why does this employee pass or fail this criterion?",
+    "evidenceRules": "{types} · max {size}",
+    "evidenceRequiredMark": "Evidence required",
+    "allCriteriaComplete": "All {count} criteria complete",
+    "criteriaIncomplete": {
+      "one": "{count} criterion incomplete",
+      "other": "{count} criteria incomplete"
+    },
+    "noProposal": "no proposed increment",
+    "notReadyCriteria": "{count} of {total} employees still have incomplete criteria. Submit unlocks when every employee is {criteria}/{criteria}.",
+    "notReadyProposals": "{count} of {total} employees have no proposed increment yet. Submit unlocks when every employee has one.",
+    "allReady": "Every employee is ready to submit.",
+    "submitCaption": "On submit the request is routed to Sirius HR, its status becomes Submitted, and both sides get an email and in-app notification."
   },
   "evidence": {
     "errors": {

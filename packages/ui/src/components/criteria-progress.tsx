@@ -1,5 +1,5 @@
-import { Icon } from '../icons/icon.js';
 import { cn } from '../lib/cn.js';
+import { StatusMark } from './status-mark.js';
 
 export type CriterionState = 'pass' | 'fail' | 'pending';
 
@@ -10,12 +10,6 @@ export interface CriteriaProgressProps {
   label: string;
   /** Tooltip text per state, e.g. { pass: 'Pass', fail: 'Fail', pending: 'Not assessed' }. */
   stateLabels: Readonly<Record<CriterionState, string>>;
-}
-
-function icon(state: CriterionState) {
-  if (state === 'pass') return { name: 'check' as const, box: 'bg-success-50 text-success-600' };
-  if (state === 'fail') return { name: 'x' as const, box: 'bg-danger-50 text-danger-600' };
-  return { name: 'circle' as const, box: 'bg-surface-muted text-ink-subtle' };
 }
 
 /**
@@ -33,18 +27,11 @@ export function CriteriaProgress({ results, label, stateLabels }: CriteriaProgre
       )}
     >
       <ul aria-hidden="true" className="flex gap-1">
-        {results.map((result) => {
-          const mark = icon(result.state);
-          return (
-            <li
-              key={result.code}
-              title={`${result.code} · ${stateLabels[result.state]}`}
-              className={cn('flex size-5 items-center justify-center rounded-[4px]', mark.box)}
-            >
-              <Icon name={mark.name} className="size-3" />
-            </li>
-          );
-        })}
+        {results.map((result) => (
+          <li key={result.code} title={`${result.code} · ${stateLabels[result.state]}`}>
+            <StatusMark state={result.state} />
+          </li>
+        ))}
       </ul>
       <span className={cn('whitespace-nowrap text-sm', complete ? 'text-brand-600' : 'text-ink')}>
         {label}

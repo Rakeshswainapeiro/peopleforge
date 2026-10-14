@@ -145,33 +145,24 @@ export default async function RequestPage({ params, searchParams }: RequestPageP
         </div>
       </Card>
       {editable && selected !== undefined ? (
-        <Card className="mt-6 scroll-mt-6" label={t('request.criteriaSection')}>
+        <Card className="mt-6" label={t('request.criteriaSection')}>
           <div id="criteria" className="scroll-mt-6">
             <CardHeader
-              title={t('request.criteriaSection')}
+              title={t('request.criteriaTitle', { name: selected.fullName })}
               description={t('request.criteriaHint')}
-              actions={
-                <p className="text-sm font-semibold text-ink" data-testid="assessed-employee">
-                  {t('request.criteriaFor', {
-                    name: selected.fullName,
-                    employeeNumber: selected.employeeNumber,
-                  })}
-                </p>
-              }
             />
           </div>
-          <div className="px-6 pt-4 pb-6">
+          <div className="px-6 pt-5 pb-6">
             <CriteriaEditor
               // Afresh after a save, and for each employee.
               key={`${String(request.version)}:${selected.id}`}
               requestId={request.id}
               lineId={selected.id}
               criteria={criteriaCards(request, selected, locale, t)}
-              labels={criteriaLabels(locale, t)}
+              labels={criteriaLabels(t)}
               maxJustification={MAX_JUSTIFICATION_LENGTH}
               messages={evidenceMessages(t)}
             />
-            <p className="mt-4 text-xs text-ink-subtle">{t('request.criteriaSaveHint')}</p>
           </div>
         </Card>
       ) : null}

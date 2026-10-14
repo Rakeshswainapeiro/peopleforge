@@ -1,58 +1,57 @@
-import { Badge, Button } from '@peopleforge/ui';
+import { Button, StatusMark } from '@peopleforge/ui';
 
 export interface ReadyItemView {
   lineId: string;
   fullName: string;
   ready: boolean;
-  /** "Ready", or "Still needed: a proposed increment · 3 criteria". */
+  /** "All 5 criteria complete", or "2 criteria incomplete · no proposed increment". */
   status: string;
 }
 
 export interface ReadyPanelProps {
-  summary: string;
   items: readonly ReadyItemView[];
+  /** "3 of 4 employees still have incomplete criteria. Submit unlocks when every employee is 5/5." */
   note: string;
   submitLabel: string;
-  /** Why the button can't be used yet. */
+  /** What submitting does (Figma caption). */
   caption: string;
 }
 
 /**
- * Figma "3. Ready to submit?": who is ready and what is missing (R1-03, R1-04, R1-06).
- * Submitting arrives with S4; until then the button stays disabled and the caption says why.
+ * Figma "3. Ready to submit?": a row per employee (✓ ready, ! not yet), the grey note and the
+ * full-width submit button (R1-03, R1-04, R1-06). Submitting arrives with S4; until then the
+ * button stays disabled.
  */
-export function ReadyPanel({ summary, items, note, submitLabel, caption }: ReadyPanelProps) {
+export function ReadyPanel({ items, note, submitLabel, caption }: ReadyPanelProps) {
   return (
-    <div className="flex flex-col gap-4">
-      <p className="text-sm font-semibold text-ink" data-testid="ready-summary">
-        {summary}
-      </p>
-      <ul className="flex flex-col divide-y divide-line rounded-card border border-line">
+    <div className="flex flex-col gap-3">
+      <ul className="flex flex-col gap-2.5">
         {items.map((item) => (
           <li
             key={item.lineId}
-            className="flex flex-wrap items-center justify-between gap-2 px-4 py-3"
+            data-ready={item.ready}
+            className="flex items-start gap-3 rounded-card border border-line-strong px-5 py-3"
           >
-            <span className="text-sm font-medium text-ink">{item.fullName}</span>
-            {item.ready ? (
-              <Badge tone="success" icon="check">
-                {item.status}
-              </Badge>
-            ) : (
-              <span className="text-xs text-warning-700">{item.status}</span>
-            )}
+            <StatusMark size="md" state={item.ready ? 'pass' : 'warning'} className="mt-0.5" />
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-ink">{item.fullName}</p>
+              <p className="text-xs text-ink">{item.status}</p>
+            </div>
           </li>
         ))}
       </ul>
-      <p className="rounded-card bg-surface-muted p-4 text-sm text-ink-muted">{note}</p>
-      <div className="flex flex-col items-end gap-1">
-        <Button disabled aria-describedby="submit-caption">
-          {submitLabel}
-        </Button>
-        <p id="submit-caption" className="text-xs text-ink-subtle">
-          {caption}
-        </p>
-      </div>
+      <p
+        className="mt-3 rounded-card bg-surface-muted px-4 py-3 text-xs text-ink"
+        data-testid="ready-note"
+      >
+        {note}
+      </p>
+      <Button size="lg" fullWidth disabled aria-describedby="submit-caption">
+        {submitLabel}
+      </Button>
+      <p id="submit-caption" className="text-xs text-ink">
+        {caption}
+      </p>
     </div>
   );
 }

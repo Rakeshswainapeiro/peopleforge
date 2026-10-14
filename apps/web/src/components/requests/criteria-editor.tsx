@@ -1,6 +1,6 @@
 'use client';
 
-import { Badge, Field, SegmentedChoice, Textarea } from '@peopleforge/ui';
+import { Field, SegmentedChoice, StatusMark, Textarea, cn } from '@peopleforge/ui';
 import { useDraftForm } from './draft-form';
 import { EvidenceFiles, type EvidenceFileView, type EvidenceFilesLabels } from './evidence-files';
 
@@ -14,15 +14,12 @@ export interface CriterionCardView {
   result: 'pass' | 'fail' | null;
   justification: string;
   complete: boolean;
-  /** "To complete: choose Pass or Fail · attach evidence", or undefined when complete. */
+  /** "To complete: add a justification, attach evidence.", or undefined when complete. */
   missingText: string | undefined;
   resultLegend: string;
   /** Null when the criterion takes no files. */
   evidence: {
-    /** "Required" / "Optional". */
-    policyLabel: string;
-    /** "PDF, PNG · up to 10 MB each · at most 5 files". */
-    rules: string;
+    required: boolean;
     accept: string;
     maxBytes: number;
     canAdd: boolean;
@@ -35,11 +32,7 @@ export interface CriteriaEditorLabels {
   pass: string;
   fail: string;
   justification: string;
-  justificationHint: string;
-  evidence: string;
-  noEvidenceNeeded: string;
-  complete: string;
-  incomplete: string;
+  justificationPlaceholder: string;
 }
 
 export interface CriteriaEditorProps {
@@ -53,10 +46,11 @@ export interface CriteriaEditorProps {
 }
 
 /**
- * Figma "2. Eligibility criteria" for one employee (R1-03, R1-04, R1-06): Pass/Fail, a
- * justification and evidence per criterion. Result and justification belong to the page's
- * draft form and are saved with "Save draft"; files upload on their own. Drafts only: Sirius
- * HR's read-only view of a submitted request is part of the review screens (S5).
+ * Figma "2. Eligibility criteria for …" (R1-03, R1-04, R1-06): one card per criterion with its
+ * result mark, Pass/Fail, a justification and evidence. Cards stay amber until complete.
+ * Result and justification belong to the page's draft form and are saved with "Save draft";
+ * files upload on their own. Drafts only: Sirius HR's read-only view of a submitted request is
+ * part of the review screens (S5).
  */
 export function CriteriaEditor({
   requestId,
@@ -85,71 +79,60 @@ export function CriteriaEditor({
             key={criterion.id}
             aria-labelledby={`${criterion.id}-title`}
             aria-describedby={criterion.missingText === undefined ? undefined : hintId}
-            className="rounded-card border border-line p-5"
+            data-complete={criterion.complete}
+            className={cn(
+              'rounded-card border p-5',
+              criterion.complete
+                ? 'border-success-200 bg-surface'
+                : 'border-warning-200 bg-warning-50/40',
+            )}
           >
             <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="min-w-0">
-                <h3 id={`${criterion.id}-title`} className="text-base font-semibold text-ink">
-                  <span className="text-ink-muted">{criterion.code}</span> · {criterion.name}
-                </h3>
-                <p className="mt-1 text-sm text-ink-muted">{criterion.description}</p>
+              <div className="flex min-w-0 items-start gap-3">
+                <StatusMark size="md" state={criterion.result ?? 'pending'} className="mt-0.5" />
+                <div className="min-w-0">
+                  <h3 id={`${criterion.id}-title`} className="text-sm font-semibold text-ink">
+                    {criterion.code} · {criterion.name}
+                  </h3>
+                  <p className="mt-0.5 text-xs text-ink-muted">{criterion.description}</p>
+                </div>
               </div>
-              <Badge
-                tone={criterion.complete ? 'success' : 'outline'}
-                icon={criterion.complete ? 'check' : 'circle'}
-              >
-                {criterion.complete ? labels.complete : labels.incomplete}
-              </Badge>
+              <input type="hidden" name="criterionId" value={criterion.id} form={formId} />
+              <SegmentedChoice
+                key={key}
+                name={`result:${criterion.id}`}
+                form={formId}
+                legend={criterion.resultLegend}
+                defaultValue={result}
+                size="md"
+                options={[
+                  { value: 'pass', label: labels.pass, tone: 'success', icon: 'check' },
+                  { value: 'fail', label: labels.fail, tone: 'danger', icon: 'x' },
+                ]}
+              />
             </div>
 
-            <div className="mt-4 grid gap-4 lg:grid-cols-[auto_1fr]">
-              <div>
-                <input type="hidden" name="criterionId" value={criterion.id} form={formId} />
-                <SegmentedChoice
+            <Field
+              label={labels.justification}
+              required={criterion.justificationRequired}
+              className="mt-4"
+            >
+              {({ id, describedBy }) => (
+                <Textarea
                   key={key}
-                  name={`result:${criterion.id}`}
+                  id={id}
+                  name={`justification:${criterion.id}`}
                   form={formId}
-                  legend={criterion.resultLegend}
-                  defaultValue={result}
-                  size="md"
-                  options={[
-                    { value: 'pass', label: labels.pass, tone: 'success', icon: 'check' },
-                    { value: 'fail', label: labels.fail, tone: 'danger', icon: 'x' },
-                  ]}
+                  defaultValue={justification}
+                  maxLength={maxJustification}
+                  placeholder={labels.justificationPlaceholder}
+                  aria-describedby={describedBy}
                 />
-              </div>
-              <Field
-                label={labels.justification}
-                required={criterion.justificationRequired}
-                hint={labels.justificationHint}
-              >
-                {({ id, describedBy }) => (
-                  <Textarea
-                    key={key}
-                    id={id}
-                    name={`justification:${criterion.id}`}
-                    form={formId}
-                    defaultValue={justification}
-                    maxLength={maxJustification}
-                    aria-describedby={describedBy}
-                  />
-                )}
-              </Field>
-            </div>
+              )}
+            </Field>
 
-            <div className="mt-4 border-t border-line pt-4">
-              <div className="mb-2 flex flex-wrap items-center gap-2">
-                <h4 className="text-xs font-medium text-ink">{labels.evidence}</h4>
-                {criterion.evidence === null ? (
-                  <span className="text-xs text-ink-subtle">{labels.noEvidenceNeeded}</span>
-                ) : (
-                  <>
-                    <Badge tone="neutral">{criterion.evidence.policyLabel}</Badge>
-                    <span className="text-xs text-ink-subtle">{criterion.evidence.rules}</span>
-                  </>
-                )}
-              </div>
-              {criterion.evidence === null ? null : (
+            {criterion.evidence === null ? null : (
+              <div className="mt-3">
                 <EvidenceFiles
                   requestId={requestId}
                   lineId={lineId}
@@ -157,15 +140,16 @@ export function CriteriaEditor({
                   files={criterion.evidence.files}
                   accept={criterion.evidence.accept}
                   maxBytes={criterion.evidence.maxBytes}
+                  required={criterion.evidence.required}
                   canAdd={criterion.evidence.canAdd}
                   labels={criterion.evidence.labels}
                   messages={messages}
                 />
-              )}
-            </div>
+              </div>
+            )}
 
             {criterion.missingText === undefined ? null : (
-              <p id={hintId} className="mt-4 text-xs font-medium text-warning-700">
+              <p id={hintId} className="mt-3 text-xs text-warning-700">
                 {criterion.missingText}
               </p>
             )}

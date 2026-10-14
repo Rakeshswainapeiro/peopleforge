@@ -58,8 +58,10 @@ test('subsidiary HR assesses an employee against the criteria with evidence', as
   await expect(page.getByRole('row', { name: /Yusuf Karim/u })).toHaveCount(1);
 
   // The first employee is assessed by default.
-  await expect(page.getByTestId('assessed-employee')).toHaveText('Aisha Rahman · EMP-1101');
-  await expect(criterion(page, 'C1')).toContainText('Not complete yet');
+  const assessing = (name: string) =>
+    page.getByRole('heading', { level: 2, name: `2. Eligibility criteria for ${name}` });
+  await expect(assessing('Aisha Rahman')).toBeVisible();
+  await expect(criterion(page, 'C1')).toHaveAttribute('data-complete', 'false');
 
   // A clean PDF is accepted, scanned and listed straight away.
   await attach(page, 'C1', 'appraisal 2026.pdf', PDF, 'application/pdf');
@@ -103,10 +105,14 @@ test('subsidiary HR assesses an employee against the criteria with evidence', as
   await page.getByRole('button', { name: 'Save draft' }).click();
 
   await expect(page.getByText('Draft saved.')).toBeVisible();
-  await expect(page.getByTestId('assessed-employee')).toHaveText('Aisha Rahman · EMP-1101');
+  await expect(assessing('Aisha Rahman')).toBeVisible();
   await expect(page.getByRole('row', { name: /Aisha Rahman/u })).toContainText('5/5 complete');
+  await expect(criterion(page, 'C1')).toHaveAttribute('data-complete', 'true');
   await expect(criterion(page, 'C2').getByRole('radio', { name: 'Fail' })).toBeChecked();
-  await expect(page.getByTestId('ready-summary')).toHaveText('1 of 2 employees ready');
+  await expect(page.getByText('All 5 criteria complete')).toBeVisible();
+  await expect(page.getByTestId('ready-note')).toHaveText(
+    '1 of 2 employees still have incomplete criteria. Submit unlocks when every employee is 5/5.',
+  );
   await expect(page.getByRole('button', { name: 'Submit to Sirius HR' })).toBeDisabled();
   expect(errors).toEqual([]);
 });
@@ -117,14 +123,16 @@ test('the pencil saves and opens the next employee’s criteria', async ({ page 
   await page.goto(requestUrl);
   await page.getByRole('textbox', { name: 'Proposed increase for Yusuf Karim' }).fill('5');
   await page.getByRole('button', { name: 'Assess criteria for Yusuf Karim' }).click();
-  await expect(page.getByTestId('assessed-employee')).toHaveText('Yusuf Karim · EMP-1102');
+  await expect(
+    page.getByRole('heading', { level: 2, name: '2. Eligibility criteria for Yusuf Karim' }),
+  ).toBeVisible();
   await expect(page).toHaveURL(/employee=[0-9a-f-]{36}#criteria$/u);
   // The proposal typed before switching was saved.
   await expect(
     page.getByRole('textbox', { name: 'Proposed increase for Yusuf Karim' }),
   ).toHaveValue('5');
   await expect(criterion(page, 'C1').getByRole('link')).toHaveCount(0);
-  await expect(page.getByText('Still needed: 5 criteria')).toBeVisible();
+  await expect(page.getByText('5 criteria incomplete', { exact: true })).toBeVisible();
   expect(errors).toEqual([]);
 });
 

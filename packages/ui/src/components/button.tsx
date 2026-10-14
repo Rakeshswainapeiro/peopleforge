@@ -6,7 +6,8 @@ import type { LinkComponent } from '../lib/link.js';
 import { PlainLink } from '../lib/link.js';
 import { Spinner } from './spinner.js';
 
-export type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger' | 'success';
+export type ButtonVariant =
+  'primary' | 'secondary' | 'outline' | 'dashed' | 'ghost' | 'danger' | 'success';
 export type ButtonSize = 'sm' | 'md' | 'lg';
 
 const VARIANTS = new Map<ButtonVariant, string>([
@@ -19,6 +20,11 @@ const VARIANTS = new Map<ButtonVariant, string>([
   ],
   // Figma: "Respond", "Continue draft", "View Status", "+ Add".
   ['outline', 'border border-brand-500 bg-surface text-brand-600 hover:bg-brand-50'],
+  // Figma: "Attach File" under a criterion.
+  [
+    'dashed',
+    'border border-dashed border-brand-500 bg-brand-50 text-brand-600 hover:border-brand-600 hover:bg-brand-100',
+  ],
   ['ghost', 'text-ink-muted hover:bg-surface-muted hover:text-ink'],
   ['danger', 'bg-danger-600 text-white hover:bg-danger-700'],
   ['success', 'bg-success-600 text-white hover:bg-success-700'],

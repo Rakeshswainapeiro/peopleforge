@@ -1,6 +1,5 @@
 import {
   MAX_EVIDENCE_PER_CRITERION,
-  MAX_JUSTIFICATION_LENGTH,
   type CriterionAssessment,
   type CriterionMissing,
   type IncrementRequest,
@@ -128,19 +127,7 @@ export function criteriaCards(
         criterion.evidencePolicy === 'none'
           ? null
           : {
-              policyLabel: t(
-                criterion.evidencePolicy === 'required'
-                  ? 'request.evidenceRequired'
-                  : 'request.evidenceOptional',
-              ),
-              rules: t('request.evidenceRules', {
-                types: list(
-                  criterion.allowedMediaTypes.map((type) => mediaTypeLabel(type, t)),
-                  locale,
-                ),
-                size: formatFileSize(criterion.maxFileMb * 1024 * 1024, locale),
-                count: MAX_EVIDENCE_PER_CRITERION,
-              }),
+              required: criterion.evidencePolicy === 'required',
               accept: criterion.allowedMediaTypes.join(','),
               maxBytes: criterion.maxFileMb * 1024 * 1024,
               canAdd: files.length < MAX_EVIDENCE_PER_CRITERION,
@@ -156,25 +143,27 @@ export function criteriaCards(
                 attach: t('request.attachFile'),
                 attachFor: t('request.attachFor', { code: criterion.code }),
                 uploading: t('request.uploading'),
-                noFiles: t('request.noFiles'),
+                // Figma: "PDF, JPG, PNG, XLSX · max 10 MB".
+                rules: t('request.evidenceRules', {
+                  types: list(
+                    criterion.allowedMediaTypes.map((type) => mediaTypeLabel(type, t)),
+                    locale,
+                  ),
+                  size: formatFileSize(criterion.maxFileMb * 1024 * 1024, locale),
+                }),
+                required: t('request.evidenceRequiredMark'),
               },
             },
     };
   });
 }
 
-export function criteriaLabels(locale: Locale, t: Translate): CriteriaEditorLabels {
+export function criteriaLabels(t: Translate): CriteriaEditorLabels {
   return {
     pass: t('request.pass'),
     fail: t('request.fail'),
     justification: t('request.justification'),
-    justificationHint: t('request.justificationHint', {
-      max: new Intl.NumberFormat(locale).format(MAX_JUSTIFICATION_LENGTH),
-    }),
-    evidence: t('request.evidence'),
-    noEvidenceNeeded: t('request.noEvidenceNeeded'),
-    complete: t('request.criterionComplete'),
-    incomplete: t('request.criterionState.pending'),
+    justificationPlaceholder: t('request.justificationPlaceholder'),
   };
 }
 
@@ -183,31 +172,52 @@ export function evidenceMessages(t: Translate): [string, string][] {
   return EVIDENCE_ERROR_KEYS.map((key) => [key, t(key)]);
 }
 
-/** Figma "3. Ready to submit?": who is ready, and what each other employee still needs. */
+/** "1 criterion incomplete" / "5 criteria incomplete", by the locale's plural rules. */
+function criteriaIncomplete(count: number, locale: Locale, t: Translate): string {
+  const form = new Intl.PluralRules(locale).select(count) === 'one' ? 'one' : 'other';
+  return t(`request.criteriaIncomplete.${form}`, {
+    count: new Intl.NumberFormat(locale).format(count),
+  });
+}
+
+/**
+ * Figma "3. Ready to submit?": a row per employee ("All 5 criteria complete" / "5 criteria
+ * incomplete"), and a note saying what still blocks submitting. Ready = a proposed increment
+ * and every criterion complete (the API's `totals.ready`).
+ */
 export function readyView(
   request: IncrementRequest,
   locale: Locale,
   t: Translate,
 ): ReadyPanelProps {
   const number = new Intl.NumberFormat(locale);
-  const allReady = request.totals.ready === request.totals.employees;
+  const total = request.criteria.length;
+  const rows = request.lines.map((line) => ({
+    line,
+    open: line.criteria.length - completeCount(line),
+    proposed: line.proposedValue !== null,
+  }));
+  const withOpenCriteria = rows.filter((row) => row.open > 0).length;
+  const withoutProposal = rows.filter((row) => !row.proposed).length;
+  const employees = number.format(request.lines.length);
+  const note =
+    withOpenCriteria > 0
+      ? t('request.notReadyCriteria', {
+          count: number.format(withOpenCriteria),
+          total: employees,
+          criteria: number.format(total),
+        })
+      : withoutProposal > 0
+        ? t('request.notReadyProposals', {
+            count: number.format(withoutProposal),
+            total: employees,
+          })
+        : t('request.allReady');
   return {
-    summary: t('request.readySummary', {
-      ready: number.format(request.totals.ready),
-      total: number.format(request.totals.employees),
-    }),
-    items: request.lines.map((line) => {
-      const openCriteria = line.criteria.length - completeCount(line);
+    items: rows.map(({ line, open, proposed }) => {
       const needs = [
-        ...(line.proposedValue === null ? [t('request.needsProposal')] : []),
-        ...(openCriteria === 0
-          ? []
-          : [
-              t(
-                `request.needsCriteria.${new Intl.PluralRules(locale).select(openCriteria) === 'one' ? 'one' : 'other'}`,
-                { count: number.format(openCriteria) },
-              ),
-            ]),
+        ...(open === 0 ? [] : [criteriaIncomplete(open, locale, t)]),
+        ...(proposed ? [] : [t('request.noProposal')]),
       ];
       return {
         lineId: line.id,
@@ -215,13 +225,13 @@ export function readyView(
         ready: needs.length === 0,
         status:
           needs.length === 0
-            ? t('request.ready')
-            : t('request.stillNeeded', { items: list(needs, locale) }),
+            ? t('request.allCriteriaComplete', { count: number.format(total) })
+            : needs.join(' · '),
       };
     }),
-    note: t('request.submitNote'),
+    note,
     submitLabel: t('request.submit'),
-    caption: t(allReady ? 'request.submitUnavailable' : 'request.submitBlocked'),
+    caption: t('request.submitCaption'),
   };
 }
 

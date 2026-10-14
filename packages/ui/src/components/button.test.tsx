@@ -18,6 +18,7 @@ describe('buttonClasses', () => {
   it.each([
     ['secondary', 'border-line-strong'],
     ['outline', 'border-brand-500'],
+    ['dashed', 'border-dashed'],
     ['ghost', 'hover:bg-surface-muted'],
     ['danger', 'bg-danger-600'],
     ['success', 'bg-success-600'],

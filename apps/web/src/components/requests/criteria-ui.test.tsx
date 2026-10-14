@@ -51,7 +51,7 @@ function editor() {
         requestId={REQUEST_ID}
         lineId={LINE_1}
         criteria={criteriaCards(draft, omar, 'en', t)}
-        labels={criteriaLabels('en', t)}
+        labels={criteriaLabels(t)}
         maxJustification={2000}
         messages={evidenceMessages(t)}
       />
@@ -80,10 +80,24 @@ describe('CriteriaEditor [R1-03, R1-06]', () => {
     expect(within(c1).getByRole('textbox', { name: /^Justification/u })).toHaveValue(
       'Rated 4 of 5 in the 2026 appraisal.',
     );
-    expect(within(c1).getByText('Complete')).toBeInTheDocument();
+    // Figma: complete cards are calm, incomplete ones amber; the mark shows the result.
+    expect(c1).toHaveAttribute('data-complete', 'true');
+    expect(c1).toHaveClass('border-success-200');
+    expect(c1.querySelector('[data-state]')).toHaveAttribute('data-state', 'pass');
+    expect(within(c1).getByText('PDF, PNG, JPG, XLSX · max 10 MB')).toBeInTheDocument();
+    expect(within(c1).getByText('Evidence required')).toHaveClass('sr-only');
     const c3 = screen.getByRole('article', { name: 'C3 · [Placeholder] Criterion 3' });
-    expect(c3).toHaveAccessibleDescription('To complete: add a justification, attach evidence');
-    expect(within(c3).getByText('Not complete yet')).toBeInTheDocument();
+    expect(c3).toHaveAccessibleDescription('To complete: add a justification, attach evidence.');
+    expect(c3).toHaveClass('border-warning-200');
+    const c4 = screen.getByRole('article', { name: 'C4 · [Placeholder] Criterion 4' });
+    expect(c4.querySelector('[data-state]')).toHaveAttribute('data-state', 'pending');
+    expect(within(c4).getByRole('textbox')).toHaveAttribute(
+      'placeholder',
+      'Why does this employee pass or fail this criterion?',
+    );
+    // C5 takes files but doesn't need them: no asterisk.
+    const c5 = screen.getByRole('article', { name: 'C5 · [Placeholder] Criterion 5' });
+    expect(within(c5).queryByText('Evidence required')).toBeNull();
     expect(
       within(screen.getByRole('article', { name: 'C2 · [Placeholder] Criterion 2' })).getByRole(
         'radio',
@@ -148,14 +162,14 @@ describe('CriteriaEditor [R1-03, R1-06]', () => {
           requestId={REQUEST_ID}
           lineId={LINE_1}
           criteria={criteriaCards(draft, must(draft.lines[0]), 'en', t).slice(0, 1)}
-          labels={criteriaLabels('en', t)}
+          labels={criteriaLabels(t)}
           maxJustification={2000}
           messages={[]}
         />
       </DraftForm>,
     );
-    expect(screen.getByText('No files needed for this criterion.')).toBeInTheDocument();
     expect(screen.queryByLabelText(/Attach a file/u)).toBeNull();
+    expect(screen.queryByText(/max 10 MB/u)).toBeNull();
   });
 });
 
@@ -177,12 +191,14 @@ function files(overrides: Partial<Parameters<typeof EvidenceFiles>[0]> = {}) {
       ]}
       accept="application/pdf"
       maxBytes={1024}
+      required
       canAdd
       labels={{
         attach: 'Attach file',
         attachFor: 'Attach a file for C1',
         uploading: 'Uploading and scanning…',
-        noFiles: 'No files attached yet.',
+        rules: 'PDF · max 1 kB',
+        required: 'Evidence required',
       }}
       messages={evidenceMessages(t)}
       {...overrides}
@@ -253,31 +269,46 @@ describe('EvidenceFiles [R1-04]', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('unknown.key');
   });
 
-  it('offers no upload at the file limit, and says when there are no files', () => {
-    files({ canAdd: false, files: [] });
-    expect(screen.getByText('No files attached yet.')).toBeInTheDocument();
+  it('offers no upload at the file limit, still showing the rules', () => {
+    files({ canAdd: false, files: [], required: false });
     expect(screen.queryByLabelText('Attach a file for C1')).toBeNull();
+    expect(screen.queryByRole('list')).toBeNull();
+    expect(screen.getByText('PDF · max 1 kB')).toBeInTheDocument();
+    expect(screen.queryByText('Evidence required')).toBeNull();
   });
 });
 
 describe('ReadyPanel', () => {
   it('lists readiness and keeps Submit disabled with its reason', () => {
     render(<ReadyPanel {...readyView(draftRequest(), 'en', t)} />);
-    expect(screen.getByTestId('ready-summary')).toHaveTextContent('0 of 2 employees ready');
-    expect(screen.getByRole('button', { name: 'Submit to Sirius HR' })).toBeDisabled();
+    expect(screen.getByTestId('ready-note')).toHaveTextContent(
+      '2 of 2 employees still have incomplete criteria. Submit unlocks when every employee is 5/5.',
+    );
+    expect(screen.getByText('3 criteria incomplete')).toBeInTheDocument();
+    const submit = screen.getByRole('button', { name: 'Submit to Sirius HR' });
+    expect(submit).toBeDisabled();
+    expect(submit).toHaveAccessibleDescription(/^On submit the request is routed to Sirius HR/u);
   });
 
   it('marks a ready employee', () => {
     render(
       <ReadyPanel
-        summary="1 of 1 employees ready"
-        items={[{ lineId: LINE_1, fullName: 'Omar Haddad', ready: true, status: 'Ready' }]}
+        items={[
+          {
+            lineId: LINE_1,
+            fullName: 'Omar Haddad',
+            ready: true,
+            status: 'All 5 criteria complete',
+          },
+        ]}
         note="Note"
         submitLabel="Submit to Sirius HR"
         caption="Later"
       />,
     );
-    expect(screen.getByText('Ready')).toBeInTheDocument();
+    const row = screen.getByText('All 5 criteria complete').closest('li');
+    expect(row).toHaveAttribute('data-ready', 'true');
+    expect(row?.querySelector('[data-state]')).toHaveAttribute('data-state', 'pass');
   });
 });
 

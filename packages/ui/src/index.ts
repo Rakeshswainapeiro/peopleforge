@@ -59,5 +59,6 @@ export {
   type SegmentedChoiceProps,
 } from './components/segmented-choice.js';
 export { Skeleton, Spinner } from './components/spinner.js';
+export { StatusMark, type MarkState, type StatusMarkProps } from './components/status-mark.js';
 export { CellStack, Table, TBody, Td, Th, THead, Tr, type TableProps } from './components/table.js';
 export { ToggleGroup, type ToggleGroupProps, type ToggleItem } from './components/toggle-group.js';
