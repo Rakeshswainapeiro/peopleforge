@@ -38,6 +38,21 @@ describe('Field', () => {
     expect(screen.getByText('Search')).toHaveClass('sr-only');
   });
 
+  it('offers a large size for table value boxes', () => {
+    render(
+      <>
+        <Input aria-label="Big" controlSize="lg" />
+        <Input aria-label="Big search" controlSize="lg" icon="search" />
+        <Select aria-label="Big select" controlSize="lg">
+          <option>One</option>
+        </Select>
+      </>,
+    );
+    expect(screen.getByRole('textbox', { name: 'Big' })).toHaveClass('h-12', 'text-base');
+    expect(screen.getByRole('textbox', { name: 'Big search' })).toHaveClass('h-12');
+    expect(screen.getByRole('combobox', { name: 'Big select' })).toHaveClass('h-12');
+  });
+
   it('renders a plain input and a select with a chevron', async () => {
     render(
       <>
@@ -48,7 +63,7 @@ describe('Field', () => {
         </Select>
       </>,
     );
-    expect(screen.getByRole('textbox', { name: 'Value' })).toHaveClass('px-3');
+    expect(screen.getByRole('textbox', { name: 'Value' })).toHaveClass('px-3', 'h-10');
     const select = screen.getByRole('combobox', { name: 'Period' });
     await userEvent.selectOptions(select, 'q2');
     expect(select).toHaveValue('q2');
@@ -211,6 +226,6 @@ describe('SegmentedChoice', () => {
       <SegmentedChoice name="k" legend="L" size="md" options={[{ value: 'a', label: 'A' }]} />,
     );
     expect(screen.getByRole('radio', { name: 'A' })).not.toBeChecked();
-    expect(screen.getByText('A')).toHaveClass('h-8');
+    expect(screen.getByText('A')).toHaveClass('h-9');
   });
 });

@@ -16,7 +16,7 @@ import { getRequestLocale } from '@/i18n/request-locale';
 import { createTranslator } from '@/i18n/translator';
 import { hasAnyPermission } from '@/lib/navigation';
 import { parseErrorKey } from '@/lib/request-errors';
-import { entityName, localised } from '@/lib/viewer-display';
+import { entityName, localised, roleLabel } from '@/lib/viewer-display';
 import { openCycles, searchEmployees } from '@/server/increment-requests';
 import { requireViewer } from '@/server/session';
 import { startRequest } from '../actions';
@@ -38,7 +38,13 @@ export default async function NewRequestPage({ searchParams }: NewRequestPagePro
   const query = await searchParams;
   const error = parseErrorKey(query.error);
 
-  const header = <PageHeader title={t('request.newTitle')} description={t('request.newIntro')} />;
+  const header = (
+    <PageHeader
+      eyebrow={t(roleLabel(me.roles))}
+      title={t('request.newTitle')}
+      description={t('request.newIntroGeneric')}
+    />
+  );
   const entity = me.entities.find((candidate) => candidate.id === query.entity) ?? me.entities[0];
   if (entity === undefined) {
     return (
@@ -88,34 +94,34 @@ export default async function NewRequestPage({ searchParams }: NewRequestPagePro
           <CardHeader
             title={t('request.employeesSection')}
             description={t('request.employeesHint', { entity: name })}
+            actions={
+              <AddEmployeeForm
+                action={startRequest}
+                employees={employees.data}
+                t={t}
+                hidden={{
+                  entityId: entity.id,
+                  // A fresh key per page view: a double click creates one draft, not two.
+                  idempotencyKey: randomUUID(),
+                  ...(cycles.data.length === 1 ? { cycleId: onlyCycle.id } : {}),
+                }}
+              >
+                {cycles.data.length > 1 ? (
+                  <Field label={t('request.cycle')} className="w-56">
+                    {({ id }) => (
+                      <Select id={id} name="cycleId" defaultValue={onlyCycle.id} controlSize="lg">
+                        {cycles.data.map((cycle) => (
+                          <option key={cycle.id} value={cycle.id}>
+                            {localised(cycle.name, locale)}
+                          </option>
+                        ))}
+                      </Select>
+                    )}
+                  </Field>
+                ) : null}
+              </AddEmployeeForm>
+            }
           />
-          <div className="px-5 pt-4">
-            <AddEmployeeForm
-              action={startRequest}
-              employees={employees.data}
-              t={t}
-              hidden={{
-                entityId: entity.id,
-                // A fresh key per page view: a double click creates one draft, not two.
-                idempotencyKey: randomUUID(),
-                ...(cycles.data.length === 1 ? { cycleId: onlyCycle.id } : {}),
-              }}
-            >
-              {cycles.data.length > 1 ? (
-                <Field label={t('request.cycle')} className="min-w-48">
-                  {({ id }) => (
-                    <Select id={id} name="cycleId" defaultValue={onlyCycle.id}>
-                      {cycles.data.map((cycle) => (
-                        <option key={cycle.id} value={cycle.id}>
-                          {localised(cycle.name, locale)}
-                        </option>
-                      ))}
-                    </Select>
-                  )}
-                </Field>
-              ) : null}
-            </AddEmployeeForm>
-          </div>
           <EmptyState
             icon="file"
             title={t('request.emptyTitle')}

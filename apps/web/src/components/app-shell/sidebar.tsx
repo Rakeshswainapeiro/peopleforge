@@ -31,6 +31,7 @@ export function Sidebar({ me, locale, t }: SidebarProps) {
     href: item.href,
     icon: item.icon,
     label: t(item.label),
+    alsoActiveFor: item.alsoActiveFor,
   }));
   return (
     <aside className="flex flex-col gap-6 bg-sidebar px-3 py-4 text-sidebar-ink lg:sticky lg:top-0 lg:h-dvh lg:w-60 lg:shrink-0 lg:py-5">

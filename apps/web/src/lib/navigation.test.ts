@@ -30,6 +30,13 @@ describe('isActivePath', () => {
     ['/reports/rp-01', '/reports', true],
     ['/reportsx', '/reports', false],
   ])('%s is active for %s: %s', (pathname, href, expected) => {
-    expect(isActivePath(pathname, href)).toBe(expected);
+    expect(isActivePath(pathname, { href })).toBe(expected);
+  });
+
+  it('keeps New Request selected while a draft is edited (Figma)', () => {
+    const newRequest = { href: '/requests/new', alsoActiveFor: ['/requests'] };
+    expect(isActivePath('/requests/34230d44-59a7-4faf-9f69-4025ab34481f', newRequest)).toBe(true);
+    expect(isActivePath('/requests/new', newRequest)).toBe(true);
+    expect(isActivePath('/requestsx', newRequest)).toBe(false);
   });
 });

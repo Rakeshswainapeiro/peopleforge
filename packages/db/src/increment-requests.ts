@@ -48,6 +48,8 @@ export interface IncrementRequestRecord {
   entity: { id: string; code: string; name: LocalisedText };
   cycle: { id: string; name: LocalisedText };
   criteriaSetId: string;
+  /** The criteria of the pinned set, in display order (results per employee arrive in S3). */
+  criteria: { id: string; code: string; name: LocalisedText }[];
   version: number;
   createdAt: Date;
   updatedAt: Date;
@@ -380,6 +382,12 @@ export function createIncrementRequestRepository(
           .where('r.deleted_at', 'is', null)
           .executeTakeFirst();
         if (request === undefined) return null;
+        const criteria = await trx
+          .selectFrom('increments.criterion')
+          .select(['id', 'code', 'name'])
+          .where('criteria_set_id', '=', request.criteria_set_id)
+          .orderBy('position')
+          .execute();
         const lines = await trx
           .selectFrom('increments.request_line')
           .selectAll()
@@ -395,6 +403,7 @@ export function createIncrementRequestRepository(
           entity: { id: request.entity_id, code: request.entity_code, name: request.entity_name },
           cycle: { id: request.cycle_id, name: request.cycle_name },
           criteriaSetId: request.criteria_set_id,
+          criteria,
           version: request.version,
           createdAt: request.created_at,
           updatedAt: request.updated_at,

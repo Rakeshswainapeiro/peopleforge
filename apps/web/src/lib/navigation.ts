@@ -8,6 +8,8 @@ export interface NavItem {
   icon: IconName;
   /** Shown when the viewer has any of these; omitted: everyone signed in. */
   anyOf?: readonly Permission[];
+  /** Other path prefixes that belong to this item (e.g. a draft being edited → New Request). */
+  alsoActiveFor?: readonly string[] | undefined;
 }
 
 /**
@@ -21,6 +23,8 @@ export const NAV_ITEMS: readonly NavItem[] = [
     label: 'nav.newRequest',
     icon: 'file',
     anyOf: ['increment_request:create'],
+    // Figma: the draft editor keeps "New Request" selected.
+    alsoActiveFor: ['/requests'],
   },
   { href: '/notifications', label: 'nav.notifications', icon: 'bell' },
   {
@@ -42,8 +46,18 @@ export function visibleNavItems(granted: readonly Permission[]): NavItem[] {
   return NAV_ITEMS.filter((item) => hasAnyPermission(granted, item.anyOf));
 }
 
-/** Home matches exactly; other items also match their sub-pages (e.g. /reports/rp-01). */
-export function isActivePath(pathname: string, href: string): boolean {
-  if (href === '/') return pathname === '/';
-  return pathname === href || pathname.startsWith(`${href}/`);
+function underPath(pathname: string, prefix: string): boolean {
+  return pathname === prefix || pathname.startsWith(`${prefix}/`);
+}
+
+/**
+ * Home matches exactly; other items match their own sub-pages (e.g. /reports/rp-01) and any
+ * `alsoActiveFor` prefix (e.g. /requests/<id> for New Request).
+ */
+export function isActivePath(
+  pathname: string,
+  item: Pick<NavItem, 'href' | 'alsoActiveFor'>,
+): boolean {
+  if (item.href === '/') return pathname === '/';
+  return [item.href, ...(item.alsoActiveFor ?? [])].some((prefix) => underPath(pathname, prefix));
 }

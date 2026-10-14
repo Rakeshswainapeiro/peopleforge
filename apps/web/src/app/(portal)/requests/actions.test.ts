@@ -107,16 +107,14 @@ describe('addEmployeeAction and removeEmployeeAction', () => {
   });
 
   it('removes the employee whose button was pressed', async () => {
-    await expect(
-      removeEmployeeAction(form({ requestId: REQUEST, removeLineId: LINE_1 })),
-    ).rejects.toThrow(`NEXT_REDIRECT /requests/${REQUEST}`);
+    await expect(removeEmployeeAction(LINE_1, form({ requestId: REQUEST }))).rejects.toThrow(
+      `NEXT_REDIRECT /requests/${REQUEST}`,
+    );
     expect(removeEmployee).toHaveBeenCalledWith(REQUEST, LINE_1);
   });
 
   it('refuses tampered IDs before calling the API', async () => {
-    await expect(
-      removeEmployeeAction(form({ requestId: '../admin', removeLineId: LINE_1 })),
-    ).rejects.toThrow();
+    await expect(removeEmployeeAction(LINE_1, form({ requestId: '../admin' }))).rejects.toThrow();
     expect(removeEmployee).not.toHaveBeenCalled();
   });
 });

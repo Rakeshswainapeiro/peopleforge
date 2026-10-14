@@ -18,10 +18,15 @@ export function proposalRows(
     grade: line.grade,
     currencyCode: line.currency,
     current: formatMoney(line.currentSalary, line.currency, locale),
-    newSalary:
-      line.newSalary === null
-        ? t('request.notSet')
-        : formatMoney(line.newSalary, line.currency, locale),
+    // Criteria results arrive with S3; until then every criterion is "not assessed yet".
+    criteria: request.criteria.map((criterion) => ({
+      code: criterion.code,
+      state: 'pending' as const,
+    })),
+    criteriaLabel: t('request.criteriaComplete', {
+      done: 0,
+      total: request.criteria.length,
+    }),
     kind: line.proposedKind ?? 'percent',
     value: line.proposedValue === null ? '' : trimDecimal(line.proposedValue),
     labels: {
@@ -67,7 +72,12 @@ export function tableLabels(t: Translate): ProposalsTableLabels {
     colCurrent: t('request.colCurrent'),
     colProposedAs: t('request.colProposedAs'),
     colValue: t('request.colValue'),
-    colNew: t('request.colNew'),
+    colCriteria: t('request.colCriteria'),
+    criterionStates: {
+      pass: t('request.criterionState.pass'),
+      fail: t('request.criterionState.fail'),
+      pending: t('request.criterionState.pending'),
+    },
     colActions: t('request.colActions'),
     percentOption: t('request.percentOption'),
     valuePlaceholder: t('request.valuePlaceholder'),

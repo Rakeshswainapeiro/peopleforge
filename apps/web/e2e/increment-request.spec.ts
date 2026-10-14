@@ -8,12 +8,23 @@ test.describe.configure({ mode: 'serial' });
 
 let requestUrl = '';
 
+/** Fails the test on any browser console error or uncaught exception (CSP, hydration, actions). */
+function watchForErrors(page: Page): string[] {
+  const errors: string[] = [];
+  page.on('console', (message) => {
+    if (message.type() === 'error') errors.push(message.text());
+  });
+  page.on('pageerror', (error) => errors.push(error.message));
+  return errors;
+}
+
 async function addEmployee(page: Page, option: string): Promise<void> {
   await page.getByRole('combobox', { name: 'Add employee' }).selectOption({ label: option });
   await page.getByRole('button', { name: 'Add' }).click();
 }
 
 test('subsidiary HR raises a draft and proposes increments', async ({ page }) => {
+  const errors = watchForErrors(page);
   await signIn(page, 'alphaHr');
   await page
     .getByRole('navigation', { name: 'Main' })
@@ -28,9 +39,10 @@ test('subsidiary HR raises a draft and proposes increments', async ({ page }) =>
   await addEmployee(page, 'Aisha Rahman · EMP-1101 · G5');
   await page.waitForURL(/\/requests\/[0-9a-f-]{36}$/u);
   requestUrl = page.url();
-  await expect(page.getByRole('heading', { level: 1 })).toContainText(
-    /Increment request INC-2026-\d{4}/u,
-  );
+  await expect(
+    page.getByRole('heading', { level: 1, name: 'New increment request' }),
+  ).toBeVisible();
+  await expect(page.getByText(/^Subsidiary HR · INC-2026-\d{4} · Draft$/u)).toBeVisible();
   await addEmployee(page, 'Yusuf Karim · EMP-1102 · G6');
 
   const table = page.getByRole('table', {
@@ -48,10 +60,14 @@ test('subsidiary HR raises a draft and proposes increments', async ({ page }) =>
   await page.getByRole('button', { name: 'Save draft' }).click();
 
   await expect(page.getByText('Draft saved.')).toBeVisible();
-  // 8% of 14,200 = 1,136; 1,680 of 16,800 = 10%; total 2,816; average 9%.
-  await expect(table.getByRole('row', { name: /Aisha Rahman/u })).toContainText(/AED\s15,336/u);
+  // 8% of 14,200 = 1,136; 1,680 of 16,800 = 10%; total 2,816; average 9%. Criteria: S3.
   await expect(page.getByTestId('total-increase')).toHaveText(/^AED\s2,816 \/ month$/u);
   await expect(page.getByTestId('average-percent')).toHaveText('9%');
+  // Figma: the draft editor keeps "New Request" selected in the sidebar.
+  await expect(
+    page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'New Request' }),
+  ).toHaveAttribute('aria-current', 'page');
+  expect(errors).toEqual([]);
 });
 
 test('a refused value is explained on its row and kept', async ({ page }) => {
@@ -69,10 +85,13 @@ test('a refused value is explained on its row and kept', async ({ page }) => {
 });
 
 test('removing an employee, and continuing the draft from Home', async ({ page }) => {
+  const errors = watchForErrors(page);
   await signIn(page, 'alphaHr');
   await page.goto(requestUrl);
   await page.getByRole('button', { name: 'Remove Yusuf Karim' }).click();
   await expect(page.getByRole('row', { name: /Yusuf Karim/u })).toHaveCount(0);
+  await expect(page.getByRole('row', { name: /Aisha Rahman/u })).toHaveCount(1);
+  expect(errors).toEqual([]);
 
   await page.goto('/');
   const reference = requestUrl.split('/').at(-1) ?? '';

@@ -19,6 +19,11 @@ function request(overrides: Partial<IncrementRequest> = {}): IncrementRequest {
     status: 'draft',
     entity: { id: ID, code: 'SUB-C', name: { en: 'Subsidiary C' } },
     cycle: { id: ID, name: { en: 'Increment cycle 2026' } },
+    criteria: ['C1', 'C2', 'C3', 'C4', 'C5'].map((code, index) => ({
+      id: `44444444-4444-4444-8444-44444444444${String(index)}`,
+      code,
+      name: { en: `[Placeholder] ${code}` },
+    })),
     version: 2,
     createdAt: '2026-10-14T07:00:00.000Z',
     updatedAt: '2026-10-14T07:00:00.000Z',
@@ -69,7 +74,8 @@ describe('proposalRows', () => {
   it('formats amounts and labels each row for screen readers', () => {
     const [first, second] = proposalRows(request(), 'en', t);
     expect(first?.current).toMatch(/^AED\s21,500$/u);
-    expect(first?.newSalary).toMatch(/^AED\s23,220$/u);
+    expect(first?.criteriaLabel).toBe('0/5 complete');
+    expect(first?.criteria.map((criterion) => criterion.state)).toEqual(Array(5).fill('pending'));
     expect(first).toMatchObject({
       kind: 'percent',
       value: '8',
@@ -80,7 +86,7 @@ describe('proposalRows', () => {
         remove: 'Remove Omar Haddad',
       },
     });
-    expect(second).toMatchObject({ newSalary: 'Not set', kind: 'percent', value: '' });
+    expect(second).toMatchObject({ kind: 'percent', value: '' });
   });
 });
 

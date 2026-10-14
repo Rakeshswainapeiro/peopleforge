@@ -124,17 +124,14 @@
   },
   "request": {
     "newTitle": "New increment request",
-    "newIntro": "Add employees and propose an increment for each. Eligibility criteria follow in the next step.",
-    "draftTitle": "Increment request {reference}",
-    "draftIntro": "{cycle} · {entity}. Proposals are kept when you save the draft.",
-    "statusDraft": "Draft",
+    "newIntro": "Add employees, propose an increment, then complete all {count} criteria for each one.",
     "saveDraft": "Save draft",
     "saving": "Saving…",
     "saved": "Draft saved.",
     "employeesSection": "1. Employees and proposed increment",
     "employeesHint": "Only {entity} employees can be added. Each employee can appear once.",
     "addEmployee": "Add employee",
-    "chooseEmployee": "Choose an employee",
+    "chooseEmployee": "Search by name or ID…",
     "add": "Add",
     "adding": "Adding…",
     "noMoreEmployees": "Every active {entity} employee is already in this request.",
@@ -148,7 +145,6 @@
     "colCurrent": "Current monthly",
     "colProposedAs": "Proposed as",
     "colValue": "Value",
-    "colNew": "New monthly",
     "colActions": "Actions",
     "percentOption": "%",
     "proposedAsFor": "Proposed as, for {name}",
@@ -156,10 +152,10 @@
     "valuePlaceholder": "e.g. 6",
     "remove": "Remove {name}",
     "notSet": "Not set",
-    "totalsEmployees": "Employees",
-    "totalsIncrease": "Total proposed increase",
+    "totalsEmployees": "Employees:",
+    "totalsIncrease": "Total proposed increase:",
     "perMonth": "{amount} / month",
-    "totalsAverage": "Average",
+    "totalsAverage": "Average:",
     "noCycleTitle": "No increment cycle is open",
     "noCycleBody": "Sirius HR opens a cycle before increment requests can be raised.",
     "noSubsidiaryTitle": "No subsidiary assigned",
@@ -183,6 +179,15 @@
       "chooseEmployee": "Choose an employee to add.",
       "notFound": "This request no longer exists or isn't visible to you.",
       "generic": "The change couldn't be saved. Try again."
-    }
+    },
+    "draftEyebrow": "{role} · {reference} · Draft",
+    "colCriteria": "Criteria",
+    "criteriaComplete": "{done}/{total} complete",
+    "criterionState": {
+      "pass": "Pass",
+      "fail": "Fail",
+      "pending": "Not assessed yet"
+    },
+    "newIntroGeneric": "Add employees, propose an increment, then complete the eligibility criteria for each one."
   }
 }

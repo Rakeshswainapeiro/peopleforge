@@ -46,7 +46,7 @@ export function SegmentedChoice({
             <span
               className={cn(
                 'flex items-center justify-center rounded-[calc(var(--radius-control)-2px)] font-medium text-ink',
-                size === 'sm' ? 'h-7 min-w-9 px-2 text-xs' : 'h-8 min-w-11 px-3 text-sm',
+                size === 'sm' ? 'h-7 min-w-9 px-2 text-xs' : 'h-9 min-w-12 px-3 text-sm',
                 'hover:bg-surface-muted peer-checked:bg-ink peer-checked:text-white',
                 'peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-brand-500',
                 transition,

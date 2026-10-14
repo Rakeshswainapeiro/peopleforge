@@ -58,14 +58,14 @@ export function Th({ className, scope = 'col', ...props }: ThHTMLAttributes<HTML
 }
 
 export function Td({ className, ...props }: TdHTMLAttributes<HTMLTableCellElement>) {
-  return <td {...props} className={cn('px-3 py-3.5 align-middle text-ink', className)} />;
+  return <td {...props} className={cn('px-3 py-4 align-middle text-ink', className)} />;
 }
 
 /** Two-line cell: primary text over a muted line (Figma: "Omar Haddad / EMP-3318 · G7"). */
 export function CellStack({ primary, secondary }: { primary: ReactNode; secondary?: ReactNode }) {
   return (
     <div className="flex flex-col">
-      <span className="font-medium text-ink">{primary}</span>
+      <span className="font-semibold text-ink">{primary}</span>
       {secondary === undefined ? null : <span className="text-xs text-ink-muted">{secondary}</span>}
     </div>
   );

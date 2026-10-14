@@ -126,6 +126,8 @@ export const IncrementRequestSchema = z.object({
   status: RequestStatusSchema,
   entity: EntitySummarySchema,
   cycle: CycleSchema.pick({ id: true, name: true }),
+  /** The eligibility criteria this request is assessed against (pinned at creation, R1-05). */
+  criteria: z.array(z.object({ id: z.uuid(), code: z.string(), name: LocalisedTextSchema })),
   version: z.number().int().min(1),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),

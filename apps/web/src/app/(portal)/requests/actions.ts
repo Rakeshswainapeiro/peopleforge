@@ -67,9 +67,17 @@ export async function addEmployeeAction(formData: FormData): Promise<never> {
   outcome(await addEmployee(requestId, employeeId.data), `/requests/${requestId}`);
 }
 
-export async function removeEmployeeAction(formData: FormData): Promise<never> {
+/**
+ * The trash button of a row. The line ID is bound to the action (`.bind(null, lineId)`):
+ * React overrides a button's `name` when its formAction is a function, so a name/value pair
+ * would never reach the server.
+ */
+export async function removeEmployeeAction(
+  lineIdInput: string,
+  formData: FormData,
+): Promise<never> {
   const requestId = Id.parse(field(formData, 'requestId'));
-  const lineId = Id.parse(field(formData, 'removeLineId'));
+  const lineId = Id.parse(lineIdInput);
   outcome(await removeEmployee(requestId, lineId), `/requests/${requestId}`);
 }
 

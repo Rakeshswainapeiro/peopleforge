@@ -22,7 +22,11 @@ const row: ProposalRowView = {
   grade: 'G7',
   currencyCode: 'AED',
   current: 'AED 21,500',
-  newSalary: 'AED 23,220',
+  criteria: [
+    { code: 'C1', state: 'pending' },
+    { code: 'C2', state: 'pending' },
+  ],
+  criteriaLabel: '0/2 complete',
   kind: 'percent',
   value: '8',
   labels: {
@@ -83,10 +87,8 @@ describe('ProposalsTable', () => {
         name: 'AED',
       }),
     ).toBeChecked();
-    expect(screen.getByRole('button', { name: 'Remove Omar Haddad' })).toHaveAttribute(
-      'value',
-      LINE,
-    );
+    // No name/value on the button: React overrides them; the line ID is bound to the action.
+    expect(screen.getByRole('button', { name: 'Remove Omar Haddad' })).not.toHaveAttribute('value');
     expect(screen.getByText('Totals')).toBeInTheDocument();
   });
 

@@ -41,6 +41,11 @@ export function record(overrides: Partial<IncrementRequestRecord> = {}): Increme
     entity: { id: SUB_A, code: 'SUB-A', name: { en: 'Subsidiary A' } },
     cycle: { id: CYCLE_ID, name: { en: 'Increment cycle 2026' } },
     criteriaSetId: '00000000-0000-4000-8000-0000000c5e71',
+    criteria: ['C1', 'C2', 'C3', 'C4', 'C5'].map((code, index) => ({
+      id: `44444444-4444-4444-8444-44444444444${String(index)}`,
+      code,
+      name: { en: `[Placeholder] ${code}` },
+    })),
     version: 3,
     createdAt: new Date('2026-10-14T07:00:00Z'),
     updatedAt: new Date('2026-10-14T07:05:00Z'),

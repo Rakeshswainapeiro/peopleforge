@@ -74,21 +74,31 @@ export function Field({
   );
 }
 
+export type ControlSize = 'md' | 'lg';
+
+/** md: filters and forms (40px). lg: the Figma table value boxes (48px, larger text). */
+function sizeClasses(size: ControlSize): string {
+  return size === 'lg' ? 'h-12 text-base' : 'h-10';
+}
+
 export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   /** Leading icon inside the box, e.g. search. */
   icon?: IconName | undefined;
+  controlSize?: ControlSize;
 }
 
-export function Input({ icon, className, ...props }: InputProps) {
-  if (icon === undefined)
-    return <input {...props} className={cn(control, 'h-10 px-3', className)} />;
+export function Input({ icon, controlSize = 'md', className, ...props }: InputProps) {
+  const size = sizeClasses(controlSize);
+  if (icon === undefined) {
+    return <input {...props} className={cn(control, size, 'px-3', className)} />;
+  }
   return (
     <div className="relative">
       <Icon
         name={icon}
         className="pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 text-ink-subtle"
       />
-      <input {...props} className={cn(control, 'h-10 ps-9 pe-3', className)} />
+      <input {...props} className={cn(control, size, 'ps-9 pe-3', className)} />
     </div>
   );
 }
@@ -108,10 +118,17 @@ export function Textarea({
 }
 
 /** Native select (keyboard, screen readers and mobile pickers for free) with the Figma chevron. */
-export function Select({ className, children, ...props }: SelectHTMLAttributes<HTMLSelectElement>) {
+export interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
+  controlSize?: ControlSize;
+}
+
+export function Select({ className, children, controlSize = 'md', ...props }: SelectProps) {
   return (
     <div className="relative">
-      <select {...props} className={cn(control, 'h-10 appearance-none ps-3 pe-9', className)}>
+      <select
+        {...props}
+        className={cn(control, sizeClasses(controlSize), 'appearance-none ps-3 pe-9', className)}
+      >
         {children}
       </select>
       <Icon

@@ -98,6 +98,7 @@ describe('IncrementRequestSchema', () => {
       status: 'draft',
       entity: { id: ID, code: 'SUB-A', name: { en: 'Subsidiary A' } },
       cycle: { id: ID, name: { en: 'Increment cycle 2026' } },
+      criteria: [{ id: ID, code: 'C1', name: { en: '[Placeholder] Performance rating' } }],
       version: 2,
       createdAt: '2026-10-14T07:00:00.000Z',
       updatedAt: '2026-10-14T07:05:00.000Z',

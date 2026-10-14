@@ -25,9 +25,9 @@ export function AddEmployeeForm({ action, hidden, employees, t, children }: AddE
         <input key={name} type="hidden" name={name} value={value} />
       ))}
       {children}
-      <Field label={t('request.addEmployee')} className="min-w-64 flex-1">
+      <Field label={t('request.addEmployee')} className="w-full sm:w-80">
         {({ id }) => (
-          <Select id={id} name="employeeId" required defaultValue="">
+          <Select id={id} name="employeeId" required defaultValue="" controlSize="lg">
             <option value="" disabled>
               {t('request.chooseEmployee')}
             </option>
@@ -39,7 +39,7 @@ export function AddEmployeeForm({ action, hidden, employees, t, children }: AddE
           </Select>
         )}
       </Field>
-      <Button type="submit" variant="outline" icon="plus">
+      <Button type="submit" variant="outline" size="lg" icon="plus">
         {t('request.add')}
       </Button>
     </form>

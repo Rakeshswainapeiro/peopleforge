@@ -31,9 +31,9 @@ export interface CardHeaderProps {
 export function CardHeader({ title, description, actions, level = 2 }: CardHeaderProps) {
   const Heading = level === 2 ? 'h2' : 'h3';
   return (
-    <div className="flex flex-wrap items-start justify-between gap-4 px-5 pt-5">
+    <div className="flex flex-wrap items-start justify-between gap-4 px-6 pt-6">
       <div className="min-w-0">
-        <Heading className="text-lg font-semibold text-ink">{title}</Heading>
+        <Heading className="text-xl font-semibold tracking-tight text-ink">{title}</Heading>
         {description === undefined ? null : (
           <p className="mt-1 text-xs text-ink-muted">{description}</p>
         )}
@@ -46,7 +46,7 @@ export function CardHeader({ title, description, actions, level = 2 }: CardHeade
 }
 
 export function CardBody({ children, className }: { children: ReactNode; className?: string }) {
-  return <div className={cn('p-5', className)}>{children}</div>;
+  return <div className={cn('p-6', className)}>{children}</div>;
 }
 
 export interface StatCardProps {

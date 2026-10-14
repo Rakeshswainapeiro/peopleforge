@@ -9,6 +9,7 @@ export interface NavLinkItem {
   href: string;
   label: string;
   icon: IconName;
+  alsoActiveFor?: readonly string[] | undefined;
 }
 
 /** Client component only to read the current path; labels arrive already translated. */
@@ -23,7 +24,7 @@ export function NavLinks({ items, label }: { items: readonly NavLinkItem[]; labe
               href={item.href}
               label={item.label}
               icon={item.icon}
-              active={isActivePath(pathname, item.href)}
+              active={isActivePath(pathname, item)}
               as={Link}
             />
           </li>

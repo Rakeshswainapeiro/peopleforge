@@ -24,6 +24,11 @@ export {
   type CardProps,
   type StatCardProps,
 } from './components/card.js';
+export {
+  CriteriaProgress,
+  type CriteriaProgressProps,
+  type CriterionState,
+} from './components/criteria-progress.js';
 export { EmptyState, type EmptyStateProps } from './components/empty-state.js';
 export {
   Field,

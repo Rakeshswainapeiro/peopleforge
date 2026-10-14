@@ -18,6 +18,12 @@ describe('buildCsp', () => {
     expect(csp).not.toContain('unsafe-inline');
   });
 
+  it('allows inline styles only in development (dev overlay), never in production', () => {
+    expect(buildCsp('n', true)).toContain("style-src 'self' 'unsafe-inline'");
+    expect(buildCsp('n', false)).toContain("style-src 'self' 'nonce-n'");
+    expect(buildCsp('n', false)).not.toContain('unsafe-inline');
+  });
+
   it('allows unsafe-eval only in development', () => {
     const csp = buildCsp('n0nce', true);
     expect(csp).toContain("'unsafe-eval'");

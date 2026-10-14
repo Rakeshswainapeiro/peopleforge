@@ -4,6 +4,8 @@ import {
   Alert,
   Button,
   CellStack,
+  CriteriaProgress,
+  type CriterionState,
   Input,
   SegmentedChoice,
   Spinner,
@@ -33,7 +35,8 @@ export interface ProposalRowView {
   grade: string;
   currencyCode: string;
   current: string;
-  newSalary: string;
+  criteria: readonly { code: string; state: CriterionState }[];
+  criteriaLabel: string;
   kind: 'percent' | 'amount';
   value: string;
   labels: { proposedAs: string; value: string; remove: string };
@@ -46,7 +49,8 @@ export interface ProposalsTableLabels {
   colCurrent: string;
   colProposedAs: string;
   colValue: string;
-  colNew: string;
+  colCriteria: string;
+  criterionStates: Readonly<Record<CriterionState, string>>;
   colActions: string;
   percentOption: string;
   valuePlaceholder: string;
@@ -107,10 +111,10 @@ export function ProposalsTable({
           <Tr>
             <Th>{labels.colEmployee}</Th>
             <Th>{labels.colGrade}</Th>
-            <Th className="text-end">{labels.colCurrent}</Th>
+            <Th>{labels.colCurrent}</Th>
             <Th>{labels.colProposedAs}</Th>
             <Th>{labels.colValue}</Th>
-            <Th className="text-end">{labels.colNew}</Th>
+            <Th>{labels.colCriteria}</Th>
             {editable ? <Th className="sr-only">{labels.colActions}</Th> : null}
           </Tr>
         </THead>
@@ -129,9 +133,7 @@ export function ProposalsTable({
                   <CellStack primary={row.fullName} secondary={row.employeeNumber} />
                 </Td>
                 <Td>{row.grade}</Td>
-                <Td className="whitespace-nowrap text-end font-medium tabular-nums">
-                  {row.current}
-                </Td>
+                <Td className="whitespace-nowrap font-semibold tabular-nums">{row.current}</Td>
                 <Td>
                   {editable ? (
                     <SegmentedChoice
@@ -139,6 +141,7 @@ export function ProposalsTable({
                       name={`kind:${row.lineId}`}
                       legend={row.labels.proposedAs}
                       defaultValue={typed?.kind ?? row.kind}
+                      size="md"
                       options={[
                         { value: 'percent', label: labels.percentOption },
                         { value: 'amount', label: row.currencyCode },
@@ -150,7 +153,7 @@ export function ProposalsTable({
                 </Td>
                 <Td className="min-w-32">
                   {editable ? (
-                    <div className="w-28">
+                    <div className="w-40">
                       <Input
                         key={key}
                         name={`value:${row.lineId}`}
@@ -161,6 +164,7 @@ export function ProposalsTable({
                         placeholder={labels.valuePlaceholder}
                         aria-invalid={error !== undefined}
                         aria-describedby={error === undefined ? undefined : errorId}
+                        controlSize="lg"
                         className="tabular-nums"
                       />
                       {error === undefined ? null : (
@@ -173,23 +177,27 @@ export function ProposalsTable({
                     <span className="tabular-nums">{row.value}</span>
                   )}
                 </Td>
-                <Td className="whitespace-nowrap text-end tabular-nums">{row.newSalary}</Td>
+                <Td>
+                  <CriteriaProgress
+                    results={row.criteria}
+                    label={row.criteriaLabel}
+                    stateLabels={labels.criterionStates}
+                  />
+                </Td>
                 {editable ? (
                   <Td className="text-end">
                     <button
                       type="submit"
-                      formAction={removeEmployeeAction}
-                      name="removeLineId"
-                      value={row.lineId}
+                      formAction={removeEmployeeAction.bind(null, row.lineId)}
                       aria-label={row.labels.remove}
                       title={row.labels.remove}
                       className={cn(
-                        'inline-flex size-8 items-center justify-center rounded-control text-ink-muted hover:bg-danger-50 hover:text-danger-600',
+                        'inline-flex size-9 items-center justify-center rounded-control text-ink hover:bg-danger-50 hover:text-danger-600',
                         transition,
                         focusRing,
                       )}
                     >
-                      <Icon name="trash" />
+                      <Icon name="trash" className="size-5" />
                     </button>
                   </Td>
                 ) : null}

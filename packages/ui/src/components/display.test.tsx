@@ -5,6 +5,7 @@ import { Avatar, initials } from './avatar.js';
 import { Badge } from './badge.js';
 import { BrandMark, Wordmark } from './brand.js';
 import { Card, CardBody, CardHeader, StatCard } from './card.js';
+import { CriteriaProgress } from './criteria-progress.js';
 import { EmptyState } from './empty-state.js';
 import { PageHeader } from './page-header.js';
 import { ProgressSteps } from './progress-steps.js';
@@ -57,7 +58,7 @@ describe('Card', () => {
     expect(screen.getByText('Where it is')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Go' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { level: 3, name: 'Sub' })).toBeInTheDocument();
-    expect(screen.getByText('Body')).toHaveClass('p-5', 'b');
+    expect(screen.getByText('Body')).toHaveClass('p-6', 'b');
   });
 
   it('renders stat cards, raised or subtle', () => {
@@ -216,5 +217,47 @@ describe('EmptyState', () => {
     const { container } = render(<EmptyState title="Nothing here" />);
     expect(container.querySelector('[data-icon="file"]')).not.toBeNull();
     expect(container.querySelectorAll('p')).toHaveLength(1);
+  });
+});
+
+describe('CriteriaProgress', () => {
+  const stateLabels = { pass: 'Pass', fail: 'Fail', pending: 'Not assessed' };
+
+  it('marks each criterion by shape and shows the summary', () => {
+    const { container } = render(
+      <CriteriaProgress
+        label="4/5 complete"
+        stateLabels={stateLabels}
+        results={[
+          { code: 'C1', state: 'pass' },
+          { code: 'C2', state: 'fail' },
+          { code: 'C3', state: 'pending' },
+        ]}
+      />,
+    );
+    expect(screen.getByText('4/5 complete')).toHaveClass('text-ink');
+    const marks = container.querySelectorAll('li');
+    expect([...marks].map((mark) => mark.getAttribute('title'))).toEqual([
+      'C1 · Pass',
+      'C2 · Fail',
+      'C3 · Not assessed',
+    ]);
+    expect(container.querySelector('[data-icon="check"]')).not.toBeNull();
+    expect(container.querySelector('[data-icon="x"]')).not.toBeNull();
+    expect(container.querySelector('[data-icon="circle"]')).not.toBeNull();
+    expect(container.querySelector('ul')).toHaveAttribute('aria-hidden', 'true');
+  });
+
+  it('highlights a complete set, and treats no criteria as incomplete', () => {
+    render(
+      <CriteriaProgress
+        label="5/5 complete"
+        stateLabels={stateLabels}
+        results={[{ code: 'C1', state: 'pass' }]}
+      />,
+    );
+    expect(screen.getByText('5/5 complete')).toHaveClass('text-brand-600');
+    render(<CriteriaProgress label="0/0" stateLabels={stateLabels} results={[]} />);
+    expect(screen.getByText('0/0')).toHaveClass('text-ink');
   });
 });

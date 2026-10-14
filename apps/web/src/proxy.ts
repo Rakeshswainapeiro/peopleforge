@@ -3,13 +3,15 @@ import { NextResponse, type NextRequest } from 'next/server';
 /**
  * Strict nonce-based CSP. No third-party origins are allowed: fonts, scripts and styles are
  * all first-party, which also keeps viewer traffic inside the approved hosting region.
- * `unsafe-eval` is added in development only, because React's dev tooling needs it.
+ * In development only: `unsafe-eval` (React's dev tooling) and inline styles (the Next.js dev
+ * overlay injects <style> tags without the nonce; a nonce would make browsers ignore
+ * 'unsafe-inline'). Production keeps nonce-only styles.
  */
 export function buildCsp(nonce: string, isDev: boolean): string {
   return [
     "default-src 'self'",
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${isDev ? " 'unsafe-eval'" : ''}`,
-    `style-src 'self' 'nonce-${nonce}'`,
+    isDev ? "style-src 'self' 'unsafe-inline'" : `style-src 'self' 'nonce-${nonce}'`,
     "img-src 'self' blob: data:",
     "font-src 'self'",
     "connect-src 'self'",

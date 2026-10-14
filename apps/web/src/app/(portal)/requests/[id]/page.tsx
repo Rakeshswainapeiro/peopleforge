@@ -1,5 +1,4 @@
-import { Alert, Badge, Button, Card, CardHeader, PageHeader } from '@peopleforge/ui';
-import Link from 'next/link';
+import { Alert, Button, Card, CardHeader, PageHeader } from '@peopleforge/ui';
 import { notFound, redirect } from 'next/navigation';
 import { z } from 'zod';
 import { AddEmployeeForm } from '@/components/requests/add-employee-form';
@@ -9,7 +8,7 @@ import { createTranslator } from '@/i18n/translator';
 import { hasAnyPermission } from '@/lib/navigation';
 import { parseErrorKey } from '@/lib/request-errors';
 import { proposalRows, saveMessages, tableLabels, totalsView } from '@/lib/request-view';
-import { entityName, localised } from '@/lib/viewer-display';
+import { entityName, roleLabel } from '@/lib/viewer-display';
 import { getRequest, searchEmployees } from '@/server/increment-requests';
 import { requireViewer } from '@/server/session';
 import { addEmployeeAction } from '../actions';
@@ -47,21 +46,12 @@ export default async function RequestPage({ params, searchParams }: RequestPageP
   return (
     <>
       <PageHeader
-        eyebrow={
-          <Link href="/" className="text-brand-600 underline-offset-2 hover:underline">
-            {t('nav.home')}
-          </Link>
-        }
-        title={
-          <span className="flex flex-wrap items-center gap-3">
-            {t('request.draftTitle', { reference: request.reference })}
-            <Badge tone="outline">{t('request.statusDraft')}</Badge>
-          </span>
-        }
-        description={t('request.draftIntro', {
-          cycle: localised(request.cycle.name, locale),
-          entity,
+        eyebrow={t('request.draftEyebrow', {
+          role: t(roleLabel(me.roles)),
+          reference: request.reference,
         })}
+        title={t('request.newTitle')}
+        description={t('request.newIntro', { count: request.criteria.length })}
         actions={
           editable && request.lines.length > 0 ? (
             <Button type="submit" form={FORM_ID} variant="secondary">
@@ -80,18 +70,23 @@ export default async function RequestPage({ params, searchParams }: RequestPageP
         <CardHeader
           title={t('request.employeesSection')}
           description={t('request.employeesHint', { entity })}
+          actions={
+            employees === undefined ? undefined : employees.kind === 'ok' &&
+              employees.data.length > 0 ? (
+              <AddEmployeeForm
+                action={addEmployeeAction}
+                employees={employees.data}
+                hidden={{ requestId: request.id }}
+                t={t}
+              />
+            ) : (
+              <p className="max-w-xs text-xs text-ink-muted">
+                {t('request.noMoreEmployees', { entity })}
+              </p>
+            )
+          }
         />
-        <div className="space-y-5 p-5">
-          {employees === undefined ? null : employees.kind === 'ok' && employees.data.length > 0 ? (
-            <AddEmployeeForm
-              action={addEmployeeAction}
-              employees={employees.data}
-              hidden={{ requestId: request.id }}
-              t={t}
-            />
-          ) : (
-            <p className="text-xs text-ink-muted">{t('request.noMoreEmployees', { entity })}</p>
-          )}
+        <div className="px-6 pt-4 pb-6">
           <ProposalsTable
             // A new version (after a save) starts the form afresh.
             key={request.version}

@@ -55,13 +55,14 @@ The hex values were sampled from the Figma exports. Replace them with the Figma 
 | `Field`, `Input`, `Select`, `Textarea`                   | Search, Period, Status, Justification, Value                                                                                                                                                     |
 | `ProgressSteps`                                          | Progress: Added → Submitted → Review → Decision                                                                                                                                                  |
 | `EmptyState`, `Spinner`, `Skeleton`                      | Empty lists, loading                                                                                                                                                                             |
+| `SegmentedChoice`                                        | "% \| AED" proposed-as switch (native radios)                                                                                                                                                    |
+| `CriteriaProgress`                                       | Criteria cell: ✓ / ✗ / ○ per criterion and "n/5 complete" (request table, dashboard by employee)                                                                                                 |
 | `Icon`                                                   | Outline icon set (24 px grid), directional ones mirror in RTL                                                                                                                                    |
 
 Still to build, as their slices need them:
 
 - Criteria card (pass/fail toggle, justification, evidence) and file attach: S3.
 - Employee picker (combobox, with a headless primitive): S2.
-- Criteria dots (✓ ✓ ✗ ○): S2.
 - Dialog / confirm.
 - Toast.
 

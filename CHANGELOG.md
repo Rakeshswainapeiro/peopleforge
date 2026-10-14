@@ -4,6 +4,24 @@ All notable changes are recorded here. Format: [Keep a Changelog](https://keepac
 
 ## [Unreleased]
 
+### Fixed
+
+- Removing an employee from a draft failed with "Something went wrong". React overrides a button's `name` when its `formAction` is a function, so the line ID never reached the server. The ID is now bound to the action, and the tests cover it.
+- The sidebar lost its selection while editing a draft (`/requests/<id>`). **New Request** now stays selected, as in the Figma.
+- In `next dev`, the CSP blocked the Next.js dev overlay's inline styles. That filled the console with errors and set off the dev "Issues" badge. Development now allows inline styles; production keeps nonce-only styles.
+
+### Changed
+
+- The draft editor now follows the Figma:
+  - the title stays "New increment request", with role · reference · Draft above it;
+  - "Add employee" and "+ Add" sit at the right of the section header;
+  - the table has larger "% | AED" and value controls;
+  - a **Criteria** column (`CriteriaProgress`, "0/5 complete" until S3) replaces "New monthly", which is not in the Figma;
+  - totals read "Employees: · Total proposed increase: · Average:".
+- Design system: `CriteriaProgress`; `controlSize="lg"` for Input/Select; roomier cards (24 px); semibold names in tables.
+- The request detail API includes the request's pinned `criteria`.
+- End-to-end tests now fail on any browser console error or uncaught exception.
+
 ### Added — slice S2: draft increment requests (R1-02)
 
 - Subsidiary HR can create a draft increment request for the open cycle and add employees from their subsidiary. Each employee's grade and monthly salary are snapshotted, encrypted. The request then takes a proposed increment per employee, as a % or as an amount in the salary currency. Totals show employees, total monthly increase per currency, and the average %. Employees can be removed, and drafts are listed under "Needs your action" on Home.

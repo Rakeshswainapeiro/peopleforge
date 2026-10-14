@@ -61,6 +61,11 @@ const DRAFT: IncrementRequest = {
   status: 'draft',
   entity: { id: SUB_A, code: 'SUB-A', name: { en: 'Subsidiary A' } },
   cycle: { id: CYCLE, name: { en: 'Increment cycle 2026' } },
+  criteria: ['C1', 'C2', 'C3', 'C4', 'C5'].map((code, index) => ({
+    id: `44444444-4444-4444-8444-44444444444${String(index)}`,
+    code,
+    name: { en: `[Placeholder] ${code}` },
+  })),
   version: 2,
   createdAt: '2026-10-14T07:00:00.000Z',
   updatedAt: '2026-10-14T07:00:00.000Z',
@@ -189,14 +194,17 @@ describe('New increment request page [R1-02]', () => {
 describe('Increment request page [R1-02]', () => {
   it('shows the draft with totals, the employee picker and Save draft', async () => {
     render(await requestPage());
-    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(
-      'Increment request INC-2026-0007Draft',
-    );
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'New increment request' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Subsidiary HR · INC-2026-0007 · Draft')).toBeInTheDocument();
     expect(
       screen.getByText(
-        'Increment cycle 2026 · Subsidiary A. Proposals are kept when you save the draft.',
+        'Add employees, propose an increment, then complete all 5 criteria for each one.',
       ),
     ).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Criteria' })).toBeInTheDocument();
+    expect(screen.getByText('0/5 complete')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Save draft' })).toBeInTheDocument();
     expect(screen.getByTestId('total-increase')).toHaveTextContent(/^AED\s852 \/ month$/u);
     expect(screen.getByTestId('average-percent')).toHaveTextContent('6%');

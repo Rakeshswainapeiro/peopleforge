@@ -160,6 +160,14 @@ describe('create', () => {
       version: 1,
     });
     expect(request?.reference).toMatch(/^INC-2026-\d{4}$/);
+    expect(request?.criteria.map((criterion) => criterion.code)).toEqual([
+      'C1',
+      'C2',
+      'C3',
+      'C4',
+      'C5',
+    ]);
+    expect(request?.criteria[0]?.name.en).toBe('[Placeholder] Performance rating');
     expect(
       request?.lines.map((line) => [line.employeeNumber, line.grade, line.currentSalary]),
     ).toEqual([

@@ -115,6 +115,7 @@ function toDto(record: IncrementRequestRecord): IncrementRequest {
     status: record.status,
     entity: record.entity,
     cycle: record.cycle,
+    criteria: record.criteria,
     version: record.version,
     createdAt: record.createdAt.toISOString(),
     updatedAt: record.updatedAt.toISOString(),
