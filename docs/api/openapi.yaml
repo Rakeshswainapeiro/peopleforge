@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: PeopleForge API
-  version: 0.3.0
+  version: 0.4.0
   description: >
     Phase 1 API (BRD SIRIUS-HR-BRD-001). Every /api/v1 route requires an access token from the
     Sirius identity provider (Microsoft Entra ID; Keycloak locally) sent as
@@ -12,6 +12,8 @@ servers:
   - url: http://localhost:4000
     description: Local development
 tags:
+  - name: increment-requests
+    description: R1 Increment Request Portal
   - name: health
   - name: identity
 paths:
@@ -68,6 +70,178 @@ paths:
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '429': { $ref: '#/components/responses/RateLimited' }
         '503': { $ref: '#/components/responses/IdentityProviderUnavailable' }
+  /api/v1/increment-cycles/open:
+    get:
+      tags: [increment-requests]
+      summary: Increment cycles open for requests (configuration, Q1)
+      responses:
+        '200':
+          description: Open cycles, newest first
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/Cycle' } }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+  /api/v1/employees:
+    get:
+      tags: [increment-requests]
+      summary: Employee picker for a request — name, number and grade, never salary (R1-02)
+      description: Requires `increment_request:create`. A subsidiary user may only search their own subsidiaries (403 otherwise); Row-Level Security re-checks every row.
+      parameters:
+        - { name: entityId, in: query, required: true, schema: { type: string, format: uuid } }
+        - { name: search, in: query, schema: { type: string, maxLength: 100 } }
+        - { name: excludeRequestId, in: query, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Up to 50 active employees, by name
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/EmployeeOption' } }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/v1/increment-requests:
+    get:
+      tags: [increment-requests]
+      summary: The caller's increment requests, newest first (R1-02)
+      description: Requires `increment_request:read`. Drafts are listed only for callers who can create requests; Sirius sees a request once it is submitted.
+      parameters:
+        - { name: status, in: query, schema: { type: string, enum: [draft] } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: pageSize, in: query, schema: { type: integer, enum: [10, 25, 50], default: 10 } }
+      responses:
+        '200':
+          description: A page of summaries
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/IncrementRequestPage' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [increment-requests]
+      summary: Create a draft request, optionally with its first employees (R1-02)
+      description: >
+        Requires `increment_request:create`. Idempotent per user and `Idempotency-Key`: repeating the
+        call returns the same draft. `entityId` is required only when the caller acts for more than
+        one subsidiary. Each employee's grade and monthly salary are snapshotted.
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: { type: string, pattern: '^[A-Za-z0-9_-]{8,128}$' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [cycleId]
+              properties:
+                cycleId: { type: string, format: uuid }
+                entityId: { type: string, format: uuid }
+                employeeIds: { type: array, maxItems: 200, items: { type: string, format: uuid } }
+      responses:
+        '201':
+          description: The draft
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/IncrementRequest' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/increment-requests/{id}:
+    get:
+      tags: [increment-requests]
+      summary: One request with derived figures and totals (R1-02)
+      parameters: [{ $ref: '#/components/parameters/RequestId' }]
+      responses:
+        '200':
+          description: The request
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/IncrementRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/increment-requests/{id}/lines:
+    post:
+      tags: [increment-requests]
+      summary: Add an employee to a draft (snapshot of grade and salary)
+      parameters: [{ $ref: '#/components/parameters/RequestId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [employeeId]
+              properties: { employeeId: { type: string, format: uuid } }
+      responses:
+        '201':
+          description: The updated request
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/IncrementRequest' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/increment-requests/{id}/lines/{lineId}:
+    delete:
+      tags: [increment-requests]
+      summary: Remove an employee from a draft (soft delete)
+      parameters:
+        - { $ref: '#/components/parameters/RequestId' }
+        - { name: lineId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: The updated request
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/IncrementRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/increment-requests/{id}/proposals:
+    put:
+      tags: [increment-requests]
+      summary: Save proposed increments for the draft's employees, all or nothing
+      description: >
+        `version` must be the version last read (409 if the draft changed). A value is a decimal
+        string with up to 2 decimals: a percentage (above 0, at most 100) or a monthly amount (above
+        0, at most the current salary). `kind` and `value` both null clear a proposal. Refusals name
+        the field, e.g. `proposals.2.value` with code `over_limit` or `not_positive`.
+      parameters: [{ $ref: '#/components/parameters/RequestId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [version, proposals]
+              properties:
+                version: { type: integer, minimum: 1 }
+                proposals:
+                  type: array
+                  maxItems: 200
+                  items:
+                    type: object
+                    additionalProperties: false
+                    required: [lineId, kind, value]
+                    properties:
+                      lineId: { type: string, format: uuid }
+                      kind: { type: [string, 'null'], enum: [percent, amount, null] }
+                      value: { $ref: '#/components/schemas/NullableDecimal' }
+      responses:
+        '200':
+          description: The updated request
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/IncrementRequest' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
 security:
   - bearer: []
 components:
@@ -79,6 +253,8 @@ components:
       description: >
         OIDC access token for audience `OIDC_AUDIENCE`, issued by `OIDC_ISSUER` (Entra ID in
         production, pending Sirius IT, A6; Keycloak locally). Roles come from the `roles` claim.
+  parameters:
+    RequestId: { name: id, in: path, required: true, schema: { type: string, format: uuid } }
   headers:
     RequestId:
       description: Correlation ID, echoed or generated per request.
@@ -95,12 +271,145 @@ components:
       content:
         application/json:
           schema: { $ref: '#/components/schemas/ApiError' }
+    ValidationFailed:
+      description: Input refused; `details` name the fields
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiError' }
+    Forbidden:
+      description: The caller's role lacks the permission, or the subsidiary isn't theirs
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiError' }
+    NotFound:
+      description: Doesn't exist, or isn't visible to the caller (another subsidiary's, or a draft for Sirius)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiError' }
+    Conflict:
+      description: Stale `version`, duplicate employee, or no active criteria set
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiError' }
     RateLimited:
       description: Too many requests
       content:
         application/json:
           schema: { $ref: '#/components/schemas/ApiError' }
   schemas:
+    Decimal:
+      type: string
+      pattern: '^\d{1,9}(\.\d{1,2})?$'
+      description: Exact decimal as a string (never a JSON number), e.g. "21500.00"
+    NullableDecimal:
+      type: [string, 'null']
+      pattern: '^\d{1,9}(\.\d{1,2})?$'
+    LocalisedText:
+      type: object
+      required: [en]
+      properties: { en: { type: string }, ar: { type: string } }
+    Cycle:
+      type: object
+      required: [id, name, startsOn, endsOn, submissionDeadline, status]
+      properties:
+        id: { type: string, format: uuid }
+        name: { $ref: '#/components/schemas/LocalisedText' }
+        startsOn: { type: string, format: date }
+        endsOn: { type: string, format: date }
+        submissionDeadline: { type: [string, 'null'], format: date }
+        status: { type: string, enum: [planned, open, closed] }
+    EmployeeOption:
+      type: object
+      required: [id, employeeNumber, fullName, grade]
+      properties:
+        id: { type: string, format: uuid }
+        employeeNumber: { type: string }
+        fullName: { type: string }
+        grade: { type: string }
+    RequestLine:
+      type: object
+      required:
+        [
+          id,
+          employeeId,
+          employeeNumber,
+          fullName,
+          grade,
+          currency,
+          currentSalary,
+          proposedKind,
+          proposedValue,
+          increase,
+          newSalary,
+          percent,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        employeeId: { type: string, format: uuid }
+        employeeNumber: { type: string }
+        fullName: { type: string }
+        grade: { type: string }
+        currency: { type: string, example: AED }
+        currentSalary: { $ref: '#/components/schemas/Decimal' }
+        proposedKind: { type: [string, 'null'], enum: [percent, amount, null] }
+        proposedValue: { $ref: '#/components/schemas/NullableDecimal' }
+        increase: { $ref: '#/components/schemas/NullableDecimal' }
+        newSalary: { $ref: '#/components/schemas/NullableDecimal' }
+        percent: { $ref: '#/components/schemas/NullableDecimal' }
+    IncrementRequest:
+      type: object
+      required: [id, reference, status, entity, cycle, version, createdAt, updatedAt, lines, totals]
+      properties:
+        id: { type: string, format: uuid }
+        reference: { type: string, example: INC-2026-0001 }
+        status: { type: string, enum: [draft] }
+        entity: { $ref: '#/components/schemas/EntitySummary' }
+        cycle:
+          type: object
+          required: [id, name]
+          properties:
+            id: { type: string, format: uuid }
+            name: { $ref: '#/components/schemas/LocalisedText' }
+        version: { type: integer, minimum: 1 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        lines: { type: array, items: { $ref: '#/components/schemas/RequestLine' } }
+        totals:
+          type: object
+          required: [employees, proposed, increaseByCurrency, averagePercent]
+          properties:
+            employees: { type: integer }
+            proposed: { type: integer }
+            increaseByCurrency:
+              type: array
+              items:
+                type: object
+                required: [currency, amount]
+                properties:
+                  { currency: { type: string }, amount: { $ref: '#/components/schemas/Decimal' } }
+            averagePercent: { $ref: '#/components/schemas/NullableDecimal' }
+    IncrementRequestPage:
+      type: object
+      required: [items, page, pageSize, total]
+      properties:
+        page: { type: integer }
+        pageSize: { type: integer }
+        total: { type: integer }
+        items:
+          type: array
+          items:
+            type: object
+            required:
+              [id, reference, status, entityId, cycleId, employeeCount, createdAt, updatedAt]
+            properties:
+              id: { type: string, format: uuid }
+              reference: { type: string }
+              status: { type: string, enum: [draft] }
+              entityId: { type: string, format: uuid }
+              cycleId: { type: string, format: uuid }
+              employeeCount: { type: integer }
+              createdAt: { type: string, format: date-time }
+              updatedAt: { type: string, format: date-time }
     Liveness:
       type: object
       required: [status]

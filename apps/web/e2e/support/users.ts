@@ -17,6 +17,14 @@ export const USERS = {
     name: 'Alpha HR Test',
     roles: ['PeopleForge.SubsidiaryHR'],
   },
+  /** Subsidiary HR for Subsidiary B: must never see Subsidiary A's requests. */
+  betaHr: {
+    id: '7d6a1c3e-2b4f-4c8a-9e10-000000000005',
+    email: 'pf.beta.hr@sirius.local',
+    username: 'pf.beta.hr',
+    name: 'Beta HR Test',
+    roles: ['PeopleForge.SubsidiaryHR'],
+  },
   noRole: {
     id: '7d6a1c3e-2b4f-4c8a-9e10-000000000006',
     email: 'pf.norole@sirius.local',

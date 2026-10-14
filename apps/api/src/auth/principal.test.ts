@@ -1,6 +1,6 @@
 import type { VerifiedIdentity } from '@sirius/identity';
 import { describe, expect, it } from 'vitest';
-import { ROLES } from '@peopleforge/access';
+import { ROLES } from '@peopleforge/contracts';
 import { principalFromIdentity, scopeOf } from './principal.js';
 
 function identity(roles: string[]): VerifiedIdentity {

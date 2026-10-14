@@ -1,4 +1,4 @@
-import type { Permission } from '@peopleforge/access';
+import type { Permission } from '@peopleforge/contracts';
 import type { IconName } from '@peopleforge/ui';
 import { notFound } from 'next/navigation';
 import { PlaceholderPage } from '@/components/placeholder-page';

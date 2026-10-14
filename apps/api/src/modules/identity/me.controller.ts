@@ -2,7 +2,7 @@ import { Controller, Get, Inject, Req } from '@nestjs/common';
 import type { EntityDirectory, EntitySummary } from '@peopleforge/db';
 import type { IncomingMessage } from 'node:http';
 import type { Logger } from 'pino';
-import type { Permission } from '@peopleforge/access';
+import type { Permission } from '@peopleforge/contracts';
 import { Authenticated } from '../../auth/policy.js';
 import {
   permissionsOfPrincipal,

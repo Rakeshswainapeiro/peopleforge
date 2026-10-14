@@ -17,7 +17,7 @@
     "db:status": "node --env-file-if-exists=.env.local scripts/migrate.ts status"
   },
   "dependencies": {
-    "@peopleforge/access": "workspace:*",
+    "@peopleforge/contracts": "workspace:*",
     "@peopleforge/db": "workspace:*",
     "@peopleforge/ui": "workspace:*",
     "@sirius/auth-better": "0.1.0",
@@ -40,6 +40,7 @@
     "@tailwindcss/postcss": "4.3.3",
     "@testing-library/jest-dom": "7.0.1",
     "@testing-library/react": "16.3.3",
+    "@testing-library/user-event": "14.6.1",
     "@types/node": "26.6.4",
     "@types/pg": "8.23.1",
     "@types/react": "19.3.0",

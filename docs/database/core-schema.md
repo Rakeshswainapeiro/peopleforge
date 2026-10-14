@@ -1,6 +1,6 @@
-# Schemas `core` and `increments` (slice S1)
+# Schemas `core` and `increments` (slices S1–S2)
 
-Migrations: `packages/db/migrations/core/0001_core_schema`, `0002_placeholder_configuration` (up/down), recorded in `migrations.core`. Decisions: ADR-002 (data access, RLS), ADR-008 (salary encryption). Design: `docs/design/r1-increment-portal.md` §3a.
+Migrations: `packages/db/migrations/core/0001_core_schema`, `0002_placeholder_configuration`, `0003_increment_requests` (up/down), recorded in `migrations.core`. Decisions: ADR-002 (data access, RLS), ADR-008 (salary encryption). Design: `docs/design/r1-increment-portal.md` §3a.
 
 Every table here also carries `created_at`, `created_by`, `updated_at`, `updated_by` (UTC timestamps, user IDs), and `version` (optimistic locking) where rows are edited. `created_by`/`updated_by` is `seed` for migration and seed rows.
 
@@ -11,13 +11,23 @@ erDiagram
   ENTITY ||--o{ USER_ENTITY : "assigned to"
   ENTITY ||--o{ EMPLOYEE : employs
   CRITERIA_SET ||--|{ CRITERION : contains
-  INCREMENT_CYCLE
+  INCREMENT_CYCLE ||--o{ INCREMENT_REQUEST : "raised in"
+  ENTITY ||--o{ INCREMENT_REQUEST : raises
+  CRITERIA_SET ||--o{ INCREMENT_REQUEST : "pinned by"
+  INCREMENT_REQUEST ||--o{ REQUEST_LINE : contains
+  EMPLOYEE ||--o{ REQUEST_LINE : "proposed in"
+  INCREMENT_REQUEST ||--o{ IDEMPOTENCY_KEY : "created by"
+  INCREMENT_CYCLE ||--|| REQUEST_SEQUENCE : numbers
   ENTITY { uuid id PK; text code UK; jsonb name; char3 default_currency }
   USER_ENTITY { text user_id PK; uuid entity_id PK,FK }
   EMPLOYEE { uuid id PK; uuid entity_id FK; text employee_number; text full_name; text grade; bytea monthly_salary; char3 currency }
   INCREMENT_CYCLE { uuid id PK; jsonb name; date starts_on; date ends_on; date submission_deadline; text status }
   CRITERIA_SET { uuid id PK; int version UK; text status }
   CRITERION { uuid id PK; uuid criteria_set_id FK; smallint position; text code; jsonb name; jsonb description; text evidence_policy }
+  INCREMENT_REQUEST { uuid id PK; text reference UK; uuid entity_id FK; uuid cycle_id FK; uuid criteria_set_id FK; text status; int version }
+  REQUEST_LINE { uuid id PK; uuid request_id FK; uuid entity_id FK; uuid employee_id FK; text grade; bytea current_salary; char3 currency; text proposed_kind; bytea proposed_value }
+  IDEMPOTENCY_KEY { text user_id PK; text key PK; uuid request_id FK }
+  REQUEST_SEQUENCE { uuid cycle_id PK; int last_number }
 ```
 
 ## Data dictionary
@@ -83,32 +93,79 @@ Primary key `(user_id, entity_id)`. Rows are inserted and deleted, never updated
 
 `criteria_set.status` is `draft`, `active` or `retired`; a partial unique index allows one `active` set. All values are Internal. **Migration `0002` seeds placeholder set v1 with C1–C5 named `[Placeholder]`** (C5 evidence optional) and "Increment cycle 2026" (open, deadline 2026-11-30). They are replaced through configuration once Sirius provides A1.
 
+### `increments.increment_request` — a subsidiary's request in a cycle (R1-02)
+
+| Column            | Type          | Null | Meaning                                                                    | Sensitivity |
+| ----------------- | ------------- | ---- | -------------------------------------------------------------------------- | ----------- |
+| `id`              | `uuid`        | No   | Primary key (chosen by the API before insert)                              | Internal    |
+| `reference`       | `text`        | No   | `INC-<cycle start year>-<NNNN>`, unique; numbered per cycle                | Internal    |
+| `entity_id`       | `uuid`        | No   | → `core.entity`; drives RLS                                                | Internal    |
+| `cycle_id`        | `uuid`        | No   | → `core.increment_cycle` (must be `open` at creation)                      | Internal    |
+| `criteria_set_id` | `uuid`        | No   | The criteria set active at creation; later changes don't affect it (R1-05) | Internal    |
+| `status`          | `text`        | No   | `draft` (submission and decisions arrive in S4–S5)                         | Internal    |
+| `version`         | `integer`     | No   | Bumped by every change; a save with a stale version is refused (409)       | Internal    |
+| `deleted_at`      | `timestamptz` | Yes  | Soft delete                                                                | Internal    |
+
+Unique `(id, entity_id)` exists so lines can reference the pair.
+
+### `increments.request_line` — an employee in a request
+
+| Column                                  | Type          | Null | Meaning                                                                                          | Sensitivity    |
+| --------------------------------------- | ------------- | ---- | ------------------------------------------------------------------------------------------------ | -------------- |
+| `request_id`, `entity_id`               | `uuid`        | No   | → `increment_request (id, entity_id)`: a line can't sit in another subsidiary's request          | Internal       |
+| `employee_id`, `entity_id`              | `uuid`        | No   | → `core.employee (id, entity_id)`: the employee must belong to the same subsidiary               | Internal       |
+| `employee_number`, `full_name`, `grade` | `text`        | No   | Snapshot when added (Q2 decision): later directory changes don't rewrite the request             | Confidential   |
+| `current_salary`                        | `bytea`       | No   | Snapshot of monthly salary; AES-256-GCM, AD `increments.request_line:current_salary:<id>`        | **Restricted** |
+| `currency`                              | `char(3)`     | No   | ISO 4217 of the salary and of an amount proposal                                                 | Internal       |
+| `proposed_kind`                         | `text`        | Yes  | `percent` or `amount`; null until proposed                                                       | Confidential   |
+| `proposed_value`                        | `bytea`       | Yes  | Encrypted decimal (percentage or monthly amount), AD `…:proposed_value:<id>`; null with the kind | **Restricted** |
+| `created_at`                            | `timestamptz` | No   | `clock_timestamp()`: keeps the order employees were added within one transaction                 | Internal       |
+| `deleted_at`                            | `timestamptz` | Yes  | Soft delete (removing an employee); the same employee may be added again                         | Internal       |
+
+Derived values (increase, new salary, percentage, totals) are computed by the API on read with decimal arithmetic and are **not stored** (no stale copies). Rules: `apps/api/src/modules/increment-requests/money.ts`.
+
+### `increments.idempotency_key` and `increments.request_sequence`
+
+- `idempotency_key (user_id, key) → request_id`: the first creation with a key claims it, in the same transaction. A repeat or concurrent call returns the same draft. The foreign key is `DEFERRABLE INITIALLY DEFERRED`, because the key is claimed before the request row exists.
+- `request_sequence (cycle_id) → last_number`: allocates reference numbers. It is a counter only; no entity data.
+
 ## Row-Level Security
 
 Session settings, set per transaction by `withScope` (`set_config(…, true)`): `app.user_id`, `app.scope` (`group` | `entity`), `app.entity_ids` (comma-separated UUIDs). Missing settings mean no access.
 
-| Table                                  | Policy                                                                                         |
-| -------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| `core.entity`                          | Read: `core.can_access_entity(id)`. Insert/update: group scope only                            |
-| `core.user_entity`                     | Read: group scope, or the caller's own rows. Insert/delete: group scope only                   |
-| `core.employee`                        | All commands: `core.can_access_entity(entity_id)` (USING and WITH CHECK, so rows can't move)   |
-| `core.increment_cycle`, `increments.*` | No RLS: configuration readable by every signed-in user; writes need `criteria:configure` (API) |
+| Table                                                                                                    | Policy                                                                                                                      |
+| -------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `core.entity`                                                                                            | Read: `core.can_access_entity(id)`. Insert/update: group scope only                                                         |
+| `core.user_entity`                                                                                       | Read: group scope, or the caller's own rows. Insert/delete: group scope only                                                |
+| `core.employee`                                                                                          | All commands: `core.can_access_entity(entity_id)` (USING and WITH CHECK, so rows can't move)                                |
+| `increments.increment_request`, `increments.request_line`                                                | All commands: `core.can_access_entity(entity_id)`                                                                           |
+| `increments.idempotency_key`                                                                             | Own rows only: `user_id = core.current_user_id()`                                                                           |
+| `core.increment_cycle`, `increments.criteria_set`, `increments.criterion`, `increments.request_sequence` | No RLS: configuration (or a counter) readable by every signed-in user; configuration writes need `criteria:configure` (API) |
 
 RLS is `FORCE`d, so the owner is bound too (the seed sets group scope explicitly). Proven in `packages/db/src/rls.test.ts`.
 
-**Grants to the app role:** `SELECT, INSERT, UPDATE` on entity, cycle, employee and the criteria tables; `SELECT, INSERT, DELETE` on `user_entity`. No `DELETE` on business tables (soft delete), no DDL, no `BYPASSRLS`.
+**Grants to the app role:**
+
+- `SELECT, INSERT, UPDATE` on entity, cycle, employee, the criteria tables, `increment_request`, `request_line` and `request_sequence`.
+- `SELECT, INSERT` on `idempotency_key`.
+- `SELECT, INSERT, DELETE` on `user_entity`. No `DELETE` on business tables (soft delete), no DDL, no `BYPASSRLS`.
 
 ## Indexes
 
-| Index                                                    | Serves                                                     |
-| -------------------------------------------------------- | ---------------------------------------------------------- |
-| `entity.code` unique                                     | Lookup by code, uniqueness                                 |
-| `user_entity` PK `(user_id, entity_id)`                  | Resolving a caller's subsidiaries on every request         |
-| `user_entity_entity_idx (entity_id)`                     | "Who acts for this subsidiary" (admin screen, reminders)   |
-| `employee_entity_number_uidx` (live rows)                | Uniqueness and lookup of an employee number per subsidiary |
-| `employee_entity_name_idx (entity_id, lower(full_name))` | Employee search when adding to a request                   |
-| `criteria_set_one_active_uidx`                           | Enforces a single active criteria set                      |
-| `criterion (criteria_set_id, position/code)` unique      | Loading a set in order                                     |
+| Index                                                                                      | Serves                                                      |
+| ------------------------------------------------------------------------------------------ | ----------------------------------------------------------- |
+| `entity.code` unique                                                                       | Lookup by code, uniqueness                                  |
+| `user_entity` PK `(user_id, entity_id)`                                                    | Resolving a caller's subsidiaries on every request          |
+| `user_entity_entity_idx (entity_id)`                                                       | "Who acts for this subsidiary" (admin screen, reminders)    |
+| `employee_entity_number_uidx` (live rows)                                                  | Uniqueness and lookup of an employee number per subsidiary  |
+| `employee_entity_name_idx (entity_id, lower(full_name))`                                   | Employee search when adding to a request                    |
+| `criteria_set_one_active_uidx`                                                             | Enforces a single active criteria set                       |
+| `criterion (criteria_set_id, position/code)` unique                                        | Loading a set in order                                      |
+| `employee_id_entity_uidx (id, entity_id)`                                                  | Target of the line's composite foreign key                  |
+| `increment_request_entity_cycle_idx (entity_id, cycle_id, status, updated_at desc)` (live) | Lists and dashboards per subsidiary and cycle               |
+| `increment_request.reference` unique                                                       | Lookup by reference, uniqueness                             |
+| `request_line_employee_uidx (request_id, employee_id)` (live)                              | An employee once per request (backstop to the locked check) |
+| `request_line_entity_idx (entity_id)`                                                      | RLS filter and per-subsidiary queries                       |
 
 ## Retention (proposal, confirm with Sirius under NFR-PRIV-01)
 
@@ -117,3 +174,5 @@ RLS is `FORCE`d, so the owner is bound too (the seed sets group scope explicitly
 | Entities, cycles, criteria sets | Kept (configuration history; requests reference them)                                               |
 | User → entity rows              | Deleted when access ends; the audit log (R1-15) keeps the history                                   |
 | Interim employee directory      | Superseded by R2 records; soft-deleted rows purged after the retention period agreed for HR records |
+| Increment requests and lines    | To agree with Sirius (Q10); proposal: decided requests 7 years, abandoned drafts 1 year             |
+| Idempotency keys                | 30 days (purge job, with the session purge)                                                         |

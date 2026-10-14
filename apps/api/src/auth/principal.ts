@@ -1,7 +1,7 @@
 import type { Scope } from '@peopleforge/db';
 import { definePrincipal } from '@sirius/auth-nest';
 import type { VerifiedIdentity } from '@sirius/identity';
-import { permissionsFor, ROLES, type Permission } from '@peopleforge/access';
+import { permissionsFor, ROLES, type Permission } from '@peopleforge/contracts';
 
 interface PrincipalBase {
   /** Identity-provider object ID (Entra `oid`): the stable key for audit and assignments. */

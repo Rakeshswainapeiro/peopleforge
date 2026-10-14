@@ -27,6 +27,11 @@ describe('role → permission matrix invariants', () => {
     }
   });
 
+  it('shows individual increment requests (salaries) only to subsidiary HR and reviewers', () => {
+    const readers = allRoles.filter((role) => permissionsFor([role]).has('increment_request:read'));
+    expect(readers.sort()).toEqual([ROLES.reviewer, ROLES.subsidiaryHr].sort());
+  });
+
   it('never lets a subsidiary decide its own requests', () => {
     expect(permissionsFor([ROLES.subsidiaryHr]).has('increment_request:decide')).toBe(false);
   });

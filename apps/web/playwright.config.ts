@@ -46,6 +46,9 @@ export default defineConfig({
         OIDC_TENANT_ID: E2E.tenantId,
         OIDC_ALLOW_HTTP: 'true',
         DATABASE_URL: E2E.databaseUrl,
+        // Same test-only key the global setup seeds salaries with (ADR-008).
+        DATA_ENCRYPTION_KEYS: E2E.dataEncryptionKeys,
+        DATA_ENCRYPTION_ACTIVE_KEY: E2E.dataEncryptionActiveKey,
       },
     },
     {

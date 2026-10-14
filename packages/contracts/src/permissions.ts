@@ -7,6 +7,7 @@
  * Changing what a role may do is a reviewed code change, not an admin-screen setting.
  */
 export const PERMISSIONS = [
+  'increment_request:read',
   'increment_request:create',
   'increment_request:submit',
   'increment_request:review',
@@ -39,6 +40,7 @@ export type Role = (typeof ROLES)[keyof typeof ROLES];
 export const ROLE_PERMISSIONS: Readonly<Record<Role, readonly Permission[]>> = {
   // Subsidiary HR acts only on its own entities; that scope is enforced in the data layer.
   [ROLES.subsidiaryHr]: [
+    'increment_request:read',
     'increment_request:create',
     'increment_request:submit',
     'evidence:upload',
@@ -50,6 +52,7 @@ export const ROLE_PERMISSIONS: Readonly<Record<Role, readonly Permission[]>> = {
   ],
   // Sirius HR reviewers decide requests and see group-wide data.
   [ROLES.reviewer]: [
+    'increment_request:read',
     'increment_request:review',
     'increment_request:decide',
     'employee_data:read',

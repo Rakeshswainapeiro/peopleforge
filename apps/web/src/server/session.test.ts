@@ -1,13 +1,14 @@
 import { getProviderAccessToken } from '@sirius/auth-better';
 import { headers } from 'next/headers';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fetchMe } from './api-client';
+import { z } from 'zod';
+import { apiRequest, fetchMe } from './api-client';
 import { getAuth } from './auth';
-import { currentSession, currentViewer, requireViewer } from './session';
+import { callApi, currentSession, currentViewer, requireViewer } from './session';
 
 vi.mock('next/headers', () => ({ headers: vi.fn() }));
 vi.mock('@sirius/auth-better', () => ({ getProviderAccessToken: vi.fn() }));
-vi.mock('./api-client', () => ({ fetchMe: vi.fn() }));
+vi.mock('./api-client', () => ({ fetchMe: vi.fn(), apiRequest: vi.fn() }));
 vi.mock('./auth', () => ({ getAuth: vi.fn() }));
 vi.mock('next/navigation', () => ({
   redirect: vi.fn((url: string) => {
@@ -95,5 +96,26 @@ describe('requireViewer', () => {
     vi.mocked(getProviderAccessToken).mockResolvedValue('eyJ.token');
     vi.mocked(fetchMe).mockResolvedValue(result);
     await expect(requireViewer()).resolves.toEqual(expected);
+  });
+});
+
+describe('callApi', () => {
+  it('calls the API with the user’s access token', async () => {
+    vi.mocked(getProviderAccessToken).mockResolvedValue('eyJ.token');
+    vi.mocked(apiRequest).mockResolvedValue({ kind: 'unavailable' });
+    const schema = z.object({});
+    await callApi('/api/v1/x', schema, { method: 'DELETE' });
+    expect(apiRequest).toHaveBeenCalledWith(
+      { apiUrl: 'http://api.test', timeoutMs: 2000 },
+      'eyJ.token',
+      '/api/v1/x',
+      schema,
+      { method: 'DELETE' },
+    );
+  });
+
+  it('reports a session without a usable token as unauthenticated', async () => {
+    vi.mocked(getProviderAccessToken).mockResolvedValue(null);
+    await expect(callApi('/x', z.object({}))).resolves.toEqual({ kind: 'unauthenticated' });
   });
 });

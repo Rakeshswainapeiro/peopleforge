@@ -1,4 +1,4 @@
-import type { Permission } from '@peopleforge/access';
+import type { Permission } from '@peopleforge/contracts';
 import type { IconName } from '@peopleforge/ui';
 import type { MessageKey } from '@/i18n/translator';
 

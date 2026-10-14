@@ -1,4 +1,4 @@
-import { ROLES, type EntitySummaryDto, type Me } from '@peopleforge/access';
+import { ROLES, type EntitySummaryDto, type LocalisedText, type Me } from '@peopleforge/contracts';
 import type { Locale } from '@sirius/shared-types';
 import type { MessageKey } from '@/i18n/translator';
 
@@ -19,7 +19,12 @@ export function roleLabel(roles: readonly string[]): MessageKey {
   return ROLE_LABELS.find(([role]) => roles.includes(role))?.[1] ?? 'roles.none';
 }
 
+/** A configuration label (entity, cycle, criterion) in the viewer's language, else English. */
+export function localised(text: LocalisedText, locale: Locale): string {
+  return (locale === 'ar' ? text.ar : undefined) ?? text.en;
+}
+
 /** Entity name in the viewer's language, falling back to English. */
 export function entityName(entity: EntitySummaryDto, locale: Locale): string {
-  return new Map(Object.entries(entity.name)).get(locale) ?? entity.name.en;
+  return localised(entity.name, locale);
 }

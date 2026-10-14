@@ -2,7 +2,7 @@ import nextPlugin from '@next/eslint-plugin-next';
 import { baseConfig } from '@sirius/config/eslint';
 import reactHooks from 'eslint-plugin-react-hooks';
 import globals from 'globals';
-import { reactRestrictedSyntax } from '../../eslint/react-rules.mjs';
+import { reactRestrictedSyntax, reactTestRestrictedSyntax } from '../../eslint/react-rules.mjs';
 
 export default [
   ...baseConfig({ tsconfigRootDir: import.meta.dirname }),
@@ -17,6 +17,10 @@ export default [
       ...reactHooks.configs.recommended.rules,
       'no-restricted-syntax': ['error', ...reactRestrictedSyntax],
     },
+  },
+  {
+    files: ['**/*.test.tsx'],
+    rules: { 'no-restricted-syntax': ['error', ...reactTestRestrictedSyntax] },
   },
   {
     // React components return JSX by convention; annotating every one adds noise, not safety.

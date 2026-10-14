@@ -2,7 +2,16 @@ import { getProviderAccessToken } from '@sirius/auth-better';
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { cache } from 'react';
-import { fetchMe, type Me, type MeResult } from './api-client';
+import type { z } from 'zod';
+import {
+  apiRequest,
+  fetchMe,
+  type ApiClientConfig,
+  type ApiRequestInit,
+  type ApiResult,
+  type Me,
+  type MeResult,
+} from './api-client';
 import { getAuth, type Auth } from './auth';
 import { serverEnv } from './env';
 
@@ -32,12 +41,27 @@ export const currentViewer = cache(async (): Promise<ViewerResult> => {
   // The session exists but its provider token can't be renewed (e.g. signed out at the
   // identity provider): the caller must end the session, or / and /sign-in redirect forever.
   if (bearer === null) return { kind: 'unauthenticated' };
-  const env = serverEnv();
-  return fetchMe(
-    { apiUrl: env.PEOPLEFORGE_API_URL, timeoutMs: env.PEOPLEFORGE_API_TIMEOUT_MS },
-    bearer,
-  );
+  return fetchMe(apiConfig(), bearer);
 });
+
+function apiConfig(): ApiClientConfig {
+  const env = serverEnv();
+  return { apiUrl: env.PEOPLEFORGE_API_URL, timeoutMs: env.PEOPLEFORGE_API_TIMEOUT_MS };
+}
+
+/**
+ * Calls the PeopleForge API as the signed-in user (pages and Server Actions). The provider
+ * access token is read server-side for each call and never reaches the browser.
+ */
+export async function callApi<T>(
+  path: string,
+  schema: z.ZodType<T>,
+  init?: ApiRequestInit,
+): Promise<ApiResult<T>> {
+  const bearer = await getProviderAccessToken(getAuth(), await headers());
+  if (bearer === null) return { kind: 'unauthenticated' };
+  return apiRequest(apiConfig(), bearer, path, schema, init);
+}
 
 /**
  * The viewer of a portal page, or null while the API is unavailable (the portal layout shows

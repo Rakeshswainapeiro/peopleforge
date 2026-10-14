@@ -1,6 +1,6 @@
 import request from 'supertest';
 import { describe, expect, it, vi } from 'vitest';
-import { ROLES } from '@peopleforge/access';
+import { ROLES } from '@peopleforge/contracts';
 import type { Principal } from '../auth/principal.js';
 import { buildApp, errorOf, resolveAs, silentLogger, testEnv } from '../test-support/factory.js';
 

@@ -1,11 +1,15 @@
 import { z } from 'zod';
 import { PERMISSIONS } from './permissions.js';
 
-/** A subsidiary as listed to a caller. Names are localised; `en` is always present. */
+/** A label in each supported locale (configuration data, i18n standard): `en` always present. */
+export const LocalisedTextSchema = z.object({ en: z.string(), ar: z.string().optional() });
+export type LocalisedText = z.infer<typeof LocalisedTextSchema>;
+
+/** A subsidiary as listed to a caller. */
 export const EntitySummarySchema = z.object({
   id: z.uuid(),
   code: z.string(),
-  name: z.object({ en: z.string() }).catchall(z.string()),
+  name: LocalisedTextSchema,
 });
 
 export type EntitySummaryDto = z.infer<typeof EntitySummarySchema>;

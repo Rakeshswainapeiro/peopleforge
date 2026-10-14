@@ -1,3 +1,5 @@
+import type { FieldCryptoError } from '@peopleforge/db';
+import { createFieldCipher, parseKeyRing, type FieldCipher } from '@peopleforge/db';
 import { identityEnvShape } from '@sirius/identity';
 import { LOG_LEVELS } from '@sirius/utils';
 import { z } from 'zod';
@@ -16,6 +18,9 @@ const EnvSchema = z
     // The app role (data access only, no DDL): migrations use the owner, never the API (ADR-002).
     DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/ }),
     DATABASE_POOL_MAX: z.coerce.number().int().min(1).max(100).default(10),
+    // Salary field keys (ADR-008): "id:base64-32-bytes,…" and the ID used for new writes.
+    DATA_ENCRYPTION_KEYS: z.string().min(1),
+    DATA_ENCRYPTION_ACTIVE_KEY: z.string().min(1),
     PORT: z.coerce.number().int().min(1).max(65535).default(4000),
     LOG_LEVEL: z.enum(LOG_LEVELS).default('info'),
     CORS_ALLOWED_ORIGINS: z
@@ -68,4 +73,21 @@ export function loadEnv(source: Record<string, string | undefined>): Env {
     throw new ConfigError(keys);
   }
   return result.data;
+}
+
+/**
+ * The salary field cipher from the key ring (ADR-008). Fails start-up with the key problem
+ * ("Key k1 must be 32 bytes", never key material) rather than at the first request.
+ */
+export function cipherFromEnv(
+  env: Pick<Env, 'DATA_ENCRYPTION_KEYS' | 'DATA_ENCRYPTION_ACTIVE_KEY'>,
+): FieldCipher {
+  try {
+    return createFieldCipher(
+      parseKeyRing(env.DATA_ENCRYPTION_KEYS, env.DATA_ENCRYPTION_ACTIVE_KEY),
+    );
+  } catch (error: unknown) {
+    // parseKeyRing only throws FieldCryptoError, whose messages name the key ID, never key bytes.
+    throw new ConfigError([`DATA_ENCRYPTION_KEYS (${(error as FieldCryptoError).message})`]);
+  }
 }

@@ -1,19 +1,20 @@
-import type { Me } from '@peopleforge/access';
+import type { Me } from '@peopleforge/contracts';
 import { render, screen, within } from '@testing-library/react';
 import { usePathname } from 'next/navigation';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getRequestLocale } from '@/i18n/request-locale';
+import { listRequests } from '@/server/increment-requests';
 import { requireViewer } from '@/server/session';
 import PortalLayout from './layout';
 import NotificationsPage from './notifications/page';
 import HomePage from './page';
 import ReportsPage from './reports/page';
-import NewRequestPage from './requests/new/page';
 
 vi.mock('@/i18n/request-locale', () => ({ getRequestLocale: vi.fn() }));
 vi.mock('@/app/actions/set-locale', () => ({ setLocale: vi.fn() }));
 vi.mock('@/app/sign-in/actions', () => ({ signOut: vi.fn(), startSignIn: vi.fn() }));
 vi.mock('@/server/session', () => ({ requireViewer: vi.fn() }));
+vi.mock('@/server/increment-requests', () => ({ listRequests: vi.fn() }));
 vi.mock('next/navigation', () => ({
   usePathname: vi.fn(() => '/'),
   notFound: vi.fn(() => {
@@ -52,6 +53,10 @@ beforeEach(() => {
   vi.mocked(getRequestLocale).mockResolvedValue('en');
   vi.mocked(requireViewer).mockResolvedValue(REVIEWER);
   vi.mocked(usePathname).mockReturnValue('/');
+  vi.mocked(listRequests).mockResolvedValue({
+    kind: 'ok',
+    data: { items: [], page: 1, pageSize: 10, total: 0 },
+  });
 });
 
 describe('portal shell', () => {
@@ -73,14 +78,13 @@ describe('portal shell', () => {
   it('shows subsidiary HR its subsidiary and New Request, marking the current page', async () => {
     vi.mocked(requireViewer).mockResolvedValue(ALPHA_HR);
     vi.mocked(usePathname).mockReturnValue('/requests/new');
-    await renderPortal(NewRequestPage);
+    await renderPortal(NotificationsPage);
     expect(screen.getByText('Subsidiary HR · Subsidiary A')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'New Request' })).toHaveAttribute(
       'aria-current',
       'page',
     );
     expect(screen.getByRole('link', { name: 'Home' })).not.toHaveAttribute('aria-current');
-    expect(screen.getByRole('heading', { level: 1, name: 'New increment request' })).toBeVisible();
   });
 
   it('says when a subsidiary user has no subsidiary assigned yet', async () => {
@@ -113,6 +117,56 @@ describe('HomePage', () => {
     expect(screen.getByRole('heading', { name: 'Increment requests' })).toBeInTheDocument();
   });
 
+  it('lists the caller’s drafts under "Needs your action" (Figma)', async () => {
+    vi.mocked(requireViewer).mockResolvedValue(ALPHA_HR);
+    const draft = {
+      id: '11111111-1111-4111-8111-111111111111',
+      reference: 'INC-2026-0150',
+      status: 'draft' as const,
+      entityId: SUB_A,
+      cycleId: '00000000-0000-4000-8000-00000000c026',
+      createdAt: '2026-10-14T07:00:00.000Z',
+      updatedAt: '2026-10-14T07:00:00.000Z',
+    };
+    vi.mocked(listRequests).mockResolvedValue({
+      kind: 'ok',
+      data: {
+        items: [
+          { ...draft, employeeCount: 4 },
+          {
+            ...draft,
+            id: '11111111-1111-4111-8111-111111111112',
+            reference: 'INC-2026-0151',
+            employeeCount: 1,
+          },
+        ],
+        page: 1,
+        pageSize: 10,
+        total: 2,
+      },
+    });
+    render(await HomePage());
+    const panel = screen.getByRole('region', { name: 'Needs your action' });
+    expect(panel).toHaveTextContent('INC-2026-0150 · Draft not submitted');
+    expect(panel).toHaveTextContent('4 employees added');
+    expect(panel).toHaveTextContent('1 employee added');
+    expect(screen.getAllByRole('link', { name: 'Continue draft' })[0]).toHaveAttribute(
+      'href',
+      `/requests/${draft.id}`,
+    );
+    expect(listRequests).toHaveBeenCalledWith({ status: 'draft', pageSize: 10 });
+  });
+
+  it('shows no drafts panel without drafts or for Sirius roles', async () => {
+    vi.mocked(requireViewer).mockResolvedValue(ALPHA_HR);
+    render(await HomePage());
+    expect(screen.queryByRole('region', { name: 'Needs your action' })).not.toBeInTheDocument();
+    vi.mocked(requireViewer).mockResolvedValue(REVIEWER);
+    vi.mocked(listRequests).mockClear();
+    render(await HomePage());
+    expect(listRequests).not.toHaveBeenCalled();
+  });
+
   it('explains when the role grants no permissions yet', async () => {
     vi.mocked(requireViewer).mockResolvedValue({ ...REVIEWER, permissions: [] });
     render(await HomePage());
@@ -125,7 +179,6 @@ describe('placeholder pages', () => {
     ['Notifications', NotificationsPage, REVIEWER],
     ['Reports', ReportsPage, REVIEWER],
     ['Reports', ReportsPage, ALPHA_HR],
-    ['New increment request', NewRequestPage, ALPHA_HR],
   ])('renders %s for a permitted viewer', async (heading, Page, viewer) => {
     vi.mocked(requireViewer).mockResolvedValue(viewer);
     render(await Page());
@@ -133,13 +186,13 @@ describe('placeholder pages', () => {
     expect(screen.getByRole('status')).toHaveTextContent('Coming in a later release.');
   });
 
-  it.each([
-    ['New Request for a reviewer', NewRequestPage, REVIEWER],
-    ['Reports without a report permission', ReportsPage, { ...ALPHA_HR, permissions: [] }],
-  ])('answers not found for %s', async (_label, Page, viewer) => {
-    vi.mocked(requireViewer).mockResolvedValue(viewer);
-    await expect(Page()).rejects.toThrow('NEXT_NOT_FOUND');
-  });
+  it.each([['Reports without a report permission', ReportsPage, { ...ALPHA_HR, permissions: [] }]])(
+    'answers not found for %s',
+    async (_label, Page, viewer) => {
+      vi.mocked(requireViewer).mockResolvedValue(viewer);
+      await expect(Page()).rejects.toThrow('NEXT_NOT_FOUND');
+    },
+  );
 
   it.each([HomePage, NotificationsPage])(
     'renders nothing while the API is unavailable',

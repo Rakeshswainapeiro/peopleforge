@@ -15,7 +15,7 @@ import request from 'supertest';
 import { describe, expect, it } from 'vitest';
 import { ApiExceptionFilter } from '../http/exception.filter.js';
 import { errorOf, silentLogger, track } from '../test-support/factory.js';
-import { ROLES } from '@peopleforge/access';
+import { ROLES } from '@peopleforge/contracts';
 import { Authenticated, Public, RequirePermission } from './policy.js';
 import { permissionsOfPrincipal, type Principal } from './principal.js';
 

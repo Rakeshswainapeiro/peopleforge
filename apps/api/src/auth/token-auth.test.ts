@@ -15,7 +15,7 @@ import {
   TEST_ISSUER,
   TEST_TENANT,
 } from '../test-support/factory.js';
-import { MeSchema, ROLES } from '@peopleforge/access';
+import { MeSchema, ROLES } from '@peopleforge/contracts';
 import { tokenResolver } from './token-resolver.js';
 
 // End-to-end through the real resolver, guard and filter, with tokens signed by an in-memory

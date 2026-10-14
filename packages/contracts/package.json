@@ -1,8 +1,8 @@
 {
-  "name": "@peopleforge/access",
+  "name": "@peopleforge/contracts",
   "version": "0.1.0",
   "private": true,
-  "description": "PeopleForge access contract shared by the API and the web app: roles, permissions and the /me response (ADR-005).",
+  "description": "PeopleForge API contract shared by the API and the web app: roles, permissions (ADR-005) and request/response schemas.",
   "type": "module",
   "exports": {
     ".": {

@@ -1,12 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { ConfigError, loadEnv } from './env.js';
+import { cipherFromEnv, ConfigError, loadEnv } from './env.js';
 
 const IDENTITY = {
   OIDC_ISSUER: 'https://login.microsoftonline.com/tenant-id/v2.0',
   OIDC_AUDIENCE: 'api://peopleforge',
   OIDC_TENANT_ID: 'tenant-id',
 };
-const DATABASE = { DATABASE_URL: 'postgres://peopleforge_app:pw@db.internal:5432/peopleforge' };
+const KEY = Buffer.alloc(32, 1).toString('base64');
+const DATABASE = {
+  DATABASE_URL: 'postgres://peopleforge_app:pw@db.internal:5432/peopleforge',
+  DATA_ENCRYPTION_KEYS: `k1:${KEY}`,
+  DATA_ENCRYPTION_ACTIVE_KEY: 'k1',
+};
 const LOCAL_IDENTITY = {
   OIDC_ISSUER: 'http://keycloak.sirius.test:8180/realms/sirius',
   OIDC_AUDIENCE: 'peopleforge-api',
@@ -100,7 +105,7 @@ describe('loadEnv', () => {
 
   it('requires the identity provider settings', () => {
     expect(() => loadEnv({ APP_ENV: 'dev' })).toThrow(
-      'Invalid or missing environment variables: DATABASE_URL, OIDC_AUDIENCE, OIDC_ISSUER, OIDC_TENANT_ID',
+      'Invalid or missing environment variables: DATABASE_URL, DATA_ENCRYPTION_ACTIVE_KEY, DATA_ENCRYPTION_KEYS, OIDC_AUDIENCE, OIDC_ISSUER, OIDC_TENANT_ID',
     );
   });
 
@@ -117,5 +122,31 @@ describe('loadEnv', () => {
     expect(() =>
       loadEnv({ APP_ENV: appEnv, ...IDENTITY, ...DATABASE, OIDC_ALLOW_HTTP: 'true', ...origins }),
     ).toThrow(/OIDC_ISSUER/);
+  });
+});
+
+describe('cipherFromEnv [ADR-008]', () => {
+  it('builds the salary cipher from the key ring', () => {
+    const cipher = cipherFromEnv(DATABASE);
+    const context = { table: 't', column: 'c', rowId: 'r' };
+    expect(cipher.decrypt(cipher.encrypt('21500.00', context), context)).toBe('21500.00');
+  });
+
+  it.each([
+    [
+      'a short key',
+      { DATA_ENCRYPTION_KEYS: 'k1:c2hvcnQ=', DATA_ENCRYPTION_ACTIVE_KEY: 'k1' },
+      'Key k1 must be 32 bytes',
+    ],
+    [
+      'a missing active key',
+      { DATA_ENCRYPTION_KEYS: `k1:${KEY}`, DATA_ENCRYPTION_ACTIVE_KEY: 'k2' },
+      'Active key is not in the key ring',
+    ],
+  ])('refuses %s, naming the problem but never the key', (_label, env, problem) => {
+    expect(() => cipherFromEnv(env)).toThrow(
+      new ConfigError([`DATA_ENCRYPTION_KEYS (${problem})`]),
+    );
+    expect(() => cipherFromEnv(env)).not.toThrow(KEY);
   });
 });

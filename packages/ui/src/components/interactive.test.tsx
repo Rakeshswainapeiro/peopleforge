@@ -5,6 +5,7 @@ import { Field, Input, Select, Textarea } from './form.js';
 import { NavItem } from './nav-item.js';
 import { Pagination } from './pagination.js';
 import { CellStack, Table, TBody, Td, Th, THead, Tr } from './table.js';
+import { SegmentedChoice } from './segmented-choice.js';
 import { ToggleGroup } from './toggle-group.js';
 
 describe('Field', () => {
@@ -178,5 +179,38 @@ describe('NavItem', () => {
     expect(home).toHaveAttribute('aria-current', 'page');
     expect(home).toHaveClass('bg-white');
     expect(screen.getByRole('link', { name: 'Reports' })).toHaveClass('hover:bg-white/10');
+  });
+});
+
+describe('SegmentedChoice', () => {
+  it('is a labelled radio group posting the chosen value', async () => {
+    render(
+      <form aria-label="f">
+        <SegmentedChoice
+          name="kind"
+          legend="Proposed as"
+          defaultValue="percent"
+          options={[
+            { value: 'percent', label: '%' },
+            { value: 'amount', label: 'AED' },
+          ]}
+        />
+      </form>,
+    );
+    const group = screen.getByRole('group', { name: 'Proposed as' });
+    expect(group).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: '%' })).toBeChecked();
+    await userEvent.click(screen.getByText('AED'));
+    expect(screen.getByRole('radio', { name: 'AED' })).toBeChecked();
+    const form = screen.getByRole<HTMLFormElement>('form', { name: 'f' });
+    expect(new FormData(form).get('kind')).toBe('amount');
+  });
+
+  it('can be medium sized and start with nothing chosen', () => {
+    render(
+      <SegmentedChoice name="k" legend="L" size="md" options={[{ value: 'a', label: 'A' }]} />,
+    );
+    expect(screen.getByRole('radio', { name: 'A' })).not.toBeChecked();
+    expect(screen.getByText('A')).toHaveClass('h-8');
   });
 });

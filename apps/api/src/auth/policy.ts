@@ -1,5 +1,5 @@
 import { createAccessPolicy } from '@sirius/auth-nest';
-import type { Permission } from '@peopleforge/access';
+import type { Permission } from '@peopleforge/contracts';
 
 /**
  * Access policy decorators, typed to PeopleForge permissions so a misspelt permission is a

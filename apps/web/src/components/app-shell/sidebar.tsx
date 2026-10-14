@@ -1,4 +1,4 @@
-import type { Me } from '@peopleforge/access';
+import type { Me } from '@peopleforge/contracts';
 import { Avatar, Wordmark } from '@peopleforge/ui';
 import type { Locale } from '@sirius/shared-types';
 import { LanguageSwitcher } from '@/components/language-switcher';

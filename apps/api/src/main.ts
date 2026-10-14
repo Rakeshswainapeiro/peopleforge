@@ -1,16 +1,23 @@
 import 'reflect-metadata';
-import { createDatabase, createEntityDirectory } from '@peopleforge/db';
+import {
+  createDatabase,
+  createEntityDirectory,
+  createIncrementRequestRepository,
+  type FieldCipher,
+} from '@peopleforge/db';
 import { verifierFromEnv } from '@sirius/identity';
 import { createLogger } from '@sirius/utils';
 import { tokenResolver } from './auth/token-resolver.js';
 import { createApp } from './bootstrap/create-app.js';
-import { ConfigError, loadEnv, type Env } from './config/env.js';
+import { cipherFromEnv, ConfigError, loadEnv, type Env } from './config/env.js';
 import { createShutdown } from './lifecycle/shutdown.js';
 
 async function start(): Promise<void> {
   let env: Env;
+  let cipher: FieldCipher;
   try {
     env = loadEnv(process.env);
+    cipher = cipherFromEnv(env);
   } catch (error: unknown) {
     // Fail fast before anything listens. Only key names are printed, never values.
     const message = error instanceof ConfigError ? error.message : 'Configuration failed';
@@ -34,6 +41,7 @@ async function start(): Promise<void> {
     // Signing keys are discovered from OIDC_ISSUER on first use (see @sirius/identity).
     resolvePrincipal: tokenResolver({ verifier: verifierFromEnv(env), logger, directory }),
     directory,
+    incrementRequests: createIncrementRequestRepository(database.db, cipher),
     readinessChecks: [{ name: 'database', check: () => database.ping() }],
     isShuttingDown: () => isShuttingDown(),
   });

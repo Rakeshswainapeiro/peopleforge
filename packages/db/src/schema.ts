@@ -89,6 +89,58 @@ export interface CriterionTable {
   updated_by: string;
 }
 
+export interface RequestSequenceTable {
+  cycle_id: string;
+  last_number: number;
+}
+
+export type RequestStatus = 'draft';
+
+export interface IncrementRequestTable {
+  id: Generated<string>;
+  reference: string;
+  entity_id: string;
+  cycle_id: string;
+  criteria_set_id: string;
+  status: Generated<RequestStatus>;
+  created_at: Timestamp;
+  created_by: string;
+  updated_at: Timestamp;
+  updated_by: string;
+  version: Generated<number>;
+  deleted_at: Date | null;
+}
+
+export type ProposedKind = 'percent' | 'amount';
+
+export interface RequestLineTable {
+  id: string;
+  request_id: string;
+  entity_id: string;
+  employee_id: string;
+  employee_number: string;
+  full_name: string;
+  grade: string;
+  /** Snapshot of the employee's monthly salary when added; ciphertext (ADR-008). */
+  current_salary: Buffer;
+  currency: string;
+  proposed_kind: ProposedKind | null;
+  /** Ciphertext of a decimal string: a percentage or an amount, per proposed_kind. */
+  proposed_value: Buffer | null;
+  created_at: Timestamp;
+  created_by: string;
+  updated_at: Timestamp;
+  updated_by: string;
+  deleted_at: Date | null;
+}
+
+export interface IdempotencyKeyTable {
+  user_id: string;
+  key: string;
+  request_id: string;
+  created_at: Timestamp;
+}
+
 /** Tables the application reads and writes, by schema-qualified name. */
 export interface Database {
   'core.entity': EntityTable;
@@ -97,4 +149,8 @@ export interface Database {
   'core.employee': EmployeeTable;
   'increments.criteria_set': CriteriaSetTable;
   'increments.criterion': CriterionTable;
+  'increments.request_sequence': RequestSequenceTable;
+  'increments.increment_request': IncrementRequestTable;
+  'increments.request_line': RequestLineTable;
+  'increments.idempotency_key': IdempotencyKeyTable;
 }

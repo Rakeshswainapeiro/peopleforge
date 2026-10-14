@@ -24,6 +24,7 @@ pnpm install
 cp apps/api/.env.example apps/api/.env
 cp apps/web/.env.example apps/web/.env.local     # then set AUTH_SECRET: openssl rand -base64 48
 cp packages/db/.env.example packages/db/.env     # then set DATA_ENCRYPTION_KEYS (command in the file)
+                                                 # and copy both DATA_ENCRYPTION_* lines into apps/api/.env
 pnpm build
 pnpm db:migrate     # core schema + placeholder criteria (packages/db), then sign-in tables (web)
 pnpm db:seed        # synthetic subsidiaries A/B/C, pf.alpha.hr → A, pf.beta.hr → B, employees
@@ -77,7 +78,7 @@ apps/
   api/            NestJS API — bootstrap, auth (policy guard, principal), http, health, modules/*
   web/            Next.js App Router — i18n (en/ar), proxy (CSP), app/(portal)/*, components/*, e2e/
 packages/
-  access/         Roles, permissions and the /me contract, shared by api and web (ADR-005)
+  contracts/      API contract shared by api and web: roles, permissions, request/response schemas
   ui/             Design system: Figma tokens + components (ADR-009, docs/design/design-system.md)
   db/             SQL migrations, migration runner, RLS scope (withScope), field encryption, dev seed
 infra/docker/     Production Dockerfiles
