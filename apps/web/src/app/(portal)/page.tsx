@@ -15,7 +15,11 @@ const AREAS: readonly { title: MessageKey; body: MessageKey; ref: string }[] = [
  * Landing page until the R1 dashboard (Figma "My increment requests") lands in a later slice.
  * The portal layout handles sign-in redirects and the API-unavailable notice.
  */
-export default async function HomePage() {
+interface HomePageProps {
+  searchParams?: Promise<{ discarded?: string }>;
+}
+
+export default async function HomePage({ searchParams }: HomePageProps = {}) {
   const me = await requireViewer();
   if (me === null) return null;
   const locale = await getRequestLocale();
@@ -28,6 +32,9 @@ export default async function HomePage() {
   return (
     <>
       <PageHeader title={t('home.heading')} description={t('home.intro')} />
+      {(await searchParams)?.discarded === '1' ? (
+        <Alert tone="success" title={t('request.discarded')} className="mt-6" />
+      ) : null}
       {me.permissions.length === 0 ? (
         <Alert tone="warning" title={t('account.noPermissions')} className="mt-6" />
       ) : null}

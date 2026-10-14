@@ -48,8 +48,8 @@ export function LanguageSwitcher({ locale, t, tone = 'light' }: LanguageSwitcher
               className={cn(
                 'rounded-[calc(var(--radius-control)-2px)] px-2.5 py-1 text-xs font-medium disabled:cursor-default',
                 dark
-                  ? 'text-sidebar-ink hover:bg-white/10 disabled:bg-white disabled:text-sidebar'
-                  : 'text-ink hover:bg-surface-muted disabled:bg-ink disabled:text-white',
+                  ? 'text-sidebar-ink enabled:hover:bg-white/10 disabled:bg-white disabled:text-sidebar'
+                  : 'text-ink enabled:hover:bg-surface-muted disabled:bg-ink disabled:text-white',
                 transition,
                 focusRing,
               )}

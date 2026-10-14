@@ -29,7 +29,8 @@ export const CreateIncrementRequestSchema = z.strictObject({
   cycleId: z.uuid(),
   /** Required only when the caller acts for more than one subsidiary. */
   entityId: z.uuid().optional(),
-  employeeIds: z.array(z.uuid()).max(MAX_LINES_PER_REQUEST).default([]),
+  /** At least one: a draft starts with its first employee (an empty draft is not a request). */
+  employeeIds: z.array(z.uuid()).min(1).max(MAX_LINES_PER_REQUEST),
 });
 export type CreateIncrementRequest = z.infer<typeof CreateIncrementRequestSchema>;
 
@@ -155,3 +156,13 @@ export const IncrementRequestPageSchema = z.object({
   total: z.number().int().min(0),
 });
 export type IncrementRequestPage = z.infer<typeof IncrementRequestPageSchema>;
+
+/**
+ * DELETE …/lines/{lineId}. Removing the last employee discards the draft: `discarded` is true
+ * and `request` is null.
+ */
+export const RemoveLineResultSchema = z.object({
+  discarded: z.boolean(),
+  request: IncrementRequestSchema.nullable(),
+});
+export type RemoveLineResult = z.infer<typeof RemoveLineResultSchema>;

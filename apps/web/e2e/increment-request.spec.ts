@@ -109,3 +109,31 @@ for (const user of ['betaHr', 'reviewer'] as const) {
     await expect(page.getByText('Aisha Rahman')).toHaveCount(0);
   });
 }
+
+test('the chosen "% | AED" segment stays readable on hover', async ({ page }) => {
+  await signIn(page, 'alphaHr');
+  await page.goto(requestUrl);
+  const chosen = page
+    .getByRole('group', { name: 'Proposed as, for Aisha Rahman' })
+    .getByText('%', { exact: true });
+  await chosen.hover();
+  // White text on the dark chosen segment: the background must stay dark while hovered.
+  const background = await chosen.evaluate((element) => getComputedStyle(element).backgroundColor);
+  expect(background).toMatch(/^(rgb|oklch|lab)\(/u);
+  expect(background).not.toMatch(/^rgb\(2[0-9]{2}, 2[0-9]{2}, 2[0-9]{2}\)$/u);
+});
+
+test('removing the last employee discards the draft', async ({ page }) => {
+  await signIn(page, 'alphaHr');
+  await page.goto('/requests/new');
+  await addEmployee(page, 'Mariam Saleh · EMP-1103 · G4');
+  await page.waitForURL(/\/requests\/[0-9a-f-]{36}$/u);
+  const draftUrl = page.url();
+  await page.getByRole('button', { name: 'Remove Mariam Saleh' }).click();
+  await page.waitForURL('/?discarded=1');
+  await expect(page.getByText('Draft discarded: it had no employees left.')).toBeVisible();
+  const id = draftUrl.split('/').at(-1) ?? '';
+  await expect(page.locator(`a[href="/requests/${id}"]`)).toHaveCount(0);
+  await page.goto(draftUrl);
+  await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible();
+});

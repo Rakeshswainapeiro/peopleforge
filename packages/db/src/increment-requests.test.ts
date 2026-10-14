@@ -365,7 +365,9 @@ describe('editing a draft', () => {
     expect(added?.version).toBe(2);
     expect(added?.lines.map((line) => line.employeeNumber)).toEqual(['EMP-1101', 'EMP-1102']);
 
-    await repo.removeLine(alpha, id, String(added?.lines[0]?.id));
+    await expect(repo.removeLine(alpha, id, String(added?.lines[0]?.id))).resolves.toEqual({
+      discarded: false,
+    });
     const removed = await repo.get(alpha, id);
     expect(removed?.version).toBe(3);
     expect(removed?.lines.map((line) => line.employeeNumber)).toEqual(['EMP-1102']);
@@ -373,6 +375,18 @@ describe('editing a draft', () => {
     // A removed employee can be added again.
     await repo.addLine(alpha, id, employee('EMP-1101'));
     expect((await repo.get(alpha, id))?.lines).toHaveLength(2);
+  });
+
+  it('discards the draft when its last employee is removed', async () => {
+    const id = await draft(['EMP-1101']);
+    const lineId = String((await repo.get(alpha, id))?.lines[0]?.id);
+    await expect(repo.removeLine(alpha, id, lineId)).resolves.toEqual({ discarded: true });
+    await expect(repo.get(alpha, id)).resolves.toBeNull();
+    const drafts = await repo.list(alpha, { includeDrafts: true, limit: 100, offset: 0 });
+    expect(drafts.items.map((item) => item.id)).not.toContain(id);
+    expect(await refusal(repo.addLine(alpha, id, employee('EMP-1102')))).toMatchObject({
+      reason: 'not_found',
+    });
   });
 
   it('refuses duplicates, unknown lines and unknown requests', async () => {

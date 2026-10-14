@@ -3,11 +3,13 @@ import {
   EmployeeOptionSchema,
   IncrementRequestPageSchema,
   IncrementRequestSchema,
+  RemoveLineResultSchema,
   type CreateIncrementRequest,
   type Cycle,
   type EmployeeOption,
   type IncrementRequest,
   type IncrementRequestPage,
+  type RemoveLineResult,
   type SetProposals,
 } from '@peopleforge/contracts';
 import { z } from 'zod';
@@ -63,8 +65,8 @@ export function addEmployee(id: string, employeeId: string): Promise<ApiResult<I
   });
 }
 
-export function removeEmployee(id: string, lineId: string): Promise<ApiResult<IncrementRequest>> {
-  return callApi(requestPath(id, `/lines/${Id.parse(lineId)}`), IncrementRequestSchema, {
+export function removeEmployee(id: string, lineId: string): Promise<ApiResult<RemoveLineResult>> {
+  return callApi(requestPath(id, `/lines/${Id.parse(lineId)}`), RemoveLineResultSchema, {
     method: 'DELETE',
   });
 }

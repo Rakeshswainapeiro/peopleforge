@@ -121,7 +121,7 @@ export function workingRepository(): IncrementRequestRepository & {
       }),
     ),
     addLine: vi.fn(() => Promise.resolve()),
-    removeLine: vi.fn(() => Promise.resolve()),
+    removeLine: vi.fn(() => Promise.resolve({ discarded: false })),
     setProposals: vi.fn(() => Promise.resolve()),
   };
 }

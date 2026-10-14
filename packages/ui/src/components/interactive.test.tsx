@@ -221,6 +221,23 @@ describe('SegmentedChoice', () => {
     expect(new FormData(form).get('kind')).toBe('amount');
   });
 
+  it('never lightens the chosen segment on hover (white text must stay on dark)', () => {
+    render(
+      <SegmentedChoice
+        name="k"
+        legend="L"
+        defaultValue="a"
+        options={[{ value: 'a', label: 'A' }]}
+      />,
+    );
+    const segment = screen.getByText('A');
+    expect(segment).toHaveClass(
+      'peer-checked:bg-ink',
+      'peer-[:not(:checked)]:hover:bg-surface-muted',
+    );
+    expect(segment.className).not.toMatch(/(^|\s)hover:bg-/u);
+  });
+
   it('can be medium sized and start with nothing chosen', () => {
     render(
       <SegmentedChoice name="k" legend="L" size="md" options={[{ value: 'a', label: 'A' }]} />,

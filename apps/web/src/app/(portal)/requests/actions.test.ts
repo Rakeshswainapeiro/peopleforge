@@ -113,6 +113,23 @@ describe('addEmployeeAction and removeEmployeeAction', () => {
     expect(removeEmployee).toHaveBeenCalledWith(REQUEST, LINE_1);
   });
 
+  it('goes Home when removing the last employee discarded the draft', async () => {
+    vi.mocked(removeEmployee).mockResolvedValue({
+      kind: 'ok',
+      data: { discarded: true, request: null },
+    });
+    await expect(removeEmployeeAction(LINE_1, form({ requestId: REQUEST }))).rejects.toThrow(
+      'NEXT_REDIRECT /?discarded=1',
+    );
+  });
+
+  it('explains a failed removal on the request', async () => {
+    vi.mocked(removeEmployee).mockResolvedValue({ kind: 'unavailable' });
+    await expect(removeEmployeeAction(LINE_1, form({ requestId: REQUEST }))).rejects.toThrow(
+      `NEXT_REDIRECT /requests/${REQUEST}?error=request.errors.generic`,
+    );
+  });
+
   it('refuses tampered IDs before calling the API', async () => {
     await expect(removeEmployeeAction(LINE_1, form({ requestId: '../admin' }))).rejects.toThrow();
     expect(removeEmployee).not.toHaveBeenCalled();

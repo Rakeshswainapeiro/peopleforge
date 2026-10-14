@@ -22,6 +22,7 @@ import {
   type EmployeeOption,
   type IncrementRequest,
   type IncrementRequestPage,
+  type RemoveLineResult,
 } from '@peopleforge/contracts';
 import type { IncomingMessage } from 'node:http';
 import { z } from 'zod';
@@ -93,7 +94,7 @@ export class IncrementRequestsController {
     @Req() req: IncomingMessage,
     @Param('id') id: string,
     @Param('lineId') lineId: string,
-  ): Promise<IncrementRequest> {
+  ): Promise<RemoveLineResult> {
     return this.service.removeLine(principal.require(req), Id.parse(id), Id.parse(lineId));
   }
 

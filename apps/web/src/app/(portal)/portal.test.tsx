@@ -167,6 +167,11 @@ describe('HomePage', () => {
     expect(listRequests).not.toHaveBeenCalled();
   });
 
+  it('confirms a draft discarded by removing its last employee', async () => {
+    render(await HomePage({ searchParams: Promise.resolve({ discarded: '1' }) }));
+    expect(screen.getByText('Draft discarded: it had no employees left.')).toBeInTheDocument();
+  });
+
   it('explains when the role grants no permissions yet', async () => {
     vi.mocked(requireViewer).mockResolvedValue({ ...REVIEWER, permissions: [] });
     render(await HomePage());

@@ -188,6 +188,7 @@
       "fail": "Fail",
       "pending": "Not assessed yet"
     },
-    "newIntroGeneric": "Add employees, propose an increment, then complete the eligibility criteria for each one."
+    "newIntroGeneric": "Add employees, propose an increment, then complete the eligibility criteria for each one.",
+    "discarded": "Draft discarded: it had no employees left."
   }
 }

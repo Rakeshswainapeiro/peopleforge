@@ -37,6 +37,15 @@ describe('LanguageSwitcher', () => {
     expect(arabic).toHaveAttribute('value', 'ar');
   });
 
+  it('never restyles the current (disabled) language on hover', () => {
+    render(<LanguageSwitcher locale="en" t={createTranslator('en')} />);
+    render(<LanguageSwitcher locale="en" t={createTranslator('en')} tone="dark" />);
+    for (const button of screen.getAllByRole('button')) {
+      expect(button.className).not.toMatch(/(^|\s)hover:bg-/u);
+      expect(button.className).toMatch(/enabled:hover:bg-/u);
+    }
+  });
+
   it('labels the button group for assistive technology', () => {
     render(<LanguageSwitcher locale="en" t={createTranslator('en')} />);
     expect(screen.getByRole('group', { name: 'Language' })).toBeInTheDocument();

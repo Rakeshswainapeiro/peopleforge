@@ -78,7 +78,13 @@ export async function removeEmployeeAction(
 ): Promise<never> {
   const requestId = Id.parse(field(formData, 'requestId'));
   const lineId = Id.parse(lineIdInput);
-  outcome(await removeEmployee(requestId, lineId), `/requests/${requestId}`);
+  const result = await removeEmployee(requestId, lineId);
+  // Removing the last employee discards the draft: back to Home, which says so.
+  if (result.kind === 'ok' && result.data.discarded) redirect('/?discarded=1');
+  outcome(
+    result.kind === 'ok' ? { kind: 'ok', data: { id: requestId } } : result,
+    `/requests/${requestId}`,
+  );
 }
 
 export interface ProposalRowState {

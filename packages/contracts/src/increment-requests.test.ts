@@ -24,14 +24,17 @@ describe('DecimalString', () => {
 });
 
 describe('CreateIncrementRequestSchema', () => {
-  it('defaults to no employees and refuses unknown fields', () => {
-    expect(CreateIncrementRequestSchema.parse({ cycleId: ID })).toEqual({
+  it('needs a first employee and refuses unknown fields', () => {
+    expect(CreateIncrementRequestSchema.parse({ cycleId: ID, employeeIds: [ID] })).toEqual({
       cycleId: ID,
-      employeeIds: [],
+      employeeIds: [ID],
     });
-    expect(
-      CreateIncrementRequestSchema.safeParse({ cycleId: ID, status: 'approved' }).success,
-    ).toBe(false);
+    expect(CreateIncrementRequestSchema.safeParse({ cycleId: ID }).success).toBe(false);
+    expect(CreateIncrementRequestSchema.safeParse({ cycleId: ID, employeeIds: [] }).success).toBe(
+      false,
+    );
+    const extra = { cycleId: ID, employeeIds: [ID], status: 'approved' };
+    expect(CreateIncrementRequestSchema.safeParse(extra).success).toBe(false);
   });
 
   it('caps the number of employees', () => {

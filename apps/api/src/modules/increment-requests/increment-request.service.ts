@@ -4,6 +4,7 @@ import type {
   EmployeeOption,
   IncrementRequest,
   IncrementRequestPage,
+  RemoveLineResult,
   RequestStatus,
   SetProposals,
 } from '@peopleforge/contracts';
@@ -200,9 +201,12 @@ export class IncrementRequestService {
     return this.get(caller, id);
   }
 
-  async removeLine(caller: Principal, id: string, lineId: string): Promise<IncrementRequest> {
-    await guard(this.repository.removeLine(scopeOf(caller), id, lineId));
-    return this.get(caller, id);
+  /** Removing the last employee discards the draft; the result says so (no request returned). */
+  async removeLine(caller: Principal, id: string, lineId: string): Promise<RemoveLineResult> {
+    const { discarded } = await guard(this.repository.removeLine(scopeOf(caller), id, lineId));
+    return discarded
+      ? { discarded, request: null }
+      : { discarded, request: await this.get(caller, id) };
   }
 
   /** Saves the proposed increments (the "Save draft" table), all or nothing. */

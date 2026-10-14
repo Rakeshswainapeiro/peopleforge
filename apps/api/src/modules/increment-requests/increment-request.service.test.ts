@@ -140,10 +140,22 @@ describe('IncrementRequestService', () => {
       id: REQUEST_ID,
     });
     await expect(service.removeLine(alphaHr, REQUEST_ID, LINE_1)).resolves.toMatchObject({
-      id: REQUEST_ID,
+      discarded: false,
+      request: { id: REQUEST_ID },
     });
     expect(repository.addLine).toHaveBeenCalledWith(scopeA, REQUEST_ID, EMPLOYEE_1);
     expect(repository.removeLine).toHaveBeenCalledWith(scopeA, REQUEST_ID, LINE_1);
+  });
+
+  it('reports a draft discarded by removing its last employee, without reading it again', async () => {
+    const repository = workingRepository();
+    repository.removeLine.mockResolvedValue({ discarded: true });
+    const service = new IncrementRequestService(repository);
+    await expect(service.removeLine(alphaHr, REQUEST_ID, LINE_1)).resolves.toEqual({
+      discarded: true,
+      request: null,
+    });
+    expect(repository.get).not.toHaveBeenCalled();
   });
 
   it('saves proposals normalised to 2 decimals', async () => {

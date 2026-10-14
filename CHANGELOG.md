@@ -6,6 +6,9 @@ All notable changes are recorded here. Format: [Keep a Changelog](https://keepac
 
 ### Fixed
 
+- **An empty draft stayed under "Needs your action".** Removing a draft's last employee now discards the draft (soft delete). The user returns to Home with "Draft discarded: it had no employees left." A draft must also be created with at least one employee (`employeeIds` minItems 1). `DELETE …/lines/{lineId}` returns `{ discarded, request }`.
+- **The chosen "% | AED" segment turned white on hover, hiding its white text.** The current language button had the same bug. Hover styles now apply only to unchosen segments and enabled buttons, and an end-to-end test checks the hovered background stays dark.
+
 - Removing an employee from a draft failed with "Something went wrong". React overrides a button's `name` when its `formAction` is a function, so the line ID never reached the server. The ID is now bound to the action, and the tests cover it.
 - The sidebar lost its selection while editing a draft (`/requests/<id>`). **New Request** now stays selected, as in the Figma.
 - In `next dev`, the CSP blocked the Next.js dev overlay's inline styles. That filled the console with errors and set off the dev "Issues" badge. Development now allows inline styles; production keeps nonce-only styles.

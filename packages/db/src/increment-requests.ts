@@ -117,7 +117,11 @@ export interface IncrementRequestRepository {
     query: { status?: RequestStatus; includeDrafts: boolean; limit: number; offset: number },
   ) => Promise<{ items: RequestSummaryRecord[]; total: number }>;
   addLine: (scope: Scope, requestId: string, employeeId: string) => Promise<void>;
-  removeLine: (scope: Scope, requestId: string, lineId: string) => Promise<void>;
+  /**
+   * Removes an employee. Removing the last one discards the draft (soft delete): an empty
+   * draft is not a request, and must not linger in "Needs your action".
+   */
+  removeLine: (scope: Scope, requestId: string, lineId: string) => Promise<{ discarded: boolean }>;
   setProposals: (
     scope: Scope,
     requestId: string,
@@ -489,7 +493,22 @@ export function createIncrementRequestRepository(
           .where('deleted_at', 'is', null)
           .executeTakeFirst();
         if (removed.numUpdatedRows === 0n) throw new RequestDataError('line_not_found', lineId);
+        const remaining = await trx
+          .selectFrom('increments.request_line')
+          .select('id')
+          .where('request_id', '=', requestId)
+          .where('deleted_at', 'is', null)
+          .executeTakeFirst();
+        if (remaining === undefined) {
+          await trx
+            .updateTable('increments.increment_request')
+            .set({ deleted_at: sql`now()`, updated_at: sql`now()`, updated_by: scope.userId })
+            .where('id', '=', requestId)
+            .execute();
+          return { discarded: true };
+        }
         await touch(trx, requestId, scope.userId);
+        return { discarded: false };
       }),
 
     setProposals: (scope, requestId, input) =>
