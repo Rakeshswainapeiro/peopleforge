@@ -1,6 +1,7 @@
 import {
   Alert,
   Badge,
+  Breadcrumb,
   ButtonLink,
   Card,
   CardHeader,
@@ -26,6 +27,7 @@ import { statusBadge } from '@/lib/request-status';
 import { entityName } from '@/lib/viewer-display';
 import { getRequest } from '@/server/increment-requests';
 import { requireViewer } from '@/server/session';
+import { editRequestHref } from '@/lib/routes';
 
 interface EmployeeStatusPageProps {
   params: Promise<{ id: string; lineId: string }>;
@@ -65,20 +67,14 @@ export default async function EmployeeStatusPage({ params }: EmployeeStatusPageP
     <>
       <PageHeader
         eyebrow={
-          <nav aria-label={t('employeeStatus.breadcrumb')}>
-            <ol className="flex flex-wrap items-center gap-1">
-              <li>
-                <Link
-                  href="/"
-                  className="text-brand-600 underline underline-offset-2 hover:text-brand-700"
-                >
-                  {t('employeeStatus.myRequests')}
-                </Link>
-              </li>
-              <li aria-hidden="true">/</li>
-              <li aria-current="page">{t('employeeStatus.current')}</li>
-            </ol>
-          </nav>
+          <Breadcrumb
+            label={t('breadcrumb.label')}
+            as={Link}
+            items={[
+              { label: t('breadcrumb.myRequests'), href: '/' },
+              { label: t('employeeStatus.current') },
+            ]}
+          />
         }
         title={line.fullName}
         description={t('employeeStatus.subtitle', {
@@ -104,7 +100,7 @@ export default async function EmployeeStatusPage({ params }: EmployeeStatusPageP
           className="mt-6"
           actions={
             editable ? (
-              <ButtonLink href={`/requests/${request.id}`} variant="outline" size="sm" as={Link}>
+              <ButtonLink href={editRequestHref(request.id)} variant="outline" size="sm" as={Link}>
                 {t('dashboard.continueDraft')}
               </ButtonLink>
             ) : undefined

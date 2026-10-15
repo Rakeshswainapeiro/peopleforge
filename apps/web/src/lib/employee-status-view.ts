@@ -5,6 +5,7 @@ import type { Translate } from '@/i18n/translator';
 import { formatMoney, formatPercent } from './format';
 import { pluralForm } from './plural';
 import { localised } from './viewer-display';
+import { evidenceHref } from './routes';
 
 /**
  * Figma "Employee status" (R1-06, R1-07): one employee of a request, with the money, the
@@ -93,7 +94,7 @@ export function criterionRows(
         evidence: assessment.evidence.map((file) => ({
           id: file.id,
           name: file.fileName,
-          href: `/requests/${request.id}/evidence/${file.id}`,
+          href: evidenceHref(request.id, file.id),
           label: t('employeeStatus.download', { name: file.fileName }),
         })),
       },

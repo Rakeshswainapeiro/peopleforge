@@ -10,7 +10,9 @@ import {
   progressSteps,
   proposalRows,
   readyView,
+  markStateLabels,
   saveMessages,
+  submitDialogView,
   tableLabels,
   totalsView,
 } from './request-view';
@@ -175,7 +177,8 @@ describe('readyView', () => {
     line.criteria.map((c) => ({ ...c, missing: [] as CriterionMissing[] }));
 
   it('lists each employee as in the Figma, and why submitting is blocked', () => {
-    expect(readyView(request(), 'en', t, 'key-1')).toEqual({
+    const { submitDialog, ...view } = readyView(request(), 'en', t, 'key-1');
+    expect(view).toEqual({
       items: [
         { lineId: LINE_1, fullName: 'Omar Haddad', ready: false, status: '3 criteria incomplete' },
         {
@@ -190,15 +193,14 @@ describe('readyView', () => {
       submitKey: 'key-1',
       submitLabels: {
         submit: 'Submit to Sirius HR',
+        confirm: 'Yes, submit to Sirius HR',
         submitting: 'Submitting…',
-        cancel: 'Cancel',
-        title: 'Submit INC-2026-0001 to Sirius HR?',
-        body: '2 employees go to Sirius HR for review. You can’t edit the request afterwards.',
-        unsaved: 'Anything you changed on this page is saved first.',
+        back: 'Go back and edit',
       },
       caption:
         'On submit the request is routed to Sirius HR, its status becomes Submitted, and both sides get an email and in-app notification.',
     });
+    expect(submitDialog).toEqual(submitDialogView(request(), 'en', t));
   });
 
   it('says one criterion in the singular', () => {
@@ -246,14 +248,45 @@ describe('readyView', () => {
       'key-1',
     );
     expect(one.canSubmit).toBe(true);
-    expect(one.submitLabels.body).toBe(
-      '1 employee goes to Sirius HR for review. You can’t edit the request afterwards.',
-    );
     expect(readyView(request({ lines: [] }), 'en', t, 'k').canSubmit).toBe(false);
     expect(
       readyView(request({ lines: [{ ...omar, criteria: allComplete(omar) }] }), 'en', t, 'key-1')
         .note,
     ).toBe('Every employee is ready to submit.');
+  });
+});
+
+describe('submitDialogView [R1-07]', () => {
+  it('shows the figures, each employee about to go, and what happens on submit', () => {
+    const dialog = submitDialogView(request(), 'en', t);
+    expect(dialog).toMatchObject({
+      title: 'Submit INC-2026-0001 to Sirius HR?',
+      intro:
+        'Check the employees below. After you submit, you cannot edit this request unless Sirius HR returns it to you.',
+      table: {
+        caption: 'Employees to submit',
+        employee: 'Employee',
+        grade: 'Grade',
+        proposed: 'Proposed',
+        criteria: 'Criteria',
+      },
+      note: 'On submit: status becomes Submitted, the request goes to Sirius HR for review (Criterion 1 of 5), and you and Sirius HR get an email and in-app notification.',
+      unsaved: 'Anything you changed on this page is saved first.',
+    });
+    expect(dialog.figures.map((figure) => figure.label)).toEqual([
+      'Employees',
+      'Total increment / month',
+      'Average increment',
+    ]);
+    expect(dialog.figures[0]?.value).toBe('2');
+    expect(dialog.rows).toEqual([
+      expect.objectContaining({ id: LINE_1, name: 'Omar Haddad', criteria: '2 of 5 complete' }),
+      expect.objectContaining({
+        name: 'Neha Iyer',
+        proposed: 'Not set',
+        criteria: '0 of 5 complete',
+      }),
+    ]);
   });
 });
 
@@ -283,6 +316,10 @@ describe('labels and messages', () => {
     const messages = new Map(saveMessages(t));
     expect(messages.get('request.errors.overLimit')).toMatch(/at most 100%/u);
     expect(messages.get('request.errors.stale')).toMatch(/another window/u);
+  });
+
+  it('names each criterion mark', () => {
+    expect(markStateLabels(t)).toEqual({ pass: 'pass', fail: 'fail', pending: 'not complete' });
   });
 
   it('pluralises "employees added"', () => {

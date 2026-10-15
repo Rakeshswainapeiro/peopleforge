@@ -4,6 +4,25 @@ All notable changes are recorded here. Format: [Keep a Changelog](https://keepac
 
 ## [Unreleased]
 
+### Added — slice S4c: design refresh (R1-06, R1-07, R1-10)
+
+- **Request detail page** (`/requests/{id}`, Figma "Request detail"): the reference, "Submitted 15 Oct 2026, 11:14 by Priya Nair · Subsidiary A · With Sirius HR", **Where this request is** (Submitted → Criterion 1 … 5 → Decision), the Employees / Total increment per month / Average increment cards, and the employees with salary, proposal (% and amount), criteria marks, status and **View Status**. Right after submitting it shows a green confirmation with **View Employees** and ✕. Subsidiary HR gets **+ New increment request** here; Sirius HR doesn't.
+- **Drafts are edited at `/requests/{id}/edit`**, with a breadcrumb ("My requests / INC-… · Draft") and the criteria beside a "Ready to submit?" card that stays in view. Old links still work: `/requests/{id}` sends a draft to its editor (or "not found" for Sirius HR).
+- **Submit confirmation** now shows the three figures and every employee about to go (grade, proposed %, criteria complete) and what happens next. Buttons: **Yes, submit to Sirius HR** and **Go back and edit**.
+- **Needs your action** is a table above the cards: type, employees and reference, what's needed, how long it has waited (red with "(waiting long)" after 5 days), and **Continue draft**. Longest waiting first, the first 5, with "Showing x of y" and **See all drafts**.
+- The sidebar names home by role: **My Request** for Subsidiary HR, **Increment requests** for Sirius HR. The draft editor highlights **New Request**; a request's pages highlight home.
+- Design system: `Breadcrumb`, a large (`lg`) `Dialog`. One route helper (`lib/routes.ts`) builds every request link.
+- API: requests carry `submittedByName`; the list takes `order=newest|oldest`. OpenAPI 0.8.0. Migration `0007_submitter_name` (DEPLOYMENT.md).
+
+### Fixed — S4c
+
+- The API logged a false IPv6 warning from the rate-limit library at every start (the key already groups IPv6 addresses by /56).
+- Removed unused message keys.
+
+### Changed — S4c
+
+- The "Needs your action" ✕ is gone (not in the new designs).
+
 ### Added — slice S4b-1: "My increment requests" dashboard (R1-10, DASH-D1, R1-06)
 
 - **Home is now the dashboard** for Subsidiary HR and Sirius HR, following the Figma:

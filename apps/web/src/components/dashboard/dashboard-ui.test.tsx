@@ -1,9 +1,10 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { useRouter } from 'next/navigation';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { LinkSelect } from '../link-select';
 import { DashboardFilters, filtersHref, SEARCH_DELAY_MS } from './dashboard-filters';
+import { must } from '@/test-support/requests';
 import { NeedsYourAction } from './needs-your-action';
 
 vi.mock('next/navigation', () => ({ useRouter: vi.fn() }));
@@ -124,16 +125,60 @@ describe('filtersHref', () => {
 });
 
 describe('NeedsYourAction', () => {
-  it('lists its items and hides until the next visit with ✕', async () => {
+  const labels = {
+    title: 'Needs your action',
+    count: '2 items need your action',
+    summary: '2 drafts not submitted. Longest waiting first.',
+    caption: 'Needs your action',
+    type: 'Type',
+    employee: 'Employee / request',
+    needed: 'What’s needed',
+    waiting: 'Waiting',
+    overdue: 'overdue',
+    showing: 'Showing 2 of 2',
+    seeAll: 'See all drafts',
+  };
+  const row = {
+    id: 'r1',
+    type: { tone: 'outline' as const, label: 'Draft' },
+    primary: '4 employees',
+    secondary: 'INC-2026-0150',
+    needed: 'Complete and submit',
+    neededDetail: 'Criteria 15 of 20 complete',
+    waiting: '6d',
+    overdue: true,
+    href: '/requests/r1/edit',
+    action: 'Continue draft',
+  };
+
+  it('lists what is waiting, longest first, with the overdue ones in words too', () => {
     render(
-      <NeedsYourAction title="Needs your action" hideLabel="Hide “Needs your action”">
-        <p>INC-2026-0150 · Draft not submitted</p>
-      </NeedsYourAction>,
+      <NeedsYourAction
+        total={2}
+        rows={[row, { ...row, id: 'r2', waiting: '1d', overdue: false, href: '/requests/r2/edit' }]}
+        show={<span>Show: all</span>}
+        seeAllHref="/?status=draft"
+        labels={labels}
+      />,
     );
     const region = screen.getByRole('region', { name: 'Needs your action' });
-    expect(region).toHaveTextContent('INC-2026-0150');
-    await userEvent.click(screen.getByRole('button', { name: 'Hide “Needs your action”' }));
-    expect(screen.queryByRole('region')).toBeNull();
+    expect(region).toHaveTextContent('2 items need your action');
+    expect(region).toHaveTextContent('Show: all');
+    const table = screen.getByRole('table', { name: 'Needs your action' });
+    const rows = within(table).getAllByRole('row');
+    expect(rows).toHaveLength(3);
+    const [, waitingLong, fresh] = rows;
+    expect(waitingLong).toHaveTextContent('6d overdue');
+    expect(fresh).not.toHaveTextContent('overdue');
+    expect(within(must(waitingLong)).getByRole('link', { name: 'Continue draft' })).toHaveAttribute(
+      'href',
+      '/requests/r1/edit',
+    );
+    expect(screen.getByText('Showing 2 of 2')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'See all drafts' })).toHaveAttribute(
+      'href',
+      '/?status=draft',
+    );
   });
 });
 

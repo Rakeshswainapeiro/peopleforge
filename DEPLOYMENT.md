@@ -227,6 +227,8 @@ GRANT CONNECT ON DATABASE peopleforge TO peopleforge_app;
 
 **Release S4b-1 — migration `0006_dashboard`:** adds `increment_request.status_changed_at` (backfilled, then `NOT NULL`), a cycle index, and trigram indexes for the dashboard search. **It enables the `pg_trgm` extension** (`CREATE EXTENSION IF NOT EXISTS pg_trgm`). `pg_trgm` is a trusted extension, so the database owner can create it without superuser rights. On managed PostgreSQL it must be allowed first: on Azure Database for PostgreSQL add `PG_TRGM` to the `azure.extensions` server parameter; on Amazon RDS it is available by default. The index builds take a short lock on `request_line` and `increment_request`. That is fine at Phase 1 volumes; for large tables, create them `CONCURRENTLY` by hand before the release. No new env vars. Rolling back drops the column and indexes and leaves the extension (it holds no data).
 
+**Release S4c — migration `0007_submitter_name`:** adds the nullable column `increment_request.submitted_by_name` with a length CHECK. Adding a nullable column without a default is a catalogue-only change (no table rewrite, a brief lock). Existing submitted requests keep `null` and their page leaves out "by …". No new env vars. Rolling back drops the column.
+
 **Never in UAT or Prod:** `pnpm db:seed` (synthetic data; it refuses unless `APP_ENV` is `dev` or `test`). Production configuration (real entities, assignments, criteria) is entered through the admin screens once they exist. Until then (A1/A3 pending) the core migrations include the clearly marked `[Placeholder]` criteria set and increment cycle (R1-05).
 
 ## 7. Health endpoints

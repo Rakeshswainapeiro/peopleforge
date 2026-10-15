@@ -49,7 +49,7 @@ test('subsidiary HR assesses an employee against the criteria with evidence', as
     .getByRole('combobox', { name: 'Add employee' })
     .selectOption({ label: 'Aisha Rahman · EMP-1101 · G5' });
   await page.getByRole('button', { name: 'Add' }).click();
-  await page.waitForURL(/\/requests\/[0-9a-f-]{36}$/u);
+  await page.waitForURL(/\/requests\/[0-9a-f-]{36}\/edit$/u);
   requestUrl = page.url();
   await page
     .getByRole('combobox', { name: 'Add employee' })

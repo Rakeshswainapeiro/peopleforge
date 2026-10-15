@@ -111,6 +111,8 @@ export interface IncrementRequestTable {
   deleted_at: Date | null;
   submitted_at: Date | null;
   submitted_by: string | null;
+  /** The submitter's display name when they submitted (0007); null before then. */
+  submitted_by_name: string | null;
   /** Last status change (Age, Last update on the dashboard); set by every status change. */
   status_changed_at: Generated<Date>;
 }

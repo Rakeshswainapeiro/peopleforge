@@ -98,6 +98,7 @@ export function draftRequest(overrides: Partial<IncrementRequest> = {}): Increme
     createdAt: '2026-10-14T07:00:00.000Z',
     updatedAt: '2026-10-14T07:05:00.000Z',
     submittedAt: null,
+    submittedByName: null,
     lines: [
       {
         id: LINE_1,
@@ -139,6 +140,26 @@ export function draftRequest(overrides: Partial<IncrementRequest> = {}): Increme
     },
     ...overrides,
   };
+}
+
+/** A request as Figma's "Request detail" shows it: submitted by Priya Nair at 11:14 Dubai time. */
+export function submittedRequest(overrides: Partial<IncrementRequest> = {}): IncrementRequest {
+  const draft = draftRequest();
+  return draftRequest({
+    reference: 'INC-2026-0152',
+    status: 'submitted',
+    submittedAt: '2026-10-15T07:14:00.000Z',
+    submittedByName: 'Priya Nair',
+    lines: draft.lines.map((line) => ({
+      ...line,
+      criteria: line.criteria.map((criterion) => ({
+        ...criterion,
+        result: criterion.result ?? 'pass',
+        missing: [],
+      })),
+    })),
+    ...overrides,
+  });
 }
 
 /** The value, or a failed test: keeps fixtures typed without non-null assertions. */

@@ -1,4 +1,4 @@
-import type { Me } from '@peopleforge/contracts';
+import { ListIncrementRequestsQuerySchema, type Me } from '@peopleforge/contracts';
 import { render, screen, within } from '@testing-library/react';
 import { usePathname } from 'next/navigation';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -123,7 +123,9 @@ describe('portal shell', () => {
       'aria-current',
       'page',
     );
-    expect(screen.getByRole('link', { name: 'Home' })).not.toHaveAttribute('aria-current');
+    // Subsidiary HR's home is "My Request" (Figma).
+    expect(screen.getByRole('link', { name: 'My Request' })).not.toHaveAttribute('aria-current');
+    expect(screen.queryByRole('link', { name: 'Home' })).toBeNull();
   });
 
   it('shows unread notifications on the bell, and nothing when the count is unknown', async () => {
@@ -218,12 +220,23 @@ describe('HomePage: My increment requests [R1-10, DASH-D1]', () => {
     expect(cards).toHaveTextContent('Drafts1Not yet submitted');
 
     const action = screen.getByRole('region', { name: 'Needs your action' });
-    expect(action).toHaveTextContent('INC-2026-0150 · Draft not submitted');
-    expect(action).toHaveTextContent('4 employees added · criteria 15 of 20 complete');
+    expect(action).toHaveTextContent('1 item needs your action');
+    expect(action).toHaveTextContent('1 draft not submitted. Longest waiting first.');
+    const actions = within(action).getByRole('table', { name: 'Requests that need your action' });
+    expect(actions).toHaveTextContent('4 employeesINC-2026-0150');
+    expect(actions).toHaveTextContent('Criteria 15 of 20 complete');
     expect(within(action).getByRole('link', { name: 'Continue draft' })).toHaveAttribute(
       'href',
-      `/requests/${REQUEST_ID}`,
+      `/requests/${REQUEST_ID}/edit`,
     );
+    expect(action).toHaveTextContent('Showing 1 of 1');
+    expect(within(action).getByRole('link', { name: 'See all drafts' })).toHaveAttribute(
+      'href',
+      '/?status=draft',
+    );
+    expect(within(action).getByRole('combobox', { name: 'Show' })).toHaveValue('all');
+    // Figma: "Needs your action" comes before the counts.
+    expect(action.compareDocumentPosition(cards) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
     const tabs = screen.getByRole('navigation', { name: 'View' });
     expect(within(tabs).getByRole('link', { name: /By request/u })).toHaveAttribute(
@@ -249,7 +262,12 @@ describe('HomePage: My increment requests [R1-10, DASH-D1]', () => {
     // The first open cycle by default; drafts for the panel from every cycle.
     expect(dashboardSummary).toHaveBeenCalledWith({ cycleId: CYCLE_ID });
     expect(listRequests).toHaveBeenCalledWith({ cycleId: CYCLE_ID, page: 1, pageSize: 10 });
-    expect(listRequests).toHaveBeenCalledWith({ status: 'draft', pageSize: 10 });
+    // Drafts for the panel from every cycle, longest waiting first.
+    expect(listRequests).toHaveBeenCalledWith({ status: 'draft', order: 'oldest', pageSize: 10 });
+    // Every query is one the API accepts (it allows only its page sizes).
+    for (const [query] of vi.mocked(listRequests).mock.calls) {
+      expect(ListIncrementRequestsQuerySchema.safeParse(query).success).toBe(true);
+    }
     expect(screen.getByRole('combobox', { name: 'Period' })).toHaveValue(CYCLE_ID);
     expect(screen.queryByRole('navigation', { name: 'Request pages' })).toBeInTheDocument();
   });

@@ -86,6 +86,8 @@ export interface IncrementRequestRecord {
   createdAt: Date;
   updatedAt: Date;
   submittedAt: Date | null;
+  /** Who submitted it, as their name read then; null for a draft or an older submission. */
+  submittedByName: string | null;
   lines: RequestLineRecord[];
 }
 
@@ -202,6 +204,8 @@ export interface IncrementRequestRepository {
     input: {
       version: number;
       idempotencyKey: string;
+      /** The submitter's display name, shown as "Submitted … by {name}". */
+      submitterName: string;
       notifications: (requestReference: string) => readonly NewNotification[];
     },
   ) => Promise<{ replayed: boolean }>;
@@ -540,6 +544,7 @@ export function createIncrementRequestRepository(
             'c.id as cycle_id',
             'c.name as cycle_name',
             'r.submitted_at',
+            'r.submitted_by_name',
             sql<string | null>`to_char(c.submission_deadline, 'YYYY-MM-DD')`.as('deadline'),
           ])
           .where('r.id', '=', id)
@@ -629,6 +634,7 @@ export function createIncrementRequestRepository(
           createdAt: request.created_at,
           updatedAt: request.updated_at,
           submittedAt: request.submitted_at,
+          submittedByName: request.submitted_by_name,
           lines: lines.map((line) => ({
             id: line.id,
             employeeId: line.employee_id,
@@ -866,6 +872,7 @@ export function createIncrementRequestRepository(
           .set({
             status: 'submitted',
             submitted_at: sql`now()`,
+            submitted_by_name: input.submitterName,
             status_changed_at: sql`now()`,
             submitted_by: scope.userId,
             version: sql`version + 1`,

@@ -5,6 +5,7 @@ export { PlainLink, type LinkComponent, type LinkProps } from './lib/link.js';
 export { Alert, type AlertProps, type AlertTone } from './components/alert.js';
 export { Avatar, initials } from './components/avatar.js';
 export { Badge, type BadgeProps, type BadgeTone } from './components/badge.js';
+export { Breadcrumb, type BreadcrumbItem, type BreadcrumbProps } from './components/breadcrumb.js';
 export { BrandMark, Wordmark, type WordmarkProps } from './components/brand.js';
 export {
   Button,

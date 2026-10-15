@@ -26,6 +26,9 @@ interface Page {
   offset: number;
 }
 
+/** Newest first (the lists), or oldest first ("Needs your action": longest waiting first). */
+export type DashboardOrder = 'newest' | 'oldest';
+
 /** What is saved for one employee and criterion: enough to judge completeness, no content. */
 export interface CriterionFacts {
   criterionId: string;
@@ -84,7 +87,7 @@ export interface DashboardRepository {
   summary: (scope: Scope, filter: DashboardFilter) => Promise<DashboardSummaryRecord>;
   requests: (
     scope: Scope,
-    query: DashboardFilter & Page,
+    query: DashboardFilter & Page & { order?: DashboardOrder | undefined },
   ) => Promise<{ items: DashboardRequestRecord[]; total: number }>;
   lines: (
     scope: Scope,
@@ -253,7 +256,7 @@ export function createDashboardRepository(
             'r.status_changed_at',
           ])
           .where(where)
-          .orderBy('r.created_at', 'desc')
+          .orderBy('r.created_at', query.order === 'oldest' ? 'asc' : 'desc')
           .orderBy('r.id')
           .limit(query.limit)
           .offset(query.offset)

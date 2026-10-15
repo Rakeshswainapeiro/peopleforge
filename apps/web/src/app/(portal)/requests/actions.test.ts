@@ -75,7 +75,9 @@ describe('startRequest', () => {
   };
 
   it('creates the draft with its first employee and opens it', async () => {
-    await expect(startRequest(form(fields))).rejects.toThrow(`NEXT_REDIRECT /requests/${REQUEST}`);
+    await expect(startRequest(form(fields))).rejects.toThrow(
+      `NEXT_REDIRECT /requests/${REQUEST}/edit`,
+    );
     expect(createRequest).toHaveBeenCalledWith(
       { cycleId: CYCLE, entityId: ENTITY, employeeIds: [EMPLOYEE] },
       'key-123456789',
@@ -111,13 +113,13 @@ describe('addEmployeeAction and removeEmployeeAction', () => {
   it('adds an employee and returns to the request', async () => {
     await expect(
       addEmployeeAction(form({ requestId: REQUEST, employeeId: EMPLOYEE })),
-    ).rejects.toThrow(`NEXT_REDIRECT /requests/${REQUEST}`);
+    ).rejects.toThrow(`NEXT_REDIRECT /requests/${REQUEST}/edit`);
     expect(addEmployee).toHaveBeenCalledWith(REQUEST, EMPLOYEE);
   });
 
   it('asks for an employee, and explains duplicates', async () => {
     await expect(addEmployeeAction(form({ requestId: REQUEST }))).rejects.toThrow(
-      `NEXT_REDIRECT /requests/${REQUEST}?error=request.errors.chooseEmployee`,
+      `NEXT_REDIRECT /requests/${REQUEST}/edit?error=request.errors.chooseEmployee`,
     );
     vi.mocked(addEmployee).mockResolvedValue({
       kind: 'error',
@@ -127,12 +129,12 @@ describe('addEmployeeAction and removeEmployeeAction', () => {
     });
     await expect(
       addEmployeeAction(form({ requestId: REQUEST, employeeId: EMPLOYEE })),
-    ).rejects.toThrow(`NEXT_REDIRECT /requests/${REQUEST}?error=request.errors.duplicate`);
+    ).rejects.toThrow(`NEXT_REDIRECT /requests/${REQUEST}/edit?error=request.errors.duplicate`);
   });
 
   it('removes the employee whose button was pressed', async () => {
     await expect(removeEmployeeAction(LINE_1, form({ requestId: REQUEST }))).rejects.toThrow(
-      `NEXT_REDIRECT /requests/${REQUEST}`,
+      `NEXT_REDIRECT /requests/${REQUEST}/edit`,
     );
     expect(removeEmployee).toHaveBeenCalledWith(REQUEST, LINE_1);
   });
@@ -150,7 +152,7 @@ describe('addEmployeeAction and removeEmployeeAction', () => {
   it('explains a failed removal on the request', async () => {
     vi.mocked(removeEmployee).mockResolvedValue({ kind: 'unavailable' });
     await expect(removeEmployeeAction(LINE_1, form({ requestId: REQUEST }))).rejects.toThrow(
-      `NEXT_REDIRECT /requests/${REQUEST}?error=request.errors.generic`,
+      `NEXT_REDIRECT /requests/${REQUEST}/edit?error=request.errors.generic`,
     );
   });
 
@@ -177,7 +179,7 @@ describe('saveDraft', () => {
   it('saves the table, accepting "6 %" and "1,720", and clearing empty values', async () => {
     await expect(
       saveDraft({ rows: [] }, table({ [LINE_1]: ['percent', '6 %'], [LINE_2]: ['amount', ''] })),
-    ).rejects.toThrow(`NEXT_REDIRECT /requests/${REQUEST}?saved=1`);
+    ).rejects.toThrow(`NEXT_REDIRECT /requests/${REQUEST}/edit?saved=1`);
     await expect(saveDraft({ rows: [] }, table({ [LINE_1]: ['amount', '1,720'] }))).rejects.toThrow(
       'NEXT_REDIRECT',
     );
@@ -275,7 +277,7 @@ describe('saveDraft', () => {
 
   it('saves the assessed employee’s criteria with the proposals, staying on them [R1-03]', async () => {
     await expect(saveDraft({ rows: [] }, withCriteria({ employee: LINE_1 }))).rejects.toThrow(
-      `NEXT_REDIRECT /requests/${REQUEST}?saved=1&employee=${LINE_1}`,
+      `NEXT_REDIRECT /requests/${REQUEST}/edit?saved=1&employee=${LINE_1}`,
     );
     expect(saveDraftChanges).toHaveBeenCalledWith(REQUEST, {
       version: 3,
@@ -292,7 +294,7 @@ describe('saveDraft', () => {
 
   it('opens the next employee’s criteria after saving from a row’s pencil', async () => {
     await expect(saveDraft({ rows: [] }, withCriteria({ selectLine: LINE_2 }))).rejects.toThrow(
-      `NEXT_REDIRECT /requests/${REQUEST}?employee=${LINE_2}#criteria`,
+      `NEXT_REDIRECT /requests/${REQUEST}/edit?employee=${LINE_2}#criteria`,
     );
   });
 
@@ -380,7 +382,7 @@ describe('saveDraft with intent=submit [R1-07]', () => {
   ])('reloads the request with the reason when submitting fails (%j)', async (result, error) => {
     vi.mocked(submitRequest).mockResolvedValue(result as ApiResult<never>);
     await expect(saveDraft({ rows: [] }, submitting())).rejects.toThrow(
-      `NEXT_REDIRECT /requests/${REQUEST}?error=${error}`,
+      `NEXT_REDIRECT /requests/${REQUEST}/edit?error=${error}`,
     );
   });
 
@@ -391,7 +393,7 @@ describe('saveDraft with intent=submit [R1-07]', () => {
     );
     vi.mocked(submitRequest).mockClear();
     await expect(saveDraft({ rows: [] }, submitting('../x'))).rejects.toThrow(
-      `NEXT_REDIRECT /requests/${REQUEST}?error=request.errors.generic`,
+      `NEXT_REDIRECT /requests/${REQUEST}/edit?error=request.errors.generic`,
     );
     expect(submitRequest).not.toHaveBeenCalled();
   });

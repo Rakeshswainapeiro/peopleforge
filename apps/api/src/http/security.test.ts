@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
-import { callerKey } from './security.js';
+import { describe, expect, it, vi } from 'vitest';
+import { testEnv } from '../test-support/factory.js';
+import { callerKey, rateLimiter } from './security.js';
 
 describe('callerKey', () => {
   it('counts a request against its access token, never keeping the token itself', () => {
@@ -17,5 +18,14 @@ describe('callerKey', () => {
       callerKey(undefined, '2001:db8:1:2:aaaa:bbbb:cccc:dddd'),
     );
     expect(callerKey(undefined, undefined)).toMatch(/^ip:/u);
+  });
+});
+
+describe('rateLimiter', () => {
+  it('starts without the library’s IPv6 warning: callerKey already applies ipKeyGenerator', () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    expect(rateLimiter(testEnv())).toHaveLength(2);
+    expect(error).not.toHaveBeenCalled();
+    error.mockRestore();
   });
 });

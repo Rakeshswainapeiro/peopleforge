@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: PeopleForge API
-  version: 0.7.0
+  version: 0.8.0
   description: >
     Phase 1 API (BRD SIRIUS-HR-BRD-001). Every /api/v1 route requires an access token from the
     Sirius identity provider (Microsoft Entra ID; Keycloak locally) sent as
@@ -115,6 +115,10 @@ paths:
         - { $ref: '#/components/parameters/SearchFilter' }
         - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
         - { name: pageSize, in: query, schema: { type: integer, enum: [10, 25, 50], default: 10 } }
+        - name: order
+          in: query
+          description: By creation time; `oldest` lists the longest-waiting first ("Needs your action")
+          schema: { type: string, enum: [newest, oldest], default: newest }
       responses:
         '200':
           description: A page of summaries
@@ -686,6 +690,7 @@ components:
           createdAt,
           updatedAt,
           submittedAt,
+          submittedByName,
           lines,
           totals,
         ]
@@ -712,6 +717,11 @@ components:
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
         submittedAt: { type: [string, 'null'], format: date-time }
+        submittedByName:
+          type: [string, 'null']
+          maxLength: 200
+          description: The submitter's name as it was at submit time; null for drafts and requests submitted before it was kept
+          example: Priya Nair
         lines: { type: array, items: { $ref: '#/components/schemas/RequestLine' } }
         totals:
           type: object

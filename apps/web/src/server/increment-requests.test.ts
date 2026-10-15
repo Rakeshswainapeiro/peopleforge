@@ -73,12 +73,18 @@ describe('increment request client', () => {
   });
 
   it('sends the dashboard filters as encoded query parameters [R1-10]', async () => {
-    await listRequests({ cycleId: ID, status: 'submitted', search: 'Omar & co', page: 3 });
+    await listRequests({
+      cycleId: ID,
+      status: 'submitted',
+      search: 'Omar & co',
+      order: 'oldest',
+      page: 3,
+    });
     await dashboardSummary();
     await dashboardSummary({ cycleId: ID, search: 'مريم' });
     await listRequestLines({ requestId: OTHER, pageSize: 50 });
     expect(calls().map(([path]) => path)).toEqual([
-      `/api/v1/increment-requests?cycleId=${ID}&status=submitted&search=Omar+%26+co&page=3&pageSize=10`,
+      `/api/v1/increment-requests?cycleId=${ID}&status=submitted&search=Omar+%26+co&order=oldest&page=3&pageSize=10`,
       '/api/v1/increment-requests/summary',
       `/api/v1/increment-requests/summary?cycleId=${ID}&search=%D9%85%D8%B1%D9%8A%D9%85`,
       `/api/v1/increment-request-lines?requestId=${OTHER}&page=1&pageSize=50`,

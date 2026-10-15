@@ -13,17 +13,20 @@ import type {
 } from '@/components/requests/criteria-editor';
 import type { ProposalRowView, ProposalsTableLabels } from '@/components/requests/proposals-table';
 import type { ReadyPanelProps } from '@/components/requests/ready-panel';
+import type { SubmitDialogView } from '@/components/requests/submit-control';
 import type { MessageKey, Translate } from '@/i18n/translator';
 import { formatDate, formatFileSize, formatMoney, formatPercent, trimDecimal } from './format';
 import { pluralForm } from './plural';
+import { requestFigures } from './request-figures';
 import { EVIDENCE_ERROR_KEYS, REQUEST_ERROR_KEYS } from './request-errors';
 import { localised } from './viewer-display';
+import { evidenceHref } from './routes';
 
 /**
  * A criterion's mark in the table: its result once complete, "not complete yet" before (also
  * for a criterion the API left out, e.g. during a rolling deploy).
  */
-function criterionState(assessment: CriterionAssessment | undefined): CriterionState {
+export function criterionState(assessment: CriterionAssessment | undefined): CriterionState {
   return assessment?.missing.length === 0 && assessment.result !== null
     ? assessment.result
     : 'pending';
@@ -136,7 +139,7 @@ export function criteriaCards(
                 id: file.id,
                 fileName: file.fileName,
                 meta: `${mediaTypeLabel(file.mediaType, t)} · ${formatFileSize(file.sizeBytes, locale)}`,
-                href: `/requests/${request.id}/evidence/${file.id}`,
+                href: evidenceHref(request.id, file.id),
                 downloadLabel: t('request.downloadFile', { file: file.fileName }),
                 removeLabel: t('request.removeFile', { file: file.fileName }),
               })),
@@ -236,15 +239,47 @@ export function readyView(
     submitKey,
     submitLabels: {
       submit: t('request.submit'),
+      confirm: t('request.submitConfirm'),
       submitting: t('request.submitting'),
-      cancel: t('request.cancel'),
-      title: t('request.submitConfirmTitle', { reference: request.reference }),
-      body: t(`request.submitConfirmBody.${pluralForm(request.lines.length, locale)}`, {
-        count: employees,
-      }),
-      unsaved: t('request.submitConfirmUnsaved'),
+      back: t('request.submitBack'),
     },
+    submitDialog: submitDialogView(request, locale, t),
     caption: t('request.submitCaption'),
+  };
+}
+
+/** Figma "Submit INC-2026-0152 to Sirius HR?": the figures and every employee about to go. */
+export function submitDialogView(
+  request: IncrementRequest,
+  locale: Locale,
+  t: Translate,
+): SubmitDialogView {
+  const number = new Intl.NumberFormat(locale);
+  const total = number.format(request.criteria.length);
+  return {
+    title: t('request.submitConfirmTitle', { reference: request.reference }),
+    intro: t('request.submitConfirmIntro'),
+    figures: requestFigures(request, locale, t).map(({ label, value }) => ({ label, value })),
+    table: {
+      caption: t('request.submitTableCaption'),
+      employee: t('request.colEmployee'),
+      grade: t('request.colGrade'),
+      proposed: t('request.colProposed'),
+      criteria: t('request.colCriteria'),
+    },
+    rows: request.lines.map((line) => ({
+      id: line.id,
+      name: line.fullName,
+      number: line.employeeNumber,
+      grade: line.grade,
+      proposed: line.percent === null ? t('request.notSet') : formatPercent(line.percent, locale),
+      criteria: t('request.criteriaOf', {
+        complete: number.format(completeCount(line)),
+        total,
+      }),
+    })),
+    note: t('request.submitConfirmNote', { of: total }),
+    unsaved: t('request.submitConfirmUnsaved'),
   };
 }
 
@@ -343,4 +378,13 @@ export function progressSteps(request: IncrementRequest, locale: Locale, t: Tran
       state: 'todo',
     },
   ];
+}
+
+/** What each criterion mark means, for its tooltip (dashboard and request tables). */
+export function markStateLabels(t: Translate): Record<CriterionState, string> {
+  return {
+    pass: t('dashboard.markStates.pass'),
+    fail: t('dashboard.markStates.fail'),
+    pending: t('dashboard.markStates.pending'),
+  };
 }

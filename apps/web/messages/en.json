@@ -9,7 +9,9 @@
     "home": "Home",
     "newRequest": "New Request",
     "notifications": "Notifications",
-    "reports": "Reports"
+    "reports": "Reports",
+    "myRequests": "My Request",
+    "requests": "Increment requests"
   },
   "home": {
     "heading": "Welcome",
@@ -110,10 +112,6 @@
     "subsidiaryHr": "Subsidiary HR",
     "none": "No PeopleForge role"
   },
-  "newRequest": {
-    "heading": "New increment request",
-    "intro": "Add employees, evidence each eligibility criterion and submit the request to Sirius HR."
-  },
   "notifications": {
     "heading": "Notifications",
     "intro": "Every status change on your requests.",
@@ -168,7 +166,6 @@
     "addEmployee": "Add employee",
     "chooseEmployee": "Search by name or ID…",
     "add": "Add",
-    "adding": "Adding…",
     "noMoreEmployees": "Every active {entity} employee is already in this request.",
     "emptyTitle": "No employees yet",
     "emptyBody": "Add the first employee to start the draft.",
@@ -195,13 +192,10 @@
     "noCycleBody": "Sirius HR opens a cycle before increment requests can be raised.",
     "noSubsidiaryTitle": "No subsidiary assigned",
     "noSubsidiaryBody": "Ask your administrator to assign you to your subsidiary before raising requests.",
-    "draftsTitle": "Needs your action",
-    "draftItem": "{reference} · Draft not submitted",
     "employeesAdded": {
       "one": "{count} employee added",
       "other": "{count} employees added"
     },
-    "continueDraft": "Continue draft",
     "errors": {
       "notPositive": "Enter an increase above 0.",
       "overLimit": "An increase can be at most 100% (an amount up to the current salary).",
@@ -219,7 +213,6 @@
       "deadlinePassed": "The submission deadline for this cycle has passed.",
       "notDraft": "This request has already been submitted and can’t be changed."
     },
-    "draftEyebrow": "{role} · {reference} · Draft",
     "colCriteria": "Criteria",
     "criteriaComplete": "{done}/{total} complete",
     "criterionState": {
@@ -269,9 +262,6 @@
     "notReadyProposals": "{count} of {total} employees have no proposed increment yet. Submit unlocks when every employee has one.",
     "allReady": "Every employee is ready to submit.",
     "submitCaption": "On submit the request is routed to Sirius HR, its status becomes Submitted, and both sides get an email and in-app notification.",
-    "submittedEyebrow": "{role} · {reference} · Submitted",
-    "submittedTitle": "Increment request {reference}",
-    "submittedIntro": "Sent to Sirius HR. It can no longer be edited.",
     "waitingTitle": "Waiting for Sirius HR",
     "waitingBody": "Sent to Sirius HR on {date}. Review has not started yet.",
     "progress": "Progress",
@@ -288,14 +278,16 @@
       "todo": "not started"
     },
     "submitConfirmTitle": "Submit {reference} to Sirius HR?",
-    "submitConfirmBody": {
-      "one": "{count} employee goes to Sirius HR for review. You can’t edit the request afterwards.",
-      "other": "{count} employees go to Sirius HR for review. You can’t edit the request afterwards."
-    },
     "submitConfirmUnsaved": "Anything you changed on this page is saved first.",
-    "cancel": "Cancel",
     "submitting": "Submitting…",
-    "submittedNotice": "Request submitted to Sirius HR. Both sides have been notified."
+    "breadcrumbDraft": "{reference} · Draft",
+    "submitConfirmIntro": "Check the employees below. After you submit, you cannot edit this request unless Sirius HR returns it to you.",
+    "submitConfirmNote": "On submit: status becomes Submitted, the request goes to Sirius HR for review (Criterion 1 of {of}), and you and Sirius HR get an email and in-app notification.",
+    "submitConfirm": "Yes, submit to Sirius HR",
+    "submitBack": "Go back and edit",
+    "submitTableCaption": "Employees to submit",
+    "colProposed": "Proposed",
+    "criteriaOf": "{complete} of {total} complete"
   },
   "evidence": {
     "errors": {
@@ -315,7 +307,6 @@
     "submitted": "Submitted"
   },
   "dashboard": {
-    "eyebrow": "{role}",
     "title": "My increment requests",
     "intro": "Requests raised by {entity}. Other entities are not visible to you.",
     "introGroup": "Increment requests submitted by every subsidiary.",
@@ -335,9 +326,6 @@
       "rejectedHint": "This cycle"
     },
     "actionTitle": "Needs your action",
-    "hideAction": "Hide “Needs your action”",
-    "draftNotSubmitted": "{reference} · Draft not submitted",
-    "draftProgress": "{employees} · criteria {complete} of {total} complete",
     "continueDraft": "Continue draft",
     "views": "View",
     "byRequest": "By request",
@@ -376,7 +364,6 @@
     "withSirius": "Sirius HR",
     "employeeLine": "{number} · {grade} · {reference}",
     "notProposed": "Not proposed",
-    "criteriaMarks": "{marks}",
     "criterionMark": "{code} {state}",
     "markStates": {
       "pass": "pass",
@@ -392,7 +379,6 @@
     "noMatchTitle": "Nothing matches these filters",
     "noMatchBody": "Try another search, period or status.",
     "clearFilters": "Clear filters",
-    "loadFailed": "Requests couldn’t be loaded. Try again in a moment.",
     "rowsPerPage": "Rows per page",
     "pagination": {
       "navigation": "Request pages",
@@ -401,11 +387,30 @@
       "previous": "Previous page",
       "next": "Next page",
       "last": "Last page"
-    }
+    },
+    "actionCount": {
+      "one": "{count} item needs your action",
+      "other": "{count} items need your action"
+    },
+    "actionSummary": {
+      "one": "{count} draft not submitted. Longest waiting first.",
+      "other": "{count} drafts not submitted. Longest waiting first."
+    },
+    "show": "Show",
+    "showAll": "All ({count})",
+    "showDrafts": "Drafts ({count})",
+    "actionCaption": "Requests that need your action",
+    "colType": "Type",
+    "colNeeded": "What is needed",
+    "colWaiting": "Waiting",
+    "typeDraft": "Draft",
+    "needsSubmit": "Complete and submit",
+    "needsCriteria": "Criteria {complete} of {total} complete",
+    "overdue": "(waiting long)",
+    "showing": "Showing {shown} of {total}",
+    "seeAllDrafts": "See all drafts"
   },
   "employeeStatus": {
-    "breadcrumb": "Breadcrumb",
-    "myRequests": "My requests",
     "current": "Employee status",
     "subtitle": "{number} · {grade} · {entity} · request {reference}",
     "back": "Back to my requests",
@@ -439,5 +444,51 @@
     "notSet": "Not set",
     "none": "None",
     "download": "Download {name}"
+  },
+  "breadcrumb": {
+    "label": "Breadcrumb",
+    "myRequests": "My requests",
+    "requestDetail": "Request detail"
+  },
+  "figures": {
+    "employees": "Employees",
+    "allComplete": "All {count} criteria complete",
+    "notComplete": {
+      "one": "{count} employee not complete",
+      "other": "{count} employees not complete"
+    },
+    "totalIncrease": "Total increment / month",
+    "acrossEmployees": "Across all employees",
+    "average": "Average increment",
+    "proposed": "Proposed",
+    "none": "—",
+    "employeeCount": {
+      "one": "{count} employee",
+      "other": "{count} employees"
+    }
+  },
+  "requestDetail": {
+    "subtitle": "Submitted {date} by {name} · {entity} · With Sirius HR",
+    "subtitleNoName": "Submitted {date} · {entity} · With Sirius HR",
+    "submittedTitle": "{reference} submitted to Sirius HR",
+    "submittedBody": "{employees} · {amount} per month · Status: Submitted · Next: Sirius HR reviews Criterion 1 of {of}. You and Sirius HR have been notified.",
+    "viewEmployees": "View Employees",
+    "dismiss": "Dismiss",
+    "whereTitle": "Where this request is",
+    "stepSubmitted": "Submitted",
+    "stepDone": "Done · {date}",
+    "stepCriterion": "Criterion {number}",
+    "stepReviewing": "Sirius HR reviewing",
+    "stepDecision": "Decision",
+    "pending": "Pending",
+    "tableCaption": "Employees in {reference}",
+    "colEmployee": "Employee",
+    "colGrade": "Grade",
+    "colCurrent": "Current salary",
+    "colProposed": "Proposed",
+    "colCriteria": "Criteria {first}–{last}",
+    "colStatus": "Status",
+    "colAction": "Action",
+    "increase": "+ {amount}"
   }
 }

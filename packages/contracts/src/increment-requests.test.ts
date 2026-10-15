@@ -127,13 +127,18 @@ describe('EvidenceUploadSchema', () => {
 
 describe('ListIncrementRequestsQuerySchema', () => {
   it('reads paging from query strings with defaults', () => {
-    expect(ListIncrementRequestsQuerySchema.parse({})).toEqual({ page: 1, pageSize: 10 });
+    expect(ListIncrementRequestsQuerySchema.parse({})).toEqual({
+      page: 1,
+      pageSize: 10,
+      order: 'newest',
+    });
     expect(
       ListIncrementRequestsQuerySchema.parse({ status: 'draft', page: '3', pageSize: '25' }),
     ).toEqual({
       status: 'draft',
       page: 3,
       pageSize: 25,
+      order: 'newest',
     });
   });
 
@@ -145,7 +150,9 @@ describe('ListIncrementRequestsQuerySchema', () => {
     // "e" + combining acute (NFD) becomes the single "é" (NFC), as the database stores names.
     expect(
       ListIncrementRequestsQuerySchema.parse({ cycleId: ID, search: '  Rene\u0301  ' }),
-    ).toEqual({ cycleId: ID, search: 'René', page: 1, pageSize: 10 });
+    ).toEqual({ cycleId: ID, search: 'René', page: 1, pageSize: 10, order: 'newest' });
+    expect(ListIncrementRequestsQuerySchema.parse({ order: 'oldest' }).order).toBe('oldest');
+    expect(ListIncrementRequestsQuerySchema.safeParse({ order: 'name' }).success).toBe(false);
     expect(ListIncrementRequestsQuerySchema.parse({ search: '   ' }).search).toBeUndefined();
     expect(
       ListIncrementRequestsQuerySchema.safeParse({ search: 'x'.repeat(MAX_SEARCH_LENGTH + 1) })
@@ -219,6 +226,7 @@ describe('IncrementRequestSchema', () => {
       createdAt: '2026-10-14T07:00:00.000Z',
       updatedAt: '2026-10-14T07:05:00.000Z',
       submittedAt: null,
+      submittedByName: null,
       lines: [
         {
           id: ID,

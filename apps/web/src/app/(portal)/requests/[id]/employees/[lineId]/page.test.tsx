@@ -92,7 +92,7 @@ describe('Employee status [R1-06, R1-07]', () => {
     expect(screen.getByText('Not submitted yet')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Continue draft' })).toHaveAttribute(
       'href',
-      `/requests/${REQUEST_ID}`,
+      `/requests/${REQUEST_ID}/edit`,
     );
     expect(screen.getByText('Not proposed yet')).toBeInTheDocument();
     // Neha has no files yet.

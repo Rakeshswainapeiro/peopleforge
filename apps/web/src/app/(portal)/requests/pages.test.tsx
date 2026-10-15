@@ -1,12 +1,19 @@
 import type { Me } from '@peopleforge/contracts';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getRequestLocale } from '@/i18n/request-locale';
 import type { ApiResult } from '@/server/api-client';
 import { getRequest, openCycles, searchEmployees } from '@/server/increment-requests';
 import { requireViewer } from '@/server/session';
-import { draftRequest, EVIDENCE_ID, LINE_2 } from '@/test-support/requests';
-import RequestPage from './[id]/page';
+import {
+  draftRequest,
+  EVIDENCE_ID,
+  LINE_1,
+  LINE_2,
+  submittedRequest,
+} from '@/test-support/requests';
+import EditRequestPage from './[id]/edit/page';
+import RequestDetailPage from './[id]/page';
 import NewRequestPage from './new/page';
 
 vi.mock('@/i18n/request-locale', () => ({ getRequestLocale: vi.fn() }));
@@ -84,7 +91,18 @@ beforeEach(() => {
 const newPage = (query: Record<string, string> = {}) =>
   NewRequestPage({ searchParams: Promise.resolve(query) });
 const requestPage = (id = REQUEST, query: Record<string, string> = {}) =>
-  RequestPage({ params: Promise.resolve({ id }), searchParams: Promise.resolve(query) });
+  EditRequestPage({ params: Promise.resolve({ id }), searchParams: Promise.resolve(query) });
+const detailPage = (id = REQUEST, query: Record<string, string> = {}) =>
+  RequestDetailPage({ params: Promise.resolve({ id }), searchParams: Promise.resolve(query) });
+
+const SIRIUS_REVIEWER: Me = {
+  ...ALPHA_HR,
+  userId: 'reviewer',
+  roles: ['PeopleForge.SiriusReviewer'],
+  scope: 'group',
+  entityIds: [],
+  permissions: ['increment_request:read'],
+};
 
 describe('New increment request page [R1-02]', () => {
   it('offers the subsidiary’s employees for the open cycle', async () => {
@@ -159,13 +177,18 @@ describe('New increment request page [R1-02]', () => {
   });
 });
 
-describe('Increment request page [R1-02]', () => {
+describe('Draft editor [R1-02]', () => {
   it('shows the draft with totals, the employee picker and Save draft', async () => {
     render(await requestPage());
     expect(
       screen.getByRole('heading', { level: 1, name: 'New increment request' }),
     ).toBeInTheDocument();
-    expect(screen.getByText('Subsidiary HR · INC-2026-0007 · Draft')).toBeInTheDocument();
+    const breadcrumb = screen.getByRole('navigation', { name: 'Breadcrumb' });
+    expect(within(breadcrumb).getByRole('link', { name: 'My requests' })).toHaveAttribute(
+      'href',
+      '/',
+    );
+    expect(breadcrumb).toHaveTextContent('INC-2026-0007 · Draft');
     expect(
       screen.getByText(
         'Add employees, propose an increment, then complete all 5 criteria for each one.',
@@ -237,30 +260,10 @@ describe('Increment request page [R1-02]', () => {
     expect(screen.queryByText('Waiting for Sirius HR')).toBeNull();
   });
 
-  it('shows a submitted request read-only, waiting for Sirius HR, with its progress', async () => {
-    vi.mocked(getRequest).mockResolvedValue({
-      kind: 'ok',
-      data: { ...DRAFT, status: 'submitted', submittedAt: '2026-10-15T06:00:00.000Z' },
-    });
-    render(await requestPage(REQUEST, { submitted: '1' }));
-    expect(
-      screen.getByRole('heading', { level: 1, name: 'Increment request INC-2026-0007' }),
-    ).toBeInTheDocument();
-    expect(screen.getByText('Subsidiary HR · INC-2026-0007 · Submitted')).toBeInTheDocument();
-    expect(
-      screen.getByText('Request submitted to Sirius HR. Both sides have been notified.'),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText('Sent to Sirius HR on 15 Oct 2026. Review has not started yet.'),
-    ).toBeInTheDocument();
-    expect(screen.getByRole('list', { name: 'Progress' })).toHaveTextContent('Review in progress');
-    expect(screen.queryByRole('textbox')).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Save draft' })).toBeNull();
-    expect(screen.queryByRole('region', { name: '2. Eligibility criteria' })).toBeNull();
-    expect(screen.queryByRole('region', { name: '3. Ready to submit?' })).toBeNull();
+  it('sends a submitted request to its detail page', async () => {
+    vi.mocked(getRequest).mockResolvedValue({ kind: 'ok', data: submittedRequest() });
+    await expect(requestPage()).rejects.toThrow(`NEXT_REDIRECT /requests/${REQUEST}`);
     expect(searchEmployees).not.toHaveBeenCalled();
-    // The adding rules only matter while employees can still be added.
-    expect(screen.queryByText(/can be added/u)).toBeNull();
   });
 
   it('confirms a save and shows a known error', async () => {
@@ -277,16 +280,10 @@ describe('Increment request page [R1-02]', () => {
     ).toBeInTheDocument();
   });
 
-  it('is read-only, without Save draft, for people who cannot edit', async () => {
-    vi.mocked(requireViewer).mockResolvedValue({
-      ...ALPHA_HR,
-      permissions: ['increment_request:read'],
-    });
-    render(await requestPage());
-    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
-    expect(screen.queryByRole('region', { name: '2. Eligibility criteria' })).toBeNull();
-    expect(screen.queryByRole('region', { name: '3. Ready to submit?' })).toBeNull();
-    expect(searchEmployees).not.toHaveBeenCalled();
+  it('is not found for people who don’t prepare requests', async () => {
+    vi.mocked(requireViewer).mockResolvedValue(SIRIUS_REVIEWER);
+    await expect(requestPage()).rejects.toThrow('NEXT_NOT_FOUND');
+    expect(getRequest).not.toHaveBeenCalled();
   });
 
   it('hides Save draft while the draft is empty', async () => {
@@ -296,11 +293,6 @@ describe('Increment request page [R1-02]', () => {
   });
 
   it.each([
-    [
-      'without the read permission',
-      () => vi.mocked(requireViewer).mockResolvedValue({ ...ALPHA_HR, permissions: [] }),
-      REQUEST,
-    ],
     ['for a malformed ID', () => undefined, 'not-a-uuid'],
     [
       'for a request the API can’t find (another subsidiary’s)',
@@ -327,5 +319,99 @@ describe('Increment request page [R1-02]', () => {
     await expect(requestPage()).rejects.toThrow('Increment request API unavailable');
     vi.mocked(requireViewer).mockResolvedValue(null);
     await expect(requestPage()).resolves.toBeNull();
+  });
+});
+
+describe('Request detail [R1-06, R1-07]', () => {
+  beforeEach(() => {
+    vi.mocked(getRequest).mockResolvedValue({ kind: 'ok', data: submittedRequest() });
+  });
+
+  it('shows where the request is, its figures and its employees (Figma "Request detail")', async () => {
+    render(await detailPage());
+    expect(screen.getByRole('heading', { level: 1, name: 'INC-2026-0152' })).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Submitted 15 Oct 2026, 11:14 by Priya Nair · Subsidiary A · With Sirius HR',
+      ),
+    ).toBeInTheDocument();
+    const breadcrumb = screen.getByRole('navigation', { name: 'Breadcrumb' });
+    expect(breadcrumb).toHaveTextContent('Request detail');
+    expect(screen.getByRole('link', { name: 'New increment request' })).toHaveAttribute(
+      'href',
+      '/requests/new',
+    );
+    const steps = screen.getByRole('list', { name: 'Where this request is' });
+    expect(steps).toHaveTextContent('Done · 15 Oct 2026');
+    expect(within(steps).getAllByRole('listitem')).toHaveLength(7);
+    expect(steps.querySelector('[aria-current="step"]')).toHaveTextContent('Sirius HR reviewing');
+    expect(screen.getByText('Total increment / month')).toBeInTheDocument();
+    const table = screen.getByRole('table', { name: 'Employees in INC-2026-0152' });
+    expect(within(table).getByRole('columnheader', { name: 'Criteria C1–C5' })).toBeInTheDocument();
+    expect(within(table).getAllByRole('row')).toHaveLength(3);
+    expect(table).toHaveTextContent('EMP-3318');
+    expect(
+      within(table).getByRole('link', { name: 'View the status of Omar Haddad' }),
+    ).toHaveAttribute('href', `/requests/${REQUEST}/employees/${LINE_1}`);
+    // No success banner unless just submitted.
+    expect(screen.queryByText('INC-2026-0152 submitted to Sirius HR')).toBeNull();
+    expect(searchEmployees).not.toHaveBeenCalled();
+  });
+
+  it('confirms a submit, with View Employees and a dismiss that drops the banner', async () => {
+    render(await detailPage(REQUEST, { submitted: '1' }));
+    expect(screen.getByText('INC-2026-0152 submitted to Sirius HR')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'View Employees' })).toHaveAttribute(
+      'href',
+      '#employees',
+    );
+    expect(screen.getByRole('link', { name: 'Dismiss' })).toHaveAttribute(
+      'href',
+      `/requests/${REQUEST}`,
+    );
+    expect(document.getElementById('employees')).not.toBeNull();
+  });
+
+  it('shows Sirius HR the request without New increment request', async () => {
+    vi.mocked(requireViewer).mockResolvedValue(SIRIUS_REVIEWER);
+    render(await detailPage());
+    expect(screen.getByRole('heading', { level: 1, name: 'INC-2026-0152' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'New increment request' })).toBeNull();
+  });
+
+  it('opens a draft in the editor for its preparer, and is not found for anyone else', async () => {
+    vi.mocked(getRequest).mockResolvedValue({ kind: 'ok', data: DRAFT });
+    await expect(detailPage()).rejects.toThrow(`NEXT_REDIRECT /requests/${REQUEST}/edit`);
+    vi.mocked(requireViewer).mockResolvedValue(SIRIUS_REVIEWER);
+    await expect(detailPage()).rejects.toThrow('NEXT_NOT_FOUND');
+  });
+
+  it.each([
+    [
+      'without the read permission',
+      () => vi.mocked(requireViewer).mockResolvedValue({ ...ALPHA_HR, permissions: [] }),
+      REQUEST,
+    ],
+    ['for a malformed ID', () => undefined, 'not-a-uuid'],
+    [
+      'for a request the API can’t find (another subsidiary’s)',
+      () =>
+        vi
+          .mocked(getRequest)
+          .mockResolvedValue({ kind: 'error', status: 404, code: 'NOT_FOUND', details: [] }),
+      REQUEST,
+    ],
+  ])('answers not found %s', async (_label, arrange, id) => {
+    arrange();
+    await expect(detailPage(id)).rejects.toThrow('NEXT_NOT_FOUND');
+  });
+
+  it('ends the session, shows the error page, or renders nothing, as the API answers', async () => {
+    vi.mocked(getRequest).mockResolvedValue({ kind: 'unauthenticated' });
+    await expect(detailPage()).rejects.toThrow('NEXT_REDIRECT /session-ended');
+    vi.mocked(getRequest).mockResolvedValue({ kind: 'unavailable' });
+    await expect(detailPage()).rejects.toThrow('Increment request API unavailable');
+    vi.mocked(requireViewer).mockResolvedValue(null);
+    await expect(detailPage()).resolves.toBeNull();
   });
 });

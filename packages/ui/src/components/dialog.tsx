@@ -22,6 +22,8 @@ export interface DialogProps {
   role?: 'dialog' | 'alertdialog';
   /** False while an action runs: Esc and the backdrop then do nothing. */
   dismissible?: boolean;
+  /** `md` for a short confirmation; `lg` when it shows a table (e.g. the employees to submit). */
+  size?: 'md' | 'lg';
   className?: string;
 }
 
@@ -44,6 +46,7 @@ export function Dialog({
   actions,
   role = 'dialog',
   dismissible = true,
+  size = 'md',
   className,
 }: DialogProps) {
   const ref = useRef<HTMLDialogElement>(null);
@@ -122,9 +125,10 @@ export function Dialog({
         data-testid="dialog-panel"
         tabIndex={-1}
         className={cn(
-          'relative w-full max-w-md rounded-card border border-line bg-surface text-ink shadow-raised outline-none',
+          'relative w-full rounded-card border border-line bg-surface text-ink shadow-raised outline-none',
           'translate-y-2 scale-[0.97] opacity-0 transition-[opacity,transform] duration-150 ease-[var(--ease-standard)] group-data-[state=open]:duration-200',
           'group-data-[state=open]:translate-y-0 group-data-[state=open]:scale-100 group-data-[state=open]:opacity-100',
+          size === 'lg' ? 'max-w-2xl' : 'max-w-md',
           className,
         )}
       >

@@ -7,6 +7,7 @@ import { signIn } from './support/sign-in';
 test.describe.configure({ mode: 'serial' });
 
 let requestUrl = '';
+let detailUrl = '';
 let reference = '';
 
 const PDF = Buffer.from(
@@ -34,10 +35,14 @@ test('subsidiary HR completes a draft and submits it to Sirius HR', async ({ pag
     .getByRole('combobox', { name: 'Add employee' })
     .selectOption({ label: 'Mariam Saleh · EMP-1103 · G4' });
   await page.getByRole('button', { name: 'Add' }).click();
-  await page.waitForURL(/\/requests\/[0-9a-f-]{36}$/u);
+  await page.waitForURL(/\/requests\/[0-9a-f-]{36}\/edit$/u);
   requestUrl = page.url();
-  const eyebrow = await page.getByText(/^Subsidiary HR · INC-\d{4}-\d{4} · Draft$/u).textContent();
-  reference = /INC-\d{4}-\d{4}/u.exec(eyebrow ?? '')?.[0] ?? '';
+  detailUrl = requestUrl.replace(/\/edit$/u, '');
+  const crumb = await page
+    .getByRole('navigation', { name: 'Breadcrumb' })
+    .getByText(/^INC-\d{4}-\d{4} · Draft$/u)
+    .textContent();
+  reference = /INC-\d{4}-\d{4}/u.exec(crumb ?? '')?.[0] ?? '';
   expect(reference).not.toBe('');
 
   const submit = page.getByRole('button', { name: 'Submit to Sirius HR' });
@@ -58,10 +63,17 @@ test('subsidiary HR completes a draft and submits it to Sirius HR', async ({ pag
   await expect(page.getByText('Draft saved.')).toBeVisible();
   await expect(submit).toBeEnabled();
 
-  // A confirmation first; Cancel changes nothing.
+  // A confirmation first; "Go back and edit" changes nothing.
   await submit.click();
   const dialog = page.getByRole('alertdialog', { name: `Submit ${reference} to Sirius HR?` });
-  await expect(dialog).toContainText('1 employee goes to Sirius HR for review.');
+  await expect(dialog).toContainText('After you submit, you cannot edit this request');
+  // The figures and the employee about to go (Figma).
+  await expect(dialog.getByRole('table', { name: 'Employees to submit' })).toContainText(
+    'Mariam Saleh',
+  );
+  await expect(dialog.getByRole('table', { name: 'Employees to submit' })).toContainText(
+    '5 of 5 complete',
+  );
   // Centred in the viewport (not the browser's default corner), once the opening fade ends.
   await expect(dialog).toHaveAttribute('data-state', 'open');
   const panel = dialog.getByTestId('dialog-panel');
@@ -79,31 +91,37 @@ test('subsidiary HR completes a draft and submits it to Sirius HR', async ({ pag
   }
   // The page behind doesn't scroll while it is open.
   await expect(page.locator('html')).toHaveCSS('overflow', 'hidden');
-  await dialog.getByRole('button', { name: 'Cancel' }).click();
+  await dialog.getByRole('button', { name: 'Go back and edit' }).click();
   await expect(dialog).toBeHidden();
 
   await submit.click();
-  await dialog.getByRole('button', { name: 'Submit to Sirius HR' }).click();
-  await page.waitForURL(`${requestUrl}?submitted=1`);
+  await dialog.getByRole('button', { name: 'Yes, submit to Sirius HR' }).click();
+  // Figma "Request detail", with the confirmation banner.
+  await page.waitForURL(`${detailUrl}?submitted=1`);
+  await expect(page.getByText(`${reference} submitted to Sirius HR`)).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: reference })).toBeVisible();
   await expect(
-    page.getByText('Request submitted to Sirius HR. Both sides have been notified.'),
+    page.getByText(/^Submitted .+ by .+ · Subsidiary A · With Sirius HR$/u),
   ).toBeVisible();
   await expect(
-    page.getByRole('heading', { level: 1, name: `Increment request ${reference}` }),
-  ).toBeVisible();
-  await expect(page.getByText('Waiting for Sirius HR')).toBeVisible();
-  await expect(
-    page.getByRole('list', { name: 'Progress' }).locator('[aria-current="step"]'),
-  ).toContainText('Review in progress');
-  // Read-only: no editing controls, no criteria editor.
+    page.getByRole('list', { name: 'Where this request is' }).locator('[aria-current="step"]'),
+  ).toContainText('Sirius HR reviewing');
+  const employees = page.getByRole('table', { name: `Employees in ${reference}` });
+  await expect(employees.getByRole('row', { name: /Mariam Saleh/u })).toContainText('5%');
+  await page.getByRole('link', { name: 'View Employees' }).click();
+  await expect(page).toHaveURL(/#employees$/u);
+  await page.getByRole('link', { name: 'Dismiss' }).click();
+  await page.waitForURL(detailUrl);
+  await expect(page.getByText(`${reference} submitted to Sirius HR`)).toHaveCount(0);
+  // Read-only: no editing controls; the editor sends it back here.
   await expect(page.getByRole('button', { name: 'Save draft' })).toHaveCount(0);
   await expect(page.getByRole('textbox')).toHaveCount(0);
-  await expect(page.getByRole('region', { name: '2. Eligibility criteria' })).toHaveCount(0);
+  await page.goto(requestUrl);
+  await page.waitForURL(detailUrl);
   // On Home it leaves "Needs your action" and shows as Submitted, at its first criterion.
   await page.goto(`/?q=${reference}`);
-  const id = requestUrl.split('/').at(-1) ?? '';
   const action = page.getByRole('region', { name: 'Needs your action' });
-  await expect(action.locator(`a[href="/requests/${id}"]`)).toHaveCount(0);
+  await expect(action.locator(`a[href="${new URL(requestUrl).pathname}"]`)).toHaveCount(0);
   const row = page.getByRole('row').filter({ hasText: reference });
   await expect(row).toContainText('Submitted');
   await expect(row).toContainText('Criterion 1 of 5');
@@ -149,17 +167,17 @@ test('Sirius HR reviewers are notified and can open the submitted request', asyn
   await page.waitForURL(/filter=action_needed$/u);
   // The whole row opens it, not only View.
   await page.getByRole('listitem').filter({ hasText: reference }).click();
-  await page.waitForURL(requestUrl);
-  await expect(
-    page.getByRole('heading', { level: 1, name: `Increment request ${reference}` }),
-  ).toBeVisible();
-  await expect(page.getByRole('row', { name: /Mariam Saleh/u })).toContainText('5/5 complete');
+  await page.waitForURL(detailUrl);
+  await expect(page.getByRole('heading', { level: 1, name: reference })).toBeVisible();
+  // Sirius HR can't raise requests.
+  await expect(page.getByRole('link', { name: 'New increment request' })).toHaveCount(0);
+  await expect(page.getByRole('row', { name: /Mariam Saleh/u })).toContainText('Submitted');
   expect(errors).toEqual([]);
 });
 
 test('another subsidiary still can’t open it', async ({ page }) => {
   await signIn(page, 'betaHr');
-  await page.goto(requestUrl);
+  await page.goto(detailUrl);
   await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible();
   await page.goto('/notifications');
   await expect(page.getByRole('listitem').filter({ hasText: reference })).toHaveCount(0);

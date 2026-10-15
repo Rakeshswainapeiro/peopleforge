@@ -56,12 +56,14 @@ describe('DashboardService.requests', () => {
     const page = await new DashboardService(repository).requests(alphaHr, {
       cycleId: CYCLE_ID,
       status: 'draft',
+      order: 'oldest',
       page: 3,
       pageSize: 10,
     });
     expect(repository.requests).toHaveBeenCalledWith(scopeA, {
       cycleId: CYCLE_ID,
       status: 'draft',
+      order: 'oldest',
       includeDrafts: true,
       limit: 10,
       offset: 20,
@@ -95,10 +97,12 @@ describe('DashboardService.requests', () => {
       total: 1,
     });
     const page = await new DashboardService(repository).requests(reviewer, {
+      order: 'newest',
       page: 1,
       pageSize: 25,
     });
     expect(repository.requests).toHaveBeenCalledWith(scopeGroup, {
+      order: 'newest',
       includeDrafts: false,
       limit: 25,
       offset: 0,

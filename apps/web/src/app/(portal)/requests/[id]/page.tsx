@@ -1,48 +1,44 @@
-import { MAX_JUSTIFICATION_LENGTH } from '@peopleforge/contracts';
-import { Alert, Button, Card, CardHeader, PageHeader } from '@peopleforge/ui';
-import { randomUUID } from 'node:crypto';
+import {
+  Alert,
+  Breadcrumb,
+  ButtonLink,
+  Card,
+  CardHeader,
+  PageHeader,
+  ProgressSteps,
+  StatCard,
+} from '@peopleforge/ui';
+import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { z } from 'zod';
-import { AddEmployeeForm } from '@/components/requests/add-employee-form';
-import { CriteriaEditor } from '@/components/requests/criteria-editor';
-import { DraftForm } from '@/components/requests/draft-form';
-import { ProposalsTable } from '@/components/requests/proposals-table';
-import { ReadyPanel } from '@/components/requests/ready-panel';
-import { RequestProgress } from '@/components/requests/request-progress';
+import { RequestEmployeesTable } from '@/components/requests/request-employees-table';
 import { getRequestLocale } from '@/i18n/request-locale';
 import { createTranslator } from '@/i18n/translator';
 import { hasAnyPermission } from '@/lib/navigation';
-import { parseErrorKey } from '@/lib/request-errors';
 import {
-  criteriaCards,
-  criteriaLabels,
-  evidenceMessages,
-  proposalRows,
-  readyView,
-  saveMessages,
-  tableLabels,
-  totalsView,
-} from '@/lib/request-view';
-import { formatDate } from '@/lib/format';
-import { entityName, roleLabel } from '@/lib/viewer-display';
-import { getRequest, searchEmployees } from '@/server/increment-requests';
+  criteriaColumn,
+  detailRows,
+  detailSubtitle,
+  reviewSteps,
+  submittedBanner,
+} from '@/lib/request-detail-view';
+import { requestFigures } from '@/lib/request-figures';
+import { markStateLabels } from '@/lib/request-view';
+import { editRequestHref, requestHref } from '@/lib/routes';
+import { getRequest } from '@/server/increment-requests';
 import { requireViewer } from '@/server/session';
-import { addEmployeeAction } from '../actions';
 
-interface RequestPageProps {
+interface RequestDetailPageProps {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ saved?: string; submitted?: string; error?: string; employee?: string }>;
+  searchParams: Promise<{ submitted?: string }>;
 }
 
-const FORM_ID = 'draft-form';
-
 /**
- * An increment request. As a draft (Figma "New increment request"): 1. employees and proposed
- * increments (R1-02), 2. the criteria of one employee at a time (R1-03, R1-04, R1-06), 3. who is
- * ready to submit (R1-07). Once submitted it is read-only, with its progress; Sirius HR's
- * review screens arrive with S5.
+ * Figma "Request detail" (R1-06, R1-07): a submitted request, where it is in Sirius HR's review,
+ * its figures and its employees. A draft opens in the editor for whoever prepares requests, and
+ * is "not found" for everyone else (Sirius HR sees requests once submitted).
  */
-export default async function RequestPage({ params, searchParams }: RequestPageProps) {
+export default async function RequestDetailPage({ params, searchParams }: RequestDetailPageProps) {
   const me = await requireViewer();
   if (me === null) return null;
   if (!hasAnyPermission(me.permissions, ['increment_request:read'])) notFound();
@@ -57,148 +53,112 @@ export default async function RequestPage({ params, searchParams }: RequestPageP
   if (result.kind === 'error' && result.status === 404) notFound();
   if (result.kind !== 'ok') throw new Error('Increment request API unavailable');
   const request = result.data;
+  const preparer = me.permissions.includes('increment_request:create');
+  if (request.status === 'draft') {
+    if (preparer) redirect(editRequestHref(request.id));
+    notFound();
+  }
 
-  const draft = request.status === 'draft';
-  const editable = draft && me.permissions.includes('increment_request:create');
-  const employees = editable ? await searchEmployees(request.entity.id, request.id) : undefined;
-  const entity = entityName(request.entity, locale);
-  const totals = totalsView(request, locale, t);
-  const error = parseErrorKey(query.error);
-  // The employee being assessed: the one asked for, else the first.
-  const selected = request.lines.find((line) => line.id === query.employee) ?? request.lines.at(0);
+  const banner = query.submitted === '1' ? submittedBanner(request, locale, t) : null;
 
   return (
-    <DraftForm
-      formId={FORM_ID}
-      requestId={request.id}
-      version={request.version}
-      employee={selected?.id}
-      editable={editable}
-      saveLabel={t('request.saveDraft')}
-    >
+    <>
       <PageHeader
-        eyebrow={t(draft ? 'request.draftEyebrow' : 'request.submittedEyebrow', {
-          role: t(roleLabel(me.roles)),
-          reference: request.reference,
-        })}
-        title={
-          draft
-            ? t('request.newTitle')
-            : t('request.submittedTitle', { reference: request.reference })
+        eyebrow={
+          <Breadcrumb
+            label={t('breadcrumb.label')}
+            as={Link}
+            items={[
+              { label: t('breadcrumb.myRequests'), href: '/' },
+              { label: t('breadcrumb.requestDetail') },
+            ]}
+          />
         }
-        description={
-          draft
-            ? t('request.newIntro', { count: request.criteria.length })
-            : t('request.submittedIntro')
-        }
+        title={request.reference}
+        description={detailSubtitle(request, locale, t)}
         actions={
-          editable && request.lines.length > 0 ? (
-            <Button type="submit" form={FORM_ID} variant="secondary">
-              {t('request.saveDraft')}
-            </Button>
+          preparer ? (
+            <ButtonLink href="/requests/new" icon="plus" as={Link}>
+              {t('dashboard.newRequest')}
+            </ButtonLink>
           ) : undefined
         }
       />
-      {query.saved === '1' ? (
-        <Alert tone="success" title={t('request.saved')} className="mt-6" />
-      ) : null}
-      {query.submitted === '1' && !draft ? (
-        <Alert tone="success" title={t('request.submittedNotice')} className="mt-6" />
-      ) : null}
-      {request.submittedAt === null ? null : (
-        <>
-          <Alert tone="info" title={t('request.waitingTitle')} className="mt-6">
-            {t('request.waitingBody', { date: formatDate(request.submittedAt, locale) })}
-          </Alert>
-          <RequestProgress request={request} locale={locale} t={t} />
-        </>
-      )}
-      {error === undefined ? null : (
-        <Alert role="alert" tone="danger" title={t(error)} className="mt-6" />
-      )}
-      <Card className="mt-6" label={t('request.employeesSection')}>
-        <CardHeader
-          title={t('request.employeesSection')}
-          description={editable ? t('request.employeesHint', { entity }) : undefined}
+
+      {banner === null ? null : (
+        <Alert
+          tone="success"
+          title={banner.title}
+          className="mt-6"
           actions={
-            employees === undefined ? undefined : employees.kind === 'ok' &&
-              employees.data.length > 0 ? (
-              <AddEmployeeForm
-                action={addEmployeeAction}
-                employees={employees.data}
-                hidden={{ requestId: request.id }}
-                t={t}
-              />
-            ) : (
-              <p className="max-w-xs text-xs text-ink-muted">
-                {t('request.noMoreEmployees', { entity })}
-              </p>
-            )
+            <>
+              <ButtonLink href="#employees" variant="outline" size="sm">
+                {t('requestDetail.viewEmployees')}
+              </ButtonLink>
+              {/* Dismissing drops ?submitted=1, so a reload doesn't bring the banner back. */}
+              <ButtonLink
+                href={requestHref(request.id)}
+                variant="ghost"
+                size="sm"
+                icon="x"
+                as={Link}
+                aria-label={t('requestDetail.dismiss')}
+                className="px-2"
+              >
+                <span className="sr-only">{t('requestDetail.dismiss')}</span>
+              </ButtonLink>
+            </>
           }
-        />
+        >
+          {banner.body}
+        </Alert>
+      )}
+
+      <Card className="mt-6" label={t('requestDetail.whereTitle')}>
+        <CardHeader title={t('requestDetail.whereTitle')} />
         <div className="px-6 pt-4 pb-6">
-          <ProposalsTable
-            // A new version (after a save) starts the fields afresh.
-            key={request.version}
-            editable={editable}
-            selectedLineId={selected?.id}
-            rows={proposalRows(request, locale, t)}
-            labels={tableLabels(t)}
-            messages={saveMessages(t)}
-            footer={
-              <dl className="flex flex-wrap gap-x-8 gap-y-2 text-sm">
-                <div className="flex gap-2">
-                  <dt className="text-ink-muted">{t('request.totalsEmployees')}</dt>
-                  <dd className="font-semibold tabular-nums">{totals.employees}</dd>
-                </div>
-                <div className="flex gap-2">
-                  <dt className="text-ink-muted">{t('request.totalsIncrease')}</dt>
-                  <dd className="font-semibold tabular-nums" data-testid="total-increase">
-                    {totals.increase}
-                  </dd>
-                </div>
-                <div className="flex gap-2">
-                  <dt className="text-ink-muted">{t('request.totalsAverage')}</dt>
-                  <dd className="font-semibold tabular-nums" data-testid="average-percent">
-                    {totals.average}
-                  </dd>
-                </div>
-              </dl>
-            }
+          <ProgressSteps
+            label={t('requestDetail.whereTitle')}
+            steps={reviewSteps(request, locale, t)}
+            stateLabels={{
+              done: t('request.progressStates.done'),
+              current: t('request.progressStates.current'),
+              todo: t('request.progressStates.todo'),
+            }}
           />
         </div>
       </Card>
-      {editable && selected !== undefined ? (
-        <Card className="mt-6" label={t('request.criteriaSection')}>
-          <div id="criteria" className="scroll-mt-6">
-            <CardHeader
-              title={t('request.criteriaTitle', { name: selected.fullName })}
-              description={t('request.criteriaHint')}
-            />
-          </div>
-          <div className="px-6 pt-5 pb-6">
-            <CriteriaEditor
-              // Afresh after a save, and for each employee.
-              key={`${String(request.version)}:${selected.id}`}
-              requestId={request.id}
-              lineId={selected.id}
-              criteria={criteriaCards(request, selected, locale, t)}
-              labels={criteriaLabels(t)}
-              maxJustification={MAX_JUSTIFICATION_LENGTH}
-              messages={evidenceMessages(t)}
-            />
-          </div>
-        </Card>
-      ) : null}
-      {editable ? (
-        <Card className="mt-6" label={t('request.readySection')}>
-          <CardHeader title={t('request.readySection')} />
-          <div className="px-6 pt-4 pb-6">
-            {/* A fresh idempotency key per page view: a double click can't submit twice. */}
-            <ReadyPanel {...readyView(request, locale, t, randomUUID())} />
-          </div>
-        </Card>
-      ) : null}
-    </DraftForm>
+
+      <ul className="mt-6 grid gap-4 sm:grid-cols-3">
+        {requestFigures(request, locale, t).map((figure) => (
+          <li key={figure.label}>
+            <StatCard {...figure} />
+          </li>
+        ))}
+      </ul>
+
+      <Card className="mt-6" label={t('figures.employees')}>
+        <div id="employees" className="scroll-mt-6">
+          <CardHeader title={t('figures.employees')} />
+        </div>
+        <div className="px-6 pt-2 pb-6">
+          <RequestEmployeesTable
+            rows={detailRows(request, locale, t)}
+            labels={{
+              caption: t('requestDetail.tableCaption', { reference: request.reference }),
+              employee: t('requestDetail.colEmployee'),
+              grade: t('requestDetail.colGrade'),
+              current: t('requestDetail.colCurrent'),
+              proposed: t('requestDetail.colProposed'),
+              criteria: criteriaColumn(request, t),
+              status: t('requestDetail.colStatus'),
+              action: t('requestDetail.colAction'),
+              viewStatus: t('dashboard.viewStatus'),
+              stateLabels: markStateLabels(t),
+            }}
+          />
+        </div>
+      </Card>
+    </>
   );
 }

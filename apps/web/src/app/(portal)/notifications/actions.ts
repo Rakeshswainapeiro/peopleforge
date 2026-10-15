@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { markNotificationsRead } from '@/server/notifications';
 import { refreshPortalShell } from '@/server/portal-shell';
+import { requestHref } from '@/lib/routes';
 
 /**
  * Server Actions for the notifications page (R1-07). POST-only with an Origin check (CSRF);
@@ -37,5 +38,5 @@ export async function openNotificationAction(
   const result = await markNotificationsRead([Id.parse(notificationId)]);
   if (result.kind === 'unauthenticated') redirect('/session-ended');
   refreshPortalShell();
-  redirect(requestId === null ? '/notifications' : `/requests/${Id.parse(requestId)}`);
+  redirect(requestId === null ? '/notifications' : requestHref(Id.parse(requestId)));
 }

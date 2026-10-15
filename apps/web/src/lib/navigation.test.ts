@@ -1,42 +1,78 @@
 import { describe, expect, it } from 'vitest';
-import { isActivePath, visibleNavItems } from './navigation';
+import { activeHref, NAV_ITEMS, visibleNavItems } from './navigation';
+
+const ID = '34230d44-59a7-4faf-9f69-4025ab34481f';
+const LINE = '22222222-2222-4222-8222-222222222221';
 
 describe('visibleNavItems', () => {
-  it('shows subsidiary HR everything it can use', () => {
-    const items = visibleNavItems(['increment_request:create', 'report:read_operational']);
-    expect(items.map((item) => item.href)).toEqual([
-      '/',
-      '/requests/new',
-      '/notifications',
-      '/reports',
+  it('shows subsidiary HR "My Request" and everything else it can use', () => {
+    const items = visibleNavItems([
+      'increment_request:create',
+      'increment_request:read',
+      'report:read_operational',
+    ]);
+    expect(items.map((item) => [item.href, item.label])).toEqual([
+      ['/', 'nav.myRequests'],
+      ['/requests/new', 'nav.newRequest'],
+      ['/notifications', 'nav.notifications'],
+      ['/reports', 'nav.reports'],
     ]);
   });
 
-  it('hides New Request from roles that cannot create requests', () => {
-    const items = visibleNavItems(['report:read_executive']);
-    expect(items.map((item) => item.href)).toEqual(['/', '/notifications', '/reports']);
+  it('shows Sirius HR "Increment requests", without New Request', () => {
+    const items = visibleNavItems(['increment_request:read', 'report:read_executive']);
+    expect(items.map((item) => [item.href, item.label])).toEqual([
+      ['/', 'nav.requests'],
+      ['/notifications', 'nav.notifications'],
+      ['/reports', 'nav.reports'],
+    ]);
   });
 
   it('shows only Home and Notifications without permissions', () => {
-    expect(visibleNavItems([]).map((item) => item.href)).toEqual(['/', '/notifications']);
+    expect(visibleNavItems([]).map((item) => item.label)).toEqual([
+      'nav.home',
+      'nav.notifications',
+    ]);
   });
 });
 
-describe('isActivePath', () => {
+describe('activeHref', () => {
+  const preparer = visibleNavItems([
+    'increment_request:create',
+    'increment_request:read',
+    'report:read_operational',
+  ]);
+
   it.each([
-    ['/', '/', true],
-    ['/reports', '/', false],
-    ['/reports', '/reports', true],
-    ['/reports/rp-01', '/reports', true],
-    ['/reportsx', '/reports', false],
-  ])('%s is active for %s: %s', (pathname, href, expected) => {
-    expect(isActivePath(pathname, { href })).toBe(expected);
+    ['/', '/'],
+    // A submitted request's page and its employees belong to My Request (Figma).
+    [`/requests/${ID}`, '/'],
+    [`/requests/${ID}/employees/${LINE}`, '/'],
+    // A new request and a draft being edited belong to New Request.
+    ['/requests/new', '/requests/new'],
+    [`/requests/${ID}/edit`, '/requests/new'],
+    ['/notifications', '/notifications'],
+    ['/reports/rp-01', '/reports'],
+    ['/reportsx', undefined],
+    ['/session-ended', undefined],
+  ])('%s → %s', (pathname, expected) => {
+    expect(activeHref(pathname, preparer)).toBe(expected);
   });
 
-  it('keeps New Request selected while a draft is edited (Figma)', () => {
-    const newRequest = { href: '/requests/new', alsoActiveFor: ['/requests'] };
-    expect(isActivePath('/requests/34230d44-59a7-4faf-9f69-4025ab34481f', newRequest)).toBe(true);
-    expect(isActivePath('/requests/new', newRequest)).toBe(true);
-    expect(isActivePath('/requestsx', newRequest)).toBe(false);
+  it('falls back to My Request for a draft when New Request isn’t shown', () => {
+    const reader = visibleNavItems(['increment_request:read']);
+    expect(activeHref(`/requests/${ID}/edit`, reader)).toBe('/');
+  });
+
+  it('lists every item once per role (no duplicate hrefs shown together)', () => {
+    for (const permissions of [
+      [],
+      ['increment_request:read'],
+      ['increment_request:create', 'increment_request:read'],
+    ] as const) {
+      const hrefs = visibleNavItems(permissions).map((item) => item.href);
+      expect(new Set(hrefs).size).toBe(hrefs.length);
+    }
+    expect(NAV_ITEMS.length).toBeGreaterThan(4);
   });
 });

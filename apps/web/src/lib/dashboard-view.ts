@@ -9,14 +9,15 @@ import {
   type RequestStage,
   type RequestStatus,
 } from '@peopleforge/contracts';
-import type { CriterionState, StageMeterProps, StatCardProps } from '@peopleforge/ui';
+import type { BadgeTone, CriterionState, StageMeterProps, StatCardProps } from '@peopleforge/ui';
 import type { Locale } from '@sirius/shared-types';
 import { z } from 'zod';
 import type { Translate } from '@/i18n/translator';
-import { formatAge, formatDate, formatPercent } from './format';
-import { employeesAdded } from './request-view';
+import { daysBetween, formatAge, formatDate, formatPercent } from './format';
+import { pluralForm } from './plural';
 import { statusBadge, type StatusBadgeView } from './request-status';
 import { localised } from './viewer-display';
+import { editRequestHref, employeeStatusHref, requestLinkFor } from './routes';
 
 /**
  * "My increment requests" (R1-10, DASH-D1): the page's state lives in the URL (shareable, back
@@ -38,6 +39,8 @@ export interface DashboardState {
   requestId?: string | undefined;
   page: number;
   pageSize: number;
+  /** What "Needs your action" shows. */
+  show?: ActionFilter | undefined;
 }
 
 export type SearchParams = Readonly<Record<string, string | string[] | undefined>>;
@@ -69,6 +72,7 @@ export function dashboardState(params: SearchParams): DashboardState {
     requestId: view === 'employees' && request.success ? request.data : undefined,
     page: page.success ? page.data : 1,
     pageSize: (PAGE_SIZES as readonly number[]).includes(size) ? size : PAGE_SIZES[0],
+    show: first(params.show) === 'drafts' ? 'drafts' : undefined,
   };
 }
 
@@ -91,6 +95,7 @@ export function dashboardHref(
   }
   if (next.page > 1) query.set('page', String(next.page));
   if (next.pageSize !== PAGE_SIZES[0]) query.set('size', String(next.pageSize));
+  if (next.show !== undefined) query.set('show', next.show);
   const search = query.toString();
   return search === '' ? '/' : `/?${search}`;
 }
@@ -213,7 +218,7 @@ export function requestRows(
   return page.items.map((item) => ({
     id: item.id,
     reference: item.reference,
-    href: `/requests/${item.id}`,
+    href: requestLinkFor(item.id, item.status),
     entityCode: item.entity.code,
     created: formatDate(item.createdAt, locale),
     employees: number.format(item.employeeCount),
@@ -244,7 +249,7 @@ export interface LineRowView {
 export function lineRows(page: RequestLinePage, locale: Locale, t: Translate): LineRowView[] {
   return page.items.map((line) => ({
     id: line.id,
-    href: `/requests/${line.request.id}/employees/${line.id}`,
+    href: employeeStatusHref(line.request.id, line.id),
     name: line.fullName,
     detail: t('dashboard.employeeLine', {
       number: line.employeeNumber,
@@ -271,28 +276,56 @@ export function lineRows(page: RequestLinePage, locale: Locale, t: Translate): L
   }));
 }
 
-export interface DraftActionView {
+/** After how many days waiting an item is highlighted (assumption until the designer confirms). */
+export const ACTION_OVERDUE_DAYS = 5;
+
+/** How many items "Needs your action" lists before "See all" (Figma: 5). */
+export const ACTION_ROWS = 5;
+
+/** The "Show" choices of "Needs your action". Questions and returns join with S5. */
+export type ActionFilter = 'all' | 'drafts';
+
+export interface ActionRowView {
   id: string;
-  title: string;
-  detail: string;
+  type: { tone: BadgeTone; label: string };
+  /** "4 employees" over the request reference. */
+  primary: string;
+  secondary: string;
+  needed: string;
+  neededDetail: string;
+  waiting: string;
+  overdue: boolean;
   href: string;
+  action: string;
 }
 
-/** Figma "Needs your action": each draft with how far its criteria have got. */
-export function draftActions(
-  page: IncrementRequestPage,
+/**
+ * Figma "Needs your action" rows, longest waiting first: for now each draft, with how far its
+ * criteria have got and how long it has waited.
+ */
+export function actionRows(
+  drafts: IncrementRequestPage,
+  now: Date,
   locale: Locale,
   t: Translate,
-): DraftActionView[] {
+): ActionRowView[] {
   const number = new Intl.NumberFormat(locale);
-  return page.items.map((draft) => ({
+  // The API pages by 10, 25 or 50; the panel shows the first few.
+  return drafts.items.slice(0, ACTION_ROWS).map((draft) => ({
     id: draft.id,
-    title: t('dashboard.draftNotSubmitted', { reference: draft.reference }),
-    detail: t('dashboard.draftProgress', {
-      employees: employeesAdded(draft.employeeCount, locale, t),
+    type: { tone: 'outline', label: t('dashboard.typeDraft') },
+    primary: t(`figures.employeeCount.${pluralForm(draft.employeeCount, locale)}`, {
+      count: number.format(draft.employeeCount),
+    }),
+    secondary: draft.reference,
+    needed: t('dashboard.needsSubmit'),
+    neededDetail: t('dashboard.needsCriteria', {
       complete: number.format(draft.criteria.complete),
       total: number.format(draft.criteria.total),
     }),
-    href: `/requests/${draft.id}`,
+    waiting: formatAge(draft.statusChangedAt, now, locale),
+    overdue: daysBetween(draft.statusChangedAt, now) >= ACTION_OVERDUE_DAYS,
+    href: editRequestHref(draft.id),
+    action: t('dashboard.continueDraft'),
   }));
 }

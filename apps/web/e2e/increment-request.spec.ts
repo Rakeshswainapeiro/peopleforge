@@ -37,12 +37,14 @@ test('subsidiary HR raises a draft and proposes increments', async ({ page }) =>
   await expect(page.getByRole('option', { name: /Rohan Das/u })).toHaveCount(0);
 
   await addEmployee(page, 'Aisha Rahman · EMP-1101 · G5');
-  await page.waitForURL(/\/requests\/[0-9a-f-]{36}$/u);
+  await page.waitForURL(/\/requests\/[0-9a-f-]{36}\/edit$/u);
   requestUrl = page.url();
   await expect(
     page.getByRole('heading', { level: 1, name: 'New increment request' }),
   ).toBeVisible();
-  await expect(page.getByText(/^Subsidiary HR · INC-2026-\d{4} · Draft$/u)).toBeVisible();
+  await expect(
+    page.getByRole('navigation', { name: 'Breadcrumb' }).getByText(/^INC-2026-\d{4} · Draft$/u),
+  ).toBeVisible();
   await addEmployee(page, 'Yusuf Karim · EMP-1102 · G6');
 
   const table = page.getByRole('table', {
@@ -93,11 +95,13 @@ test('removing an employee, and continuing the draft from Home', async ({ page }
   await expect(page.getByRole('row', { name: /Aisha Rahman/u })).toHaveCount(1);
   expect(errors).toEqual([]);
 
-  await page.goto('/');
-  const reference = requestUrl.split('/').at(-1) ?? '';
-  const drafts = page.getByRole('region', { name: 'Needs your action' });
-  await expect(drafts).toBeVisible();
-  await drafts.locator(`a[href="/requests/${reference}"]`).click();
+  // Home lists it among the drafts; its reference opens the editor again.
+  await page.goto('/?status=draft&size=50');
+  await expect(page.getByRole('region', { name: 'Needs your action' })).toBeVisible();
+  await page
+    .getByRole('table', { name: 'Increment requests' })
+    .locator(`a[href="${new URL(requestUrl).pathname}"]`)
+    .click();
   await page.waitForURL(requestUrl);
 });
 
@@ -127,13 +131,12 @@ test('removing the last employee discards the draft', async ({ page }) => {
   await signIn(page, 'alphaHr');
   await page.goto('/requests/new');
   await addEmployee(page, 'Mariam Saleh · EMP-1103 · G4');
-  await page.waitForURL(/\/requests\/[0-9a-f-]{36}$/u);
+  await page.waitForURL(/\/requests\/[0-9a-f-]{36}\/edit$/u);
   const draftUrl = page.url();
   await page.getByRole('button', { name: 'Remove Mariam Saleh' }).click();
   await page.waitForURL('/?discarded=1');
   await expect(page.getByText('Draft discarded: it had no employees left.')).toBeVisible();
-  const id = draftUrl.split('/').at(-1) ?? '';
-  await expect(page.locator(`a[href="/requests/${id}"]`)).toHaveCount(0);
+  await expect(page.locator(`a[href="${new URL(draftUrl).pathname}"]`)).toHaveCount(0);
   await page.goto(draftUrl);
   await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible();
 });

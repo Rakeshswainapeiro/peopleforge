@@ -1,6 +1,6 @@
 # Schemas `core`, `increments`, `audit` and `notify` (slices S1–S4b)
 
-Migrations: `packages/db/migrations/core/0001_core_schema`, `0002_placeholder_configuration`, `0003_increment_requests`, `0004_criteria_evidence`, `0005_submission_audit_notifications`, `0006_dashboard` (up/down), recorded in `migrations.core`. Decisions: ADR-002 (data access, RLS), ADR-008 (field encryption), ADR-010 (evidence files), ADR-011 (audit trail and notifications). Design: `docs/design/r1-increment-portal.md` §3a.
+Migrations: `packages/db/migrations/core/0001_core_schema`, `0002_placeholder_configuration`, `0003_increment_requests`, `0004_criteria_evidence`, `0005_submission_audit_notifications`, `0006_dashboard`, `0007_submitter_name` (up/down), recorded in `migrations.core`. Decisions: ADR-002 (data access, RLS), ADR-008 (field encryption), ADR-010 (evidence files), ADR-011 (audit trail and notifications). Design: `docs/design/r1-increment-portal.md` §3a.
 
 Every table here also carries `created_at`, `created_by`, `updated_at`, `updated_by` (UTC timestamps, user IDs), and `version` (optimistic locking) where rows are edited. `created_by`/`updated_by` is `seed` for migration and seed rows.
 
@@ -110,19 +110,22 @@ Primary key `(user_id, entity_id)`. Rows are inserted and deleted, never updated
 
 ### `increments.increment_request` — a subsidiary's request in a cycle (R1-02)
 
-| Column              | Type          | Null | Meaning                                                                                                                               | Sensitivity |
-| ------------------- | ------------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
-| `id`                | `uuid`        | No   | Primary key (chosen by the API before insert)                                                                                         | Internal    |
-| `reference`         | `text`        | No   | `INC-<cycle start year>-<NNNN>`, unique; numbered per cycle                                                                           | Internal    |
-| `entity_id`         | `uuid`        | No   | → `core.entity`; drives RLS                                                                                                           | Internal    |
-| `cycle_id`          | `uuid`        | No   | → `core.increment_cycle` (must be `open` at creation)                                                                                 | Internal    |
-| `criteria_set_id`   | `uuid`        | No   | The criteria set active at creation; later changes don't affect it (R1-05)                                                            | Internal    |
-| `status`            | `text`        | No   | `draft` or `submitted` (S4a); review and decision statuses arrive in S5                                                               | Internal    |
-| `submitted_at`      | `timestamptz` | Yes  | When it was submitted; set exactly when `status` isn't `draft` (CHECK)                                                                | Internal    |
-| `submitted_by`      | `text`        | Yes  | User ID of the submitter; set with `submitted_at`                                                                                     | Internal    |
-| `status_changed_at` | `timestamptz` | No   | Last status change (creation for a draft); the dashboard's Age and Last update (0006, backfilled from `submitted_at` or `created_at`) | Internal    |
-| `version`           | `integer`     | No   | Bumped by every change; a save with a stale version is refused (409)                                                                  | Internal    |
-| `deleted_at`        | `timestamptz` | Yes  | Soft delete                                                                                                                           | Internal    |
+| Column              | Type          | Null | Meaning                                                                                                                                     | Sensitivity  |
+| ------------------- | ------------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| `id`                | `uuid`        | No   | Primary key (chosen by the API before insert)                                                                                               | Internal     |
+| `reference`         | `text`        | No   | `INC-<cycle start year>-<NNNN>`, unique; numbered per cycle                                                                                 | Internal     |
+| `entity_id`         | `uuid`        | No   | → `core.entity`; drives RLS                                                                                                                 | Internal     |
+| `cycle_id`          | `uuid`        | No   | → `core.increment_cycle` (must be `open` at creation)                                                                                       | Internal     |
+| `criteria_set_id`   | `uuid`        | No   | The criteria set active at creation; later changes don't affect it (R1-05)                                                                  | Internal     |
+| `status`            | `text`        | No   | `draft` or `submitted` (S4a); review and decision statuses arrive in S5                                                                     | Internal     |
+| `submitted_at`      | `timestamptz` | Yes  | When it was submitted; set exactly when `status` isn't `draft` (CHECK)                                                                      | Internal     |
+| `submitted_by`      | `text`        | Yes  | User ID of the submitter; set with `submitted_at`                                                                                           | Internal     |
+| `submitted_by_name` | `text`        | Yes  | The submitter's display name as read at submit time ("by Priya Nair"), 1–200 characters; null for drafts and requests submitted before 0007 | Confidential |
+| `status_changed_at` | `timestamptz` | No   | Last status change (creation for a draft); the dashboard's Age and Last update (0006, backfilled from `submitted_at` or `created_at`)       | Internal     |
+| `version`           | `integer`     | No   | Bumped by every change; a save with a stale version is refused (409)                                                                        | Internal     |
+| `deleted_at`        | `timestamptz` | Yes  | Soft delete                                                                                                                                 | Internal     |
+
+`submitted_by_name` is kept so the request page can say who submitted it without a user directory lookup (Phase 1 has no user profile table; the IdP holds names). It is a staff member's name, so Confidential, and goes with the request under its retention.
 
 Unique `(id, entity_id)` exists so lines can reference the pair. A submitted request is read-only: every change (lines, proposals, criteria, evidence) locks the request and refuses a non-draft (`not_draft`, 409). Submitting is idempotent per user and key (the `idempotency_key` table is reused).
 

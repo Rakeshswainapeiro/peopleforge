@@ -22,7 +22,7 @@ import {
   twoEntityHr,
   workingRepository,
 } from '../../test-support/increment-requests.js';
-import { IncrementRequestService, toDomainError } from './increment-request.service.js';
+import { actorName, IncrementRequestService, toDomainError } from './increment-request.service.js';
 
 const scopeA = { userId: 'alpha', kind: 'entity', entityIds: [SUB_A] };
 
@@ -343,7 +343,7 @@ describe('IncrementRequestService.submit [R1-07]', () => {
     await service.submit(alphaHr, REQUEST_ID, { version: 3 }, KEY);
     const [scope, id, input] = (repository.submit.mock.calls[0] ?? []) as unknown[];
     expect([scope, id]).toEqual([scopeA, REQUEST_ID]);
-    expect(input).toMatchObject({ version: 3, idempotencyKey: KEY });
+    expect(input).toMatchObject({ version: 3, idempotencyKey: KEY, submitterName: 'Alpha HR' });
     const notices = (input as { notifications: (ref: string) => unknown }).notifications(
       'INC-2026-0001',
     );
@@ -380,6 +380,10 @@ describe('IncrementRequestService.submit [R1-07]', () => {
     };
     await expect(actorOf({ ...alphaHr, name: null })).resolves.toBe('pf.alpha.hr');
     await expect(actorOf({ ...alphaHr, name: null, username: null })).resolves.toBe('alpha');
+  });
+
+  it('keeps at most 200 characters of a name (what the database stores)', () => {
+    expect(actorName({ ...alphaHr, name: 'x'.repeat(250) })).toHaveLength(200);
   });
 
   it('refuses a request with an employee not ready, naming the rows', async () => {

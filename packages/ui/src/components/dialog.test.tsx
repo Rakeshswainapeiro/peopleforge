@@ -73,6 +73,7 @@ describe('Dialog', () => {
     const dialog = screen.getByRole('dialog', { name: 'Submit INC-2026-0001?' });
     expect(dialog).toHaveAccessibleDescription('You can’t edit it afterwards.');
     expect(dialog).toHaveAttribute('data-state', 'open');
+    expect(screen.getByTestId('dialog-panel')).toHaveClass('max-w-md');
     // Focus sits on the panel; Tab then reaches the actions.
     expect(document.activeElement).toBe(screen.getByTestId('dialog-panel'));
     await userEvent.tab();
@@ -141,5 +142,14 @@ describe('Dialog', () => {
     await userEvent.click(screen.getByTestId('dialog-backdrop'));
     await afterExit();
     expect(screen.getByRole('dialog')).toHaveAttribute('data-state', 'open');
+  });
+
+  it('comes wider for content such as a table', () => {
+    render(
+      <Dialog open size="lg" onClose={() => undefined} title="Submit?" actions={null}>
+        Table
+      </Dialog>,
+    );
+    expect(screen.getByTestId('dialog-panel')).toHaveClass('max-w-2xl');
   });
 });

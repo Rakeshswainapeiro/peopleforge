@@ -31,21 +31,35 @@ test('subsidiary HR finds a draft, its employees and one employee’s status', a
     .getByRole('combobox', { name: 'Add employee' })
     .selectOption({ label: 'Aisha Rahman · EMP-1101 · G5' });
   await page.getByRole('button', { name: 'Add' }).click();
-  await page.waitForURL(/\/requests\/[0-9a-f-]{36}$/u);
-  const eyebrow = await page.getByText(/^Subsidiary HR · INC-\d{4}-\d{4} · Draft$/u).textContent();
-  reference = /INC-\d{4}-\d{4}/u.exec(eyebrow ?? '')?.[0] ?? '';
+  await page.waitForURL(/\/requests\/[0-9a-f-]{36}\/edit$/u);
+  const crumb = await page
+    .getByRole('navigation', { name: 'Breadcrumb' })
+    .getByText(/^INC-\d{4}-\d{4} · Draft$/u)
+    .textContent();
+  reference = /INC-\d{4}-\d{4}/u.exec(crumb ?? '')?.[0] ?? '';
   expect(reference).not.toBe('');
 
-  await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Home' }).click();
+  await page
+    .getByRole('navigation', { name: 'Main' })
+    .getByRole('link', { name: 'My Request' })
+    .click();
   await expect(
     page.getByRole('heading', { level: 1, name: 'My increment requests' }),
   ).toBeVisible();
   await expect(
     page.getByRole('list', { name: 'Request counts' }).getByRole('listitem'),
   ).toHaveCount(5);
+  // Figma "Needs your action": drafts, longest waiting first, the first 5 with "See all".
   const action = page.getByRole('region', { name: 'Needs your action' });
-  await expect(action).toContainText(`${reference} · Draft not submitted`);
-  await expect(action).toContainText('1 employee added · criteria 0 of 5 complete');
+  await expect(action).toContainText('Longest waiting first.');
+  const actionRows = action.getByRole('row');
+  expect(await actionRows.count()).toBeGreaterThan(1);
+  expect(await actionRows.count()).toBeLessThanOrEqual(6);
+  await expect(actionRows.nth(1)).toContainText('Complete and submit');
+  await action.getByRole('link', { name: 'See all drafts' }).click();
+  await page.waitForURL(/status=draft/u);
+  const drafts = page.getByRole('table', { name: 'Increment requests' });
+  await expect(drafts.getByRole('row').filter({ hasText: reference })).toContainText('Draft');
 
   // Search narrows the list to the draft, in place (no full reload).
   await search(page, reference);

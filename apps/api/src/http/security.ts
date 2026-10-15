@@ -53,6 +53,9 @@ function limiter(windowMs: number, limit: number, key: RequestHandlerKey): Reque
     windowMs,
     limit,
     keyGenerator: key,
+    // The library spots `req.ip` in the key function and warns that IPv6 isn't grouped; it is,
+    // by ipKeyGenerator inside callerKey (tested), so the check is a false positive here.
+    validate: { keyGeneratorIpFallback: false },
     standardHeaders: 'draft-8',
     legacyHeaders: false,
     handler: (_req, res) => {

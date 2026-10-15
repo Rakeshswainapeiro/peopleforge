@@ -8,6 +8,7 @@ import {
   type ProposedKind,
 } from '@peopleforge/contracts';
 import { redirect } from 'next/navigation';
+import { editRequestHref, requestHref } from '@/lib/routes';
 import { z } from 'zod';
 import type { MessageKey } from '@/i18n/translator';
 import {
@@ -43,14 +44,20 @@ function field(formData: FormData, name: string): string {
   return typeof value === 'string' ? value : '';
 }
 
-/** Where to go after a change: back to the request, with a message when it failed. */
-function outcome(result: ApiResult<{ id: string }>, fallbackPath: string): never {
-  if (result.kind === 'ok') redirect(`/requests/${result.data.id}`);
+/** Where to go after a change: back to the draft, with a message when it failed. */
+function outcome(
+  result: ApiResult<{ id: string }>,
+  fallback: (query: { error: string }) => string,
+): never {
+  if (result.kind === 'ok') redirect(editRequestHref(result.data.id));
   if (result.kind === 'unauthenticated') redirect('/session-ended');
   const key =
     result.kind === 'error' ? errorKeyFor(result.code, result.details) : 'request.errors.generic';
-  redirect(`${fallbackPath}?error=${key}`);
+  redirect(fallback({ error: key }));
 }
+
+const newRequestHref = (query: { error: string }) =>
+  `/requests/new?${new URLSearchParams(query).toString()}`;
 
 /** "Add" on a new request: creates the draft with its first employee. */
 export async function startRequest(formData: FormData): Promise<never> {
@@ -69,19 +76,23 @@ export async function startRequest(formData: FormData): Promise<never> {
         ]),
       ),
     );
-  if (!parsed.success) redirect('/requests/new?error=request.errors.chooseEmployee');
+  if (!parsed.success) redirect(newRequestHref({ error: 'request.errors.chooseEmployee' }));
   const { cycleId, entityId, employeeId, idempotencyKey } = parsed.data;
   outcome(
     await createRequest({ cycleId, entityId, employeeIds: [employeeId] }, idempotencyKey),
-    '/requests/new',
+    newRequestHref,
   );
 }
 
 export async function addEmployeeAction(formData: FormData): Promise<never> {
   const requestId = Id.parse(field(formData, 'requestId'));
   const employeeId = Id.safeParse(field(formData, 'employeeId'));
-  if (!employeeId.success) redirect(`/requests/${requestId}?error=request.errors.chooseEmployee`);
-  outcome(await addEmployee(requestId, employeeId.data), `/requests/${requestId}`);
+  if (!employeeId.success) {
+    redirect(editRequestHref(requestId, { error: 'request.errors.chooseEmployee' }));
+  }
+  outcome(await addEmployee(requestId, employeeId.data), (query) =>
+    editRequestHref(requestId, query),
+  );
 }
 
 /**
@@ -98,9 +109,8 @@ export async function removeEmployeeAction(
   const result = await removeEmployee(requestId, lineId);
   // Removing the last employee discards the draft: back to Home, which says so.
   if (result.kind === 'ok' && result.data.discarded) redirect('/?discarded=1');
-  outcome(
-    result.kind === 'ok' ? { kind: 'ok', data: { id: requestId } } : result,
-    `/requests/${requestId}`,
+  outcome(result.kind === 'ok' ? { kind: 'ok', data: { id: requestId } } : result, (query) =>
+    editRequestHref(requestId, query),
   );
 }
 
@@ -200,9 +210,13 @@ export async function saveDraft(
     if (field(formData, 'intent') === 'submit') {
       await submitSaved(requestId, result.data.version, field(formData, 'submitKey'));
     }
-    if (next.success) redirect(`/requests/${requestId}?employee=${next.data}#criteria`);
-    const employee = current.success ? `&employee=${current.data}` : '';
-    redirect(`/requests/${requestId}?saved=1${employee}`);
+    if (next.success) redirect(`${editRequestHref(requestId, { employee: next.data })}#criteria`);
+    redirect(
+      editRequestHref(requestId, {
+        saved: '1',
+        ...(current.success ? { employee: current.data } : {}),
+      }),
+    );
   }
   if (result.kind === 'unauthenticated') redirect('/session-ended');
   if (result.kind === 'unavailable') return keep('request.errors.generic');
@@ -227,16 +241,16 @@ export async function saveDraft(
  */
 async function submitSaved(requestId: string, version: number, keyInput: string): Promise<never> {
   const key = Key.safeParse(keyInput);
-  if (!key.success) redirect(`/requests/${requestId}?error=request.errors.generic`);
+  if (!key.success) redirect(editRequestHref(requestId, { error: 'request.errors.generic' }));
   const result = await submitRequest(requestId, version, key.data);
   if (result.kind === 'ok') {
     refreshPortalShell();
-    redirect(`/requests/${requestId}?submitted=1`);
+    redirect(requestHref(requestId, { submitted: '1' }));
   }
   if (result.kind === 'unauthenticated') redirect('/session-ended');
   const error =
     result.kind === 'error' ? errorKeyFor(result.code, result.details) : 'request.errors.generic';
-  redirect(`/requests/${requestId}?error=${error}`);
+  redirect(editRequestHref(requestId, { error }));
 }
 
 export type EvidenceActionResult = { ok: true } | { ok: false; error: EvidenceErrorKey };

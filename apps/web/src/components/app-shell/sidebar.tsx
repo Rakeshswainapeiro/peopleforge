@@ -33,7 +33,7 @@ export function Sidebar({ me, locale, t, unread }: SidebarProps) {
     href: item.href,
     icon: item.icon,
     label: t(item.label),
-    alsoActiveFor: item.alsoActiveFor,
+    activeFor: item.activeFor,
     badge:
       item.showsUnread === true
         ? {

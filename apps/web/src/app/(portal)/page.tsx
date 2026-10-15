@@ -33,7 +33,7 @@ import {
   cycleFilter,
   dashboardHref,
   dashboardState,
-  draftActions,
+  actionRows,
   kpiCards,
   lineRows,
   periodOptions,
@@ -43,6 +43,8 @@ import {
   type SearchParams,
 } from '@/lib/dashboard-view';
 import { pageCount, paginationLabels } from '@/lib/pagination';
+import { pluralForm } from '@/lib/plural';
+import { markStateLabels } from '@/lib/request-view';
 import { entityName, roleLabel } from '@/lib/viewer-display';
 import type { ApiResult } from '@/server/api-client';
 import {
@@ -152,7 +154,11 @@ async function Dashboard({ me, state, locale, t, notice }: DashboardProps) {
   const [summary, list, drafts] = await Promise.all([
     dashboardSummary(filter).then(required),
     listing,
-    preparer ? listRequests({ status: 'draft', pageSize: 10 }).then(required) : undefined,
+    // "Needs your action": drafts in every cycle, longest waiting first (the API's smallest page;
+    // the panel shows the first ACTION_ROWS).
+    preparer
+      ? listRequests({ status: 'draft', order: 'oldest', pageSize: PAGE_SIZES[0] }).then(required)
+      : undefined,
   ]);
   const total = list.data.total;
   const pages = pageCount(total, state.pageSize);
@@ -161,7 +167,8 @@ async function Dashboard({ me, state, locale, t, notice }: DashboardProps) {
   const filtered = state.search !== undefined || state.status !== undefined;
   const number = new Intl.NumberFormat(locale);
   const entity = me.entities[0];
-  const actions = drafts === undefined ? [] : draftActions(drafts, locale, t);
+  const now = new Date();
+  const actions = drafts === undefined ? [] : actionRows(drafts, now, locale, t);
 
   return (
     <>
@@ -183,6 +190,52 @@ async function Dashboard({ me, state, locale, t, notice }: DashboardProps) {
       />
       {notice}
 
+      {drafts === undefined || drafts.total === 0 ? null : (
+        <NeedsYourAction
+          total={drafts.total}
+          rows={actions}
+          seeAllHref={dashboardHref(state, { status: 'draft', search: undefined })}
+          show={
+            <LinkSelect
+              label={t('dashboard.show')}
+              value={state.show ?? 'all'}
+              options={[
+                {
+                  value: 'all',
+                  label: t('dashboard.showAll', { count: number.format(drafts.total) }),
+                  href: dashboardHref(state, { show: undefined, page: state.page }),
+                },
+                {
+                  value: 'drafts',
+                  label: t('dashboard.showDrafts', { count: number.format(drafts.total) }),
+                  href: dashboardHref(state, { show: 'drafts', page: state.page }),
+                },
+              ]}
+            />
+          }
+          labels={{
+            title: t('dashboard.actionTitle'),
+            count: t(`dashboard.actionCount.${pluralForm(drafts.total, locale)}`, {
+              count: number.format(drafts.total),
+            }),
+            summary: t(`dashboard.actionSummary.${pluralForm(drafts.total, locale)}`, {
+              count: number.format(drafts.total),
+            }),
+            caption: t('dashboard.actionCaption'),
+            type: t('dashboard.colType'),
+            employee: t('dashboard.colEmployee'),
+            needed: t('dashboard.colNeeded'),
+            waiting: t('dashboard.colWaiting'),
+            overdue: t('dashboard.overdue'),
+            showing: t('dashboard.showing', {
+              shown: number.format(actions.length),
+              total: number.format(drafts.total),
+            }),
+            seeAll: t('dashboard.seeAllDrafts'),
+          }}
+        />
+      )}
+
       <ul
         aria-label={t('dashboard.cards.label')}
         className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-[repeat(auto-fit,minmax(10rem,1fr))]"
@@ -193,27 +246,6 @@ async function Dashboard({ me, state, locale, t, notice }: DashboardProps) {
           </li>
         ))}
       </ul>
-
-      {actions.length > 0 ? (
-        <NeedsYourAction title={t('dashboard.actionTitle')} hideLabel={t('dashboard.hideAction')}>
-          <ul className="mt-3 space-y-2">
-            {actions.map((action) => (
-              <li
-                key={action.id}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-line bg-surface px-4 py-3 shadow-card"
-              >
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-ink">{action.title}</p>
-                  <p className="text-xs text-ink-muted">{action.detail}</p>
-                </div>
-                <ButtonLink href={action.href} variant="outline" size="sm" as={Link}>
-                  {t('dashboard.continueDraft')}
-                </ButtonLink>
-              </li>
-            ))}
-          </ul>
-        </NeedsYourAction>
-      ) : null}
 
       <Card className="mt-6">
         <div className="flex flex-col gap-5 p-4 sm:p-6">
@@ -307,7 +339,7 @@ async function Dashboard({ me, state, locale, t, notice }: DashboardProps) {
             )
           ) : list.view === 'requests' ? (
             <RequestsTable
-              rows={requestRows(list.data, state, new Date(), locale, t)}
+              rows={requestRows(list.data, state, now, locale, t)}
               showSubsidiary={group}
               labels={{
                 caption: t('dashboard.requestsCaption'),
@@ -336,11 +368,7 @@ async function Dashboard({ me, state, locale, t, notice }: DashboardProps) {
                 updated: t('dashboard.colUpdated'),
                 action: t('dashboard.colAction'),
                 viewStatus: t('dashboard.viewStatus'),
-                stateLabels: {
-                  pass: t('dashboard.markStates.pass'),
-                  fail: t('dashboard.markStates.fail'),
-                  pending: t('dashboard.markStates.pending'),
-                },
+                stateLabels: markStateLabels(t),
               }}
             />
           )}

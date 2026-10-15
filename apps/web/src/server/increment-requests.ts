@@ -49,6 +49,8 @@ export interface DashboardQuery extends DashboardFilter {
   page?: number;
   pageSize?: number;
   requestId?: string | undefined;
+  /** By request only: newest first (default) or oldest first. */
+  order?: 'newest' | 'oldest';
 }
 
 function dashboardParams(options: DashboardQuery, paged: boolean): string {
@@ -57,6 +59,7 @@ function dashboardParams(options: DashboardQuery, paged: boolean): string {
   if (options.status !== undefined) query.set('status', options.status);
   if (options.search !== undefined) query.set('search', options.search);
   if (options.requestId !== undefined) query.set('requestId', Id.parse(options.requestId));
+  if (options.order !== undefined) query.set('order', options.order);
   if (paged) {
     query.set('page', String(options.page ?? 1));
     query.set('pageSize', String(options.pageSize ?? 10));

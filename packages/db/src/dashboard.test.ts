@@ -5,6 +5,7 @@ import { loadCriteriaSets } from './criteria-sets.js';
 import {
   containsPattern,
   createDashboardRepository,
+  type DashboardOrder,
   type DashboardRepository,
 } from './dashboard.js';
 import { createDatabase, type DatabaseHandle } from './database.js';
@@ -60,11 +61,12 @@ async function submit(scope: Scope, id: string): Promise<void> {
   await repo.submit(scope, id, {
     version: Number(request?.version),
     idempotencyKey: `submit-${randomUUID()}`,
+    submitterName: 'Test HR',
     notifications: () => [],
   });
 }
 
-type LineQuery = Parameters<DashboardRepository['lines']>[1];
+type LineQuery = Parameters<DashboardRepository['lines']>[1] & { order?: DashboardOrder };
 
 /** Everything visible (drafts included), first page, narrowed by `filter`. */
 const everything = (filter: Partial<LineQuery> = {}): LineQuery => ({
@@ -184,6 +186,10 @@ describe('requests', () => {
     expect(oldest?.statusChangedAt.getTime()).toBeGreaterThanOrEqual(
       Number(oldest?.createdAt.getTime()),
     );
+
+    // Longest waiting first ("Needs your action").
+    const oldestFirst = await dashboard.requests(alpha, everything({ order: 'oldest' }));
+    expect(oldestFirst.items.map((item) => item.id)).toEqual([alphaSubmitted, alphaDraft]);
 
     const second = await dashboard.requests(alpha, everything({ limit: 1, offset: 1 }));
     expect(second.items.map((item) => item.id)).toEqual([alphaSubmitted]);

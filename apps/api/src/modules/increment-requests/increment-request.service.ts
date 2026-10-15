@@ -159,6 +159,7 @@ function toDto(record: IncrementRequestRecord): IncrementRequest {
     entity: record.entity,
     cycle: record.cycle,
     submittedAt: record.submittedAt === null ? null : record.submittedAt.toISOString(),
+    submittedByName: record.submittedByName,
     criteria: record.criteria.map((criterion) => ({
       ...criterion,
       maxFileMb: effectiveMaxFileMb(criterion),
@@ -169,6 +170,14 @@ function toDto(record: IncrementRequestRecord): IncrementRequest {
     lines: lines.map((entry) => entry.line),
     totals: requestTotals(lines.map((entry) => entry.totalsInput)),
   };
+}
+
+/**
+ * How people read who acted: the identity provider's display name, else the username, else the
+ * ID; at most 200 characters (what the database keeps).
+ */
+export function actorName(caller: Principal): string {
+  return (caller.name ?? caller.username ?? caller.userId).slice(0, 200);
 }
 
 /** Who hears about a submission (R1-07): the submitter, and every Sirius HR reviewer. */
@@ -193,7 +202,7 @@ function submissionNotices(
         reference,
         employees,
         entity: request.entity.code,
-        actor: caller.name ?? caller.username ?? caller.userId,
+        actor: actorName(caller),
       },
       actionNeeded: true,
     },
@@ -343,6 +352,7 @@ export class IncrementRequestService {
       this.repository.submit(scopeOf(caller), id, {
         version: input.version,
         idempotencyKey,
+        submitterName: actorName(caller),
         notifications: submissionNotices(caller, current),
       }),
     );

@@ -1,5 +1,5 @@
 import { StatusMark } from '@peopleforge/ui';
-import { SubmitControl, type SubmitControlLabels } from './submit-control';
+import { SubmitControl, type SubmitControlLabels, type SubmitDialogView } from './submit-control';
 
 export interface ReadyItemView {
   lineId: string;
@@ -16,6 +16,7 @@ export interface ReadyPanelProps {
   canSubmit: boolean;
   submitKey: string;
   submitLabels: SubmitControlLabels;
+  submitDialog: SubmitDialogView;
   /** What submitting does (Figma caption). */
   caption: string;
 }
@@ -30,6 +31,7 @@ export function ReadyPanel({
   canSubmit,
   submitKey,
   submitLabels,
+  submitDialog,
   caption,
 }: ReadyPanelProps) {
   return (
@@ -60,6 +62,7 @@ export function ReadyPanel({
         submitKey={submitKey}
         describedBy="submit-caption"
         labels={submitLabels}
+        dialog={submitDialog}
       />
       <p id="submit-caption" className="text-xs text-ink">
         {caption}

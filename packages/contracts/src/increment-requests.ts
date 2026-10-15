@@ -150,7 +150,11 @@ const pageQuery = {
     .default(10),
 };
 
-export const ListIncrementRequestsQuerySchema = DashboardFilterSchema.extend(pageQuery);
+export const ListIncrementRequestsQuerySchema = DashboardFilterSchema.extend({
+  ...pageQuery,
+  /** Newest first (default), or oldest first: "Needs your action" lists the longest waiting first. */
+  order: z.enum(['newest', 'oldest']).default('newest'),
+});
 export type ListIncrementRequestsQuery = z.infer<typeof ListIncrementRequestsQuerySchema>;
 
 /** GET /increment-request-lines: the dashboard's "By employee" tab. */
@@ -266,6 +270,8 @@ export const IncrementRequestSchema = z.object({
   updatedAt: z.iso.datetime(),
   /** When it went to Sirius HR; null while a draft. */
   submittedAt: z.iso.datetime().nullable(),
+  /** Who submitted it, as their name read then ("by Priya Nair"); null for drafts and older ones. */
+  submittedByName: z.string().max(200).nullable(),
   lines: z.array(RequestLineSchema),
   totals: RequestTotalsSchema,
 });

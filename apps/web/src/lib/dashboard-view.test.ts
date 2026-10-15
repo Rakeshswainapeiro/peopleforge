@@ -12,11 +12,13 @@ import {
   requestSummary,
 } from '@/test-support/requests';
 import {
+  ACTION_OVERDUE_DAYS,
+  ACTION_ROWS,
   ALL_PERIODS,
+  actionRows,
   cycleFilter,
   dashboardHref,
   dashboardState,
-  draftActions,
   kpiCards,
   lineRows,
   periodOptions,
@@ -40,6 +42,7 @@ describe('dashboardState [R1-10]', () => {
         request: REQUEST_ID,
         page: '3',
         size: '25',
+        show: 'drafts',
       }),
     ).toEqual({
       view: 'employees',
@@ -49,6 +52,7 @@ describe('dashboardState [R1-10]', () => {
       requestId: REQUEST_ID,
       page: 3,
       pageSize: 25,
+      show: 'drafts',
     });
     expect(dashboardState({ cycle: ALL_PERIODS }).cycle).toBe(ALL_PERIODS);
   });
@@ -76,6 +80,7 @@ describe('dashboardState [R1-10]', () => {
       page: 2,
     });
     expect(dashboardState({ q: '   ' }).search).toBeUndefined();
+    expect(dashboardState({ show: 'questions' }).show).toBeUndefined();
   });
 });
 
@@ -96,6 +101,7 @@ describe('dashboardHref', () => {
     expect(dashboardHref(state, { view: 'employees', requestId: REQUEST_ID, pageSize: 10 })).toBe(
       `/?view=employees&cycle=all&status=draft&q=Omar+%26+co&request=${REQUEST_ID}`,
     );
+    expect(dashboardHref(DEFAULT, { show: 'drafts' })).toBe('/?show=drafts');
     // A request filter only exists By employee.
     expect(dashboardHref({ ...DEFAULT, requestId: REQUEST_ID })).toBe('/');
   });
@@ -179,7 +185,8 @@ describe('requestRows', () => {
     expect(draft).toEqual({
       id: REQUEST_ID,
       reference: 'INC-2026-0150',
-      href: `/requests/${REQUEST_ID}`,
+      // A draft opens in the editor.
+      href: `/requests/${REQUEST_ID}/edit`,
       entityCode: 'SUB-A',
       created: '8 Oct 2026',
       employees: '4',
@@ -191,6 +198,7 @@ describe('requestRows', () => {
       with: 'You',
     });
     expect(submitted).toMatchObject({
+      href: '/requests/11111111-1111-4111-8111-111111111112',
       stage: { label: 'Criterion 1 of 5' },
       status: { tone: 'neutral', label: 'Submitted' },
       age: '0d',
@@ -232,15 +240,41 @@ describe('lineRows', () => {
   });
 });
 
-describe('draftActions', () => {
-  it('says how far each draft has got', () => {
-    expect(draftActions(requestPage(), 'en', t)).toEqual([
+describe('actionRows', () => {
+  it('lists each draft with what it needs and how long it has waited', () => {
+    const now = new Date('2026-10-10T08:00:00Z');
+    expect(actionRows(requestPage(), now, 'en', t)).toEqual([
       {
         id: REQUEST_ID,
-        title: 'INC-2026-0150 · Draft not submitted',
-        detail: '4 employees added · criteria 15 of 20 complete',
-        href: `/requests/${REQUEST_ID}`,
+        type: { tone: 'outline', label: 'Draft' },
+        primary: '4 employees',
+        secondary: 'INC-2026-0150',
+        needed: 'Complete and submit',
+        neededDetail: 'Criteria 15 of 20 complete',
+        waiting: '2d',
+        overdue: false,
+        href: `/requests/${REQUEST_ID}/edit`,
+        action: 'Continue draft',
       },
     ]);
+  });
+
+  it(`lists at most ${String(ACTION_ROWS)}, the API's page being larger`, () => {
+    const many = requestPage(
+      Array.from({ length: 7 }, (_, index) =>
+        requestSummary({ id: `11111111-1111-4111-8111-11111111111${String(index)}` }),
+      ),
+    );
+    expect(actionRows(many, new Date('2026-10-10T08:00:00Z'), 'en', t)).toHaveLength(ACTION_ROWS);
+  });
+
+  it(`flags a draft waiting ${String(ACTION_OVERDUE_DAYS)} days or more, and counts one employee`, () => {
+    const page = requestPage([
+      requestSummary({ employeeCount: 1, statusChangedAt: '2026-10-05T07:00:00.000Z' }),
+    ]);
+    const [row] = actionRows(page, new Date('2026-10-10T08:00:00Z'), 'en', t);
+    expect(row).toMatchObject({ primary: '1 employee', waiting: '5d', overdue: true });
+    const [fresh] = actionRows(page, new Date('2026-10-09T08:00:00Z'), 'en', t);
+    expect(fresh).toMatchObject({ waiting: '4d', overdue: false });
   });
 });

@@ -81,6 +81,7 @@ export function record(overrides: Partial<IncrementRequestRecord> = {}): Increme
     createdAt: new Date('2026-10-14T07:00:00Z'),
     updatedAt: new Date('2026-10-14T07:05:00Z'),
     submittedAt: null,
+    submittedByName: null,
     lines: [
       {
         id: LINE_1,

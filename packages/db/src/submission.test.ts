@@ -84,7 +84,12 @@ const announce =
   ];
 
 async function submit(id: string, version = 1, key = `key-${randomUUID()}`) {
-  return repo.submit(alpha, id, { version, idempotencyKey: key, notifications: announce(id) });
+  return repo.submit(alpha, id, {
+    version,
+    idempotencyKey: key,
+    submitterName: 'Alpha HR Test',
+    notifications: announce(id),
+  });
 }
 
 async function refusal(promise: Promise<unknown>): Promise<RequestDataError> {
@@ -120,6 +125,10 @@ describe('submit [R1-07]', () => {
     const request = await repo.get(alpha, id);
     expect(request).toMatchObject({ status: 'submitted', version: 2 });
     expect(request?.submittedAt).toBeInstanceOf(Date);
+    // Who submitted it, as people read it ("by Alpha HR Test").
+    expect(request?.submittedByName).toBe('Alpha HR Test');
+    // A draft has no submitter yet.
+    expect((await repo.get(alpha, await draft()))?.submittedByName).toBeNull();
     expect(request?.cycle.submissionDeadline).toBe('2026-11-30');
 
     const events = await asOwner(
@@ -166,6 +175,7 @@ describe('submit [R1-07]', () => {
         repo.submit(beta, id, {
           version: 1,
           idempotencyKey: `key-${randomUUID()}`,
+          submitterName: 'Beta HR',
           notifications: () => [],
         }),
       ),

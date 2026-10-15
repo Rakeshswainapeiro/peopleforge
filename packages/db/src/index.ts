@@ -4,6 +4,7 @@ export {
   type CriterionFacts,
   type DashboardFilter,
   type DashboardLineRecord,
+  type DashboardOrder,
   type DashboardRepository,
   type DashboardRequestRecord,
   type DashboardSummaryRecord,

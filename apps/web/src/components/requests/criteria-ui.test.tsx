@@ -322,12 +322,11 @@ describe('ReadyPanel', () => {
           submitKey="k"
           submitLabels={{
             submit: 'Submit',
+            confirm: 'Yes, submit',
             submitting: 'Submitting…',
-            cancel: 'Cancel',
-            title: 'Submit?',
-            body: 'Body',
-            unsaved: 'Saved first',
+            back: 'Back',
           }}
+          submitDialog={readyView(draftRequest(), 'en', t, 'k').submitDialog}
           caption="Later"
         />
       </DraftForm>,
@@ -344,16 +343,22 @@ describe('ReadyPanel', () => {
     const dialog = screen.getByRole('alertdialog', {
       name: 'Submit INC-2026-0001 to Sirius HR?',
     });
-    expect(dialog).toHaveTextContent('2 employees go to Sirius HR for review.');
+    expect(dialog).toHaveTextContent('After you submit, you cannot edit this request');
     expect(dialog).toHaveTextContent('Anything you changed on this page is saved first.');
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    // The figures and every employee about to go (Figma).
+    expect(within(dialog).getByText('Total increment / month')).toBeInTheDocument();
+    const table = within(dialog).getByRole('table', { name: 'Employees to submit' });
+    expect(within(table).getAllByRole('row')).toHaveLength(3);
+    expect(table).toHaveTextContent('Omar Haddad');
+    expect(table).toHaveTextContent('2 of 5 complete');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Go back and edit' }));
     await waitFor(() => {
       expect(screen.queryByRole('alertdialog')).toBeNull();
     });
 
     await userEvent.click(screen.getByRole('button', { name: 'Submit to Sirius HR' }));
     const confirm = within(screen.getByRole('alertdialog')).getByRole('button', {
-      name: 'Submit to Sirius HR',
+      name: 'Yes, submit to Sirius HR',
     });
     expect(confirm).toHaveAttribute('form', 'draft-form');
     expect(confirm).toHaveAttribute('name', 'intent');
@@ -369,16 +374,16 @@ describe('ReadyPanel', () => {
     expect(posted?.get('submitKey')).toBe('submit-key-123');
   });
 
-  it('stays open and busy while submitting: no Esc, no Cancel, no second click', async () => {
+  it('stays open and busy while submitting: no Esc, no going back, no second click', async () => {
     vi.mocked(saveDraft).mockReturnValue(new Promise(() => undefined));
     readyPanel(true);
     await userEvent.click(screen.getByRole('button', { name: 'Submit to Sirius HR' }));
     const dialog = screen.getByRole('alertdialog');
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Submit to Sirius HR' }));
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Yes, submit to Sirius HR' }));
     await waitFor(() => {
       expect(within(dialog).getByRole('button', { name: 'Submitting…' })).toBeDisabled();
     });
-    expect(within(dialog).getByRole('button', { name: 'Cancel' })).toBeDisabled();
+    expect(within(dialog).getByRole('button', { name: 'Go back and edit' })).toBeDisabled();
     fireEvent(dialog, new Event('cancel', { cancelable: true }));
     await new Promise((resolve) => setTimeout(resolve, 200));
     expect(dialog).toHaveAttribute('data-state', 'open');
