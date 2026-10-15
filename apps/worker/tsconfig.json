@@ -1,0 +1,9 @@
+{
+  "extends": "@sirius/config/tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    "declaration": false
+  },
+  "include": ["src", "src/messages/*.json"]
+}

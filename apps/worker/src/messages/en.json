@@ -1,0 +1,25 @@
+{
+  "email": {
+    "greeting": "Hello,",
+    "open": "View in PeopleForge",
+    "openText": "Open it in PeopleForge: {url}",
+    "automated": "This is an automated message from PeopleForge, the Sirius Group HR portal. Please don't reply to it.",
+    "footer": "[Legal footer pending from Sirius Group]"
+  },
+  "kinds": {
+    "request_submitted": {
+      "subject": "{reference} submitted to Sirius HR",
+      "body": {
+        "one": "Your increment request {reference} with {count} employee was submitted to Sirius HR. Sirius HR reviews it criterion by criterion; you'll be told when they respond.",
+        "other": "Your increment request {reference} with {count} employees was submitted to Sirius HR. Sirius HR reviews it criterion by criterion; you'll be told when they respond."
+      }
+    },
+    "request_received": {
+      "subject": "New increment request {reference} from {entity}",
+      "body": {
+        "one": "{actor} submitted increment request {reference} from {entity} with {count} employee. It is waiting for your review.",
+        "other": "{actor} submitted increment request {reference} from {entity} with {count} employees. It is waiting for your review."
+      }
+    }
+  }
+}

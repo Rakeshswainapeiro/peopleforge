@@ -1,7 +1,7 @@
 // CLI: node dist/cli/migrate.js <module> <up|down|status>
 // Modules: "core" (packages/db/migrations/core). Other apps call runMigrations() directly.
 import path from 'node:path';
-import { runMigrations, type MigrationCommand } from '../migrator.js';
+import { DEFAULT_WORKER_ROLE, runMigrations, type MigrationCommand } from '../migrator.js';
 
 const MODULES = new Map([['core', 'migrations/core']]);
 const [module = '', command = 'status'] = process.argv.slice(2);
@@ -22,5 +22,6 @@ await runMigrations(command as MigrationCommand, {
   directory: path.join(import.meta.dirname, '..', '..', relative),
   module,
   appRole: process.env.DATABASE_APP_ROLE ?? 'peopleforge_app',
+  workerRole: process.env.DATABASE_WORKER_ROLE ?? DEFAULT_WORKER_ROLE,
   report: (line) => process.stdout.write(`${line}\n`),
 });

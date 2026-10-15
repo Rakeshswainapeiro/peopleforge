@@ -43,7 +43,7 @@ import {
   type SearchParams,
 } from '@/lib/dashboard-view';
 import { pageCount, paginationLabels } from '@/lib/pagination';
-import { pluralForm } from '@/lib/plural';
+import { pluralForm } from '@peopleforge/i18n';
 import { markStateLabels } from '@/lib/request-view';
 import { entityName, roleLabel } from '@/lib/viewer-display';
 import type { ApiResult } from '@/server/api-client';

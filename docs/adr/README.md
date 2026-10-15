@@ -15,3 +15,4 @@ Significant technical decisions, one file each: context, decision, alternatives,
 | [0009](0009-design-system-package.md)                        | PeopleForge design system package (`@peopleforge/ui`)                  | Accepted                           |
 | [0010](0010-evidence-storage-scanning-and-downloads.md)      | Evidence files: private storage, scan first, downloads through the API | Accepted (products: A6)            |
 | [0011](0011-audit-trail-status-history-and-notifications.md) | Audit trail, status history and notifications (append-only, outbox)    | Accepted (email provider: A6)      |
+| [0012](0012-email-worker-and-outbox-delivery.md)             | Email worker: outbox delivery without a queue server                   | Accepted (email provider: A6)      |

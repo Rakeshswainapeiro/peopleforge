@@ -15,6 +15,26 @@ export const TEST_APP_URL =
   'postgres://peopleforge_app:local-pf-app-2026@localhost:55432/peopleforge_test';
 
 export const CORE_MIGRATIONS = path.join(import.meta.dirname, '..', '..', 'migrations', 'core');
+/**
+ * The web app's sign-in schema: the email outbox reads its `auth.recipient_email` view
+ * (ADR-012), so the integration tests bring it up too, as every deployment does (core, then web).
+ */
+export const WEB_MIGRATIONS = path.join(
+  import.meta.dirname,
+  '..',
+  '..',
+  '..',
+  '..',
+  'apps',
+  'web',
+  'db',
+  'migrations',
+);
+
+/** The worker role (ADR-012): reads and marks the email outbox only. */
+export const TEST_WORKER_URL =
+  process.env.TEST_DATABASE_WORKER_URL ??
+  'postgres://peopleforge_worker:local-pf-worker-2026@localhost:55432/peopleforge_test';
 
 export const testCipher = createFieldCipher(
   parseKeyRing(`test-1:${Buffer.alloc(32, 7).toString('base64')}`, 'test-1'),
@@ -33,6 +53,7 @@ export async function resetCoreDatabase(): Promise<void> {
     // roll back every applied core migration
   }
   await runMigrations('up', options);
+  await runMigrations('up', { ...options, directory: WEB_MIGRATIONS, module: 'web' });
   await seedDevelopmentData({
     connectionString: TEST_OWNER_URL,
     appEnv: 'test',

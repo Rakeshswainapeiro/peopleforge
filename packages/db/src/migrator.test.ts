@@ -30,7 +30,7 @@ beforeAll(async () => {
   await client.query('DROP TABLE IF EXISTS migrations.migrator_test');
   await files({
     '0001_first.up.sql':
-      'CREATE SCHEMA migrator_test; GRANT USAGE ON SCHEMA migrator_test TO {{APP_ROLE}};',
+      'CREATE SCHEMA migrator_test; GRANT USAGE ON SCHEMA migrator_test TO {{APP_ROLE}}, {{WORKER_ROLE}};',
     '0001_first.down.sql': 'DROP SCHEMA migrator_test CASCADE;',
     '0002_second.up.sql': 'CREATE TABLE migrator_test.t (id int);',
     '0002_second.down.sql': 'DROP TABLE migrator_test.t;',
@@ -50,7 +50,7 @@ describe('runMigrations', () => {
     await expect(listMigrations(directory)).resolves.toEqual(['0001_first', '0002_second']);
   });
 
-  it('applies pending migrations once, substituting the app role', async () => {
+  it('applies pending migrations once, substituting the app and worker roles', async () => {
     const lines: string[] = [];
     await expect(
       runMigrations('up', { ...options(), report: (l) => lines.push(l) }),
@@ -61,6 +61,11 @@ describe('runMigrations', () => {
       "SELECT has_schema_privilege('peopleforge_app', 'migrator_test', 'USAGE') AS ok",
     );
     expect(usage.rows[0]?.ok).toBe(true);
+    // The worker role defaults to peopleforge_worker (ADR-012).
+    const worker = await client.query<{ ok: boolean }>(
+      "SELECT has_schema_privilege('peopleforge_worker', 'migrator_test', 'USAGE') AS ok",
+    );
+    expect(worker.rows[0]?.ok).toBe(true);
   });
 
   it('reports status', async () => {
@@ -97,6 +102,7 @@ describe('runMigrations', () => {
   it.each([
     ['module', { module: 'core; DROP' }, 'Module is not a plain identifier'],
     ['app role', { appRole: 'app"role' }, 'App role is not a plain identifier'],
+    ['worker role', { workerRole: 'Worker Role' }, 'Worker role is not a plain identifier'],
   ])('refuses an unsafe %s identifier', async (_label, override, message) => {
     await expect(runMigrations('up', { ...options(), ...override })).rejects.toThrow(
       new MigrationError(message),

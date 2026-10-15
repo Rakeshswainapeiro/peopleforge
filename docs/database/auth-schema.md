@@ -1,8 +1,8 @@
 # Schema `auth` — sign-in (web app)
 
-Owned by the web app (Better Auth 1.7, ADR-003). Created by `apps/web/db/migrations/0001_auth_schema.up.sql`; rollback `0001_auth_schema.down.sql`. The business schema (ADR-002) never references these tables. People are identified across PeopleForge by their identity-provider object ID (`account.accountId`, Entra `oid`), which is also the API's `userId`.
+Owned by the web app (Better Auth 1.7, ADR-003). Created by `apps/web/db/migrations/0001_auth_schema.up.sql`, plus `0002_recipient_email` (the worker's view); each with a `.down.sql`. The business schema (ADR-002) never references these tables; only the email worker reads the `recipient_email` view. People are identified across PeopleForge by their identity-provider object ID (`account.accountId`, Entra `oid`), which is also the API's `userId`.
 
-**Access:** owner `peopleforge_owner` (DDL, migrations); app role `peopleforge_app` has `USAGE` on the schema and `SELECT, INSERT, UPDATE, DELETE` on the four tables, nothing else. The web app connects with `search_path=auth`.
+**Access:** owner `peopleforge_owner` (DDL, migrations); app role `peopleforge_app` has `USAGE` on the schema and `SELECT, INSERT, UPDATE, DELETE` on the four tables, nothing else; worker role `peopleforge_worker` has `USAGE` and `SELECT` on the `recipient_email` view only. The web app connects with `search_path=auth`.
 
 **Sensitivity key:** _PII_ = personal data (NFR-PRIV-01); _Secret_ = credential material; _Internal_ = no personal data.
 
@@ -49,6 +49,15 @@ Owned by the web app (Better Auth 1.7, ADR-003). Created by `apps/web/db/migrati
 ## `auth.verification` — short-lived sign-in state
 
 Holds the OAuth `state`, PKCE verifier and nonce between "Sign in" and the provider's callback (minutes). Columns: `id`, `identifier`, `value` (Secret), `expiresAt`, `createdAt`, `updatedAt`.
+
+## `auth.recipient_email` — view for the email worker (web migration 0002, ADR-012)
+
+| Column    | Type   | Meaning                                                       | Sensitivity |
+| --------- | ------ | ------------------------------------------------------------- | ----------- |
+| `user_id` | `text` | `account."accountId"`: the Entra object ID, the API's user ID | Internal    |
+| `email`   | `text` | `user.email`: the work email from sign-in                     | PII         |
+
+`security_barrier` view over `account` and `user`. Only the worker role may read it (the app role can't); it never sees sessions or tokens. A person who has never signed in has no row, so their emails are skipped.
 
 ## Indexes
 

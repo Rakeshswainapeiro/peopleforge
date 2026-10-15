@@ -1,11 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  createTranslator,
-  flattenMessages,
-  missingKeys,
-  unknownKeys,
-  type MessageKey,
-} from './translator';
+import { createTranslator, missingKeys, unknownKeys, type MessageKey } from './translator';
 
 describe('createTranslator', () => {
   it('returns English text', () => {
@@ -58,21 +52,4 @@ describe('catalogue integrity', () => {
     expect(missingKeys('en')).toEqual([]);
     expect(unknownKeys('en')).toEqual([]);
   });
-});
-
-describe('flattenMessages', () => {
-  it('flattens nested objects into dotted keys', () => {
-    expect([...flattenMessages({ a: { b: 'x', c: { d: 'y' } }, e: 'z' })]).toEqual([
-      ['a.b', 'x'],
-      ['a.c.d', 'y'],
-      ['e', 'z'],
-    ]);
-  });
-
-  it.each([null, 'text', 42, undefined])(
-    'returns an empty map for non-object input %j',
-    (input) => {
-      expect(flattenMessages(input).size).toBe(0);
-    },
-  );
 });

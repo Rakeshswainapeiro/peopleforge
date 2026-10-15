@@ -4,6 +4,15 @@ All notable changes are recorded here. Format: [Keep a Changelog](https://keepac
 
 ## [Unreleased]
 
+### Added — slice S4b-2: email worker (R1-07, R1-13)
+
+- **Emails are sent.** A new worker (`apps/worker`) sends the email for every notification: the submitter gets "INC-… submitted to Sirius HR", and the Sirius HR reviewers' mailbox gets "New increment request INC-… from SUB-A" with who submitted it. Each email has a plain-text and an HTML part and a **View in PeopleForge** link to the request. No pay, percentages or justifications.
+- **Reliable delivery (ADR-012):** emails are claimed from the outbox with `SKIP LOCKED` and a lease (several workers are safe; a crash re-sends, never loses), retried after 1 min, 5 min, 30 min, 2 h and 6 h, then marked dead and alerted on. A refused address is dead at once. Probes on port 4200; `email_outbox_stats` and `email_outbox_alert` log events for dashboards and alerts.
+- **Addresses:** a user's work email from sign-in; for a role, a shared mailbox set as configuration (`notify.role_mailbox`). No address: the email is skipped and logged, the in-app notification is unaffected.
+- **Transports:** SMTP (TLS required outside dev/test) and `.eml` files for dev/test. Mailpit for local development: `infra/local/compose.yaml` (also S3Mock and ClamAV, under `--profile evidence`).
+- Migrations core `0008_email_worker` and web `0002_recipient_email`, and a new database role **`peopleforge_worker`** that must be created first (DEPLOYMENT.md §6). New image `infra/docker/worker.Dockerfile`; env reference in DEPLOYMENT.md §4; runbook `docs/runbooks/email-outbox.md`.
+- `@peopleforge/i18n`: the web app and the worker share one message-catalogue implementation (English fallback, interpolation, plural forms).
+
 ### Added — slice S4c: design refresh (R1-06, R1-07, R1-10)
 
 - **Request detail page** (`/requests/{id}`, Figma "Request detail"): the reference, "Submitted 15 Oct 2026, 11:14 by Priya Nair · Subsidiary A · With Sirius HR", **Where this request is** (Submitted → Criterion 1 … 5 → Decision), the Employees / Total increment per month / Average increment cards, and the employees with salary, proposal (% and amount), criteria marks, status and **View Status**. Right after submitting it shows a green confirmation with **View Employees** and ✕. Subsidiary HR gets **+ New increment request** here; Sirius HR doesn't.

@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { waitForEmail } from './support/mail';
 import { signIn } from './support/sign-in';
 
 // Critical journey (R1-07): subsidiary HR completes a draft and submits it to Sirius HR after a
@@ -135,6 +136,20 @@ test('the submitter is notified', async ({ page }) => {
   const row = page.getByRole('listitem').filter({ hasText: reference });
   await expect(row).toContainText('Submitted to Sirius HR with 1 employee.');
   await expect(row).toHaveAttribute('data-unread', 'true');
+});
+
+test('the submitter and the Sirius HR reviewers’ mailbox are emailed [R1-07, R1-13]', async () => {
+  // The worker sends the outbox; here it writes .eml files (EMAIL_TRANSPORT=file).
+  const mine = await waitForEmail('pf.alpha.hr@sirius.local', reference);
+  expect(mine.subject).toBe(`${reference} submitted to Sirius HR`);
+  expect(mine.raw).toContain('From: PeopleForge <no-reply@peopleforge.local>');
+  expect(mine.text).toContain(`Open it in PeopleForge: ${detailUrl}`);
+  expect(mine.text).toContain(`href="${detailUrl}"`);
+  const reviewers = await waitForEmail('pf.reviewers@sirius.local', reference);
+  expect(reviewers.subject).toBe(`New increment request ${reference} from SUB-A`);
+  // Display values only: never pay.
+  expect(reviewers.text).toContain('Alpha HR Test submitted increment request');
+  expect(reviewers.text).not.toMatch(/11,?500/u);
 });
 
 test('Sirius HR reviewers are notified and can open the submitted request', async ({ page }) => {

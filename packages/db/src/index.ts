@@ -9,6 +9,15 @@ export {
   type DashboardRequestRecord,
   type DashboardSummaryRecord,
 } from './dashboard.js';
+export {
+  createEmailOutbox,
+  reasonCode,
+  type EmailOutbox,
+  type OutboxJob,
+  type OutboxOutcome,
+  type OutboxRecipient,
+  type OutboxStats,
+} from './email-outbox.js';
 export { createDatabase, type DatabaseHandle, type DatabaseOptions } from './database.js';
 export { createEntityDirectory, type EntityDirectory, type EntitySummary } from './directory.js';
 export {
@@ -48,6 +57,7 @@ export {
   type Recipient,
 } from './notifications.js';
 export {
+  DEFAULT_WORKER_ROLE,
   listMigrations,
   MigrationError,
   runMigrations,
@@ -57,9 +67,16 @@ export {
 export type {
   CriterionResultValue,
   Database,
+  EmailStatus,
   LocalisedText,
   ProposedKind,
   RequestStatus,
 } from './schema.js';
 export { ScopeError, withScope, type Scope } from './scope.js';
-export { SEED_ASSIGNMENTS, SEED_ENTITIES, SeedRefusedError, seedDevelopmentData } from './seed.js';
+export {
+  SEED_ASSIGNMENTS,
+  SEED_ENTITIES,
+  SEED_ROLE_MAILBOXES,
+  SeedRefusedError,
+  seedDevelopmentData,
+} from './seed.js';

@@ -3,7 +3,7 @@ import type { BadgeTone, IconName, StatCardProps } from '@peopleforge/ui';
 import type { Locale } from '@sirius/shared-types';
 import type { Translate } from '@/i18n/translator';
 import { formatMoney, formatPercent } from './format';
-import { pluralForm } from './plural';
+import { pluralForm } from '@peopleforge/i18n';
 import { localised } from './viewer-display';
 import { evidenceHref } from './routes';
 

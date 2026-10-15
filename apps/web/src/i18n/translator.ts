@@ -1,4 +1,5 @@
-import { DEFAULT_LOCALE, type Locale } from '@sirius/shared-types';
+import { createCatalogues, type TranslationParams } from '@peopleforge/i18n';
+import type { Locale } from '@sirius/shared-types';
 import ar from '../../messages/ar.json';
 import en from '../../messages/en.json';
 
@@ -9,68 +10,21 @@ type Leaves<T, Prefix extends string = ''> = {
 /** Every valid translation key, derived from the English source file. */
 export type MessageKey = Leaves<typeof en>;
 
-export type TranslationParams = Readonly<Record<string, string | number>>;
+export type { TranslationParams } from '@peopleforge/i18n';
 export type Translate = (key: MessageKey, params?: TranslationParams) => string;
 
-/** Flattens nested JSON into dotted keys once at load, so lookups are a single Map read. */
-export function flattenMessages(tree: unknown, prefix = ''): Map<string, string> {
-  const result = new Map<string, string>();
-  if (typeof tree !== 'object' || tree === null) return result;
-  for (const [key, value] of Object.entries(tree)) {
-    const path = `${prefix}${key}`;
-    if (typeof value === 'string') {
-      result.set(path, value);
-    } else {
-      for (const [nestedKey, nestedValue] of flattenMessages(value, `${path}.`)) {
-        result.set(nestedKey, nestedValue);
-      }
-    }
-  }
-  return result;
-}
-
-const EN = flattenMessages(en);
-const AR = flattenMessages(ar);
-
-function catalogueFor(locale: Locale): ReadonlyMap<string, string> {
-  switch (locale) {
-    case 'en':
-      return EN;
-    case 'ar':
-      return AR;
-  }
-}
-
-function interpolate(template: string, params: TranslationParams | undefined): string {
-  if (params === undefined) return template;
-  const values = new Map(Object.entries(params));
-  return template.replace(/\{(\w+)\}/g, (match, name: string) => {
-    const value = values.get(name);
-    return value === undefined ? match : String(value);
-  });
-}
+const catalogues = createCatalogues({ en, ar });
 
 /**
  * Returns a translator for the locale. Missing keys fall back to English, then to the key
  * itself, so a partially translated locale (Arabic is scaffolded only) never breaks a page.
  */
 export function createTranslator(locale: Locale): Translate {
-  const primary = catalogueFor(locale);
-  const fallback = catalogueFor(DEFAULT_LOCALE);
-  return (key, params) => {
-    const template = primary.get(key) ?? fallback.get(key) ?? key;
-    return interpolate(template, params);
-  };
+  return catalogues.translator(locale);
 }
 
 /** Keys present in the locale file but absent from English — always a mistake. */
-export function unknownKeys(locale: Locale): string[] {
-  const english = catalogueFor(DEFAULT_LOCALE);
-  return [...catalogueFor(locale).keys()].filter((key) => !english.has(key));
-}
+export const unknownKeys = (locale: Locale): string[] => catalogues.unknownKeys(locale);
 
 /** English keys not yet translated in the locale; reported, not enforced, while ar is a scaffold. */
-export function missingKeys(locale: Locale): string[] {
-  const catalogue = catalogueFor(locale);
-  return [...catalogueFor(DEFAULT_LOCALE).keys()].filter((key) => !catalogue.has(key));
-}
+export const missingKeys = (locale: Locale): string[] => catalogues.missingKeys(locale);

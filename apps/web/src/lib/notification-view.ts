@@ -3,7 +3,7 @@ import type { BadgeTone } from '@peopleforge/ui';
 import type { Locale } from '@sirius/shared-types';
 import type { MessageKey, Translate } from '@/i18n/translator';
 import { formatDateTime } from './format';
-import { pluralForm } from './plural';
+import { pluralForm } from '@peopleforge/i18n';
 
 /** One row of the notifications list (Figma "Notifications"), worded for the reader. */
 export interface NotificationRowView {

@@ -3,7 +3,25 @@ export {
   type CircuitBreaker,
   type CircuitBreakerOptions,
 } from './circuit-breaker.js';
-export { IntegrationError } from './errors.js';
+export {
+  emailEnvIssues,
+  EmailEnvSchema,
+  emailEnvShape,
+  emailSenderFromEnv,
+  type EmailEnv,
+  type EmailEnvIssue,
+} from './email-env.js';
+export {
+  classifySmtpError,
+  createFileSender,
+  createSmtpSender,
+  isMailbox,
+  type EmailSender,
+  type OutgoingEmail,
+  type Sender,
+  type SmtpOptions,
+} from './email-sender.js';
+export { EmailDeliveryError, IntegrationError } from './errors.js';
 export { detectMediaType, safeFileName } from './file-kind.js';
 export { createFilesystemObjectStore } from './filesystem-object-store.js';
 export {

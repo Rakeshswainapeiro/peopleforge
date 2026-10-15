@@ -2,7 +2,7 @@ import type { IncrementRequest } from '@peopleforge/contracts';
 import type { Locale } from '@sirius/shared-types';
 import type { Translate } from '@/i18n/translator';
 import { formatMoney, formatPercent } from './format';
-import { pluralForm } from './plural';
+import { pluralForm } from '@peopleforge/i18n';
 
 /** The monthly increase, per currency ("AED 3,628"; "AED 1,200 + USD 300"), or "—". */
 export function totalIncrease(request: IncrementRequest, locale: Locale, t: Translate): string {

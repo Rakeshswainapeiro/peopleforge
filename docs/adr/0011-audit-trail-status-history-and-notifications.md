@@ -32,5 +32,5 @@ Sirius users (reviewers, admins) aren't stored in the database; their roles come
 
 - The audit log grows with every action, including downloads. It should be partitioned by month once volumes are known (ADR-004), and archived after the retention period (proposal: 7 years; Q10).
 - Corrections are made by new entries, never by editing old ones. A mistaken audit row can only be fixed by a migration run by the database owner after disabling the trigger, which is itself a reviewed change.
-- Until the email worker exists, users see notifications only in the portal.
+- Emails are sent by the worker since S4b-2 (ADR-012: claiming, retries, addresses).
 - `status_event` is the source for TAT and back-and-forth (R1-11, R1-12); how time is counted (calendar vs business hours) is still ADR-006.

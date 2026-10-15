@@ -14,7 +14,7 @@ import type { Locale } from '@sirius/shared-types';
 import { z } from 'zod';
 import type { Translate } from '@/i18n/translator';
 import { daysBetween, formatAge, formatDate, formatPercent } from './format';
-import { pluralForm } from './plural';
+import { pluralForm } from '@peopleforge/i18n';
 import { statusBadge, type StatusBadgeView } from './request-status';
 import { localised } from './viewer-display';
 import { editRequestHref, employeeStatusHref, requestLinkFor } from './routes';

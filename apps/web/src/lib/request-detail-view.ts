@@ -3,7 +3,7 @@ import type { CriterionState, Step } from '@peopleforge/ui';
 import type { Locale } from '@sirius/shared-types';
 import type { Translate } from '@/i18n/translator';
 import { formatDate, formatDateTime, formatMoney, formatPercent } from './format';
-import { pluralForm } from './plural';
+import { pluralForm } from '@peopleforge/i18n';
 import { totalIncrease } from './request-figures';
 import { criterionState } from './request-view';
 import { statusBadge, type StatusBadgeView } from './request-status';

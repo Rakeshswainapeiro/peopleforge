@@ -4,6 +4,7 @@ import {
   runMigrations,
   seedDevelopmentData,
 } from '@peopleforge/db';
+import { rm } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import pg from 'pg';
@@ -23,6 +24,8 @@ const WEB_MIGRATIONS = path.join(import.meta.dirname, '..', 'db', 'migrations');
  * synthetic seed (subsidiaries, assignments) and starts every run with no sessions.
  */
 export default async function globalSetup(): Promise<void> {
+  // Each run reads only the emails it caused.
+  await rm(E2E.emailDir, { recursive: true, force: true });
   const common = { connectionString: E2E.databaseOwnerUrl, appRole: 'peopleforge_app' };
   await runMigrations('up', { ...common, directory: CORE_MIGRATIONS, module: 'core' });
   await runMigrations('up', { ...common, directory: WEB_MIGRATIONS, module: 'web' });

@@ -16,7 +16,7 @@ import type { ReadyPanelProps } from '@/components/requests/ready-panel';
 import type { SubmitDialogView } from '@/components/requests/submit-control';
 import type { MessageKey, Translate } from '@/i18n/translator';
 import { formatDate, formatFileSize, formatMoney, formatPercent, trimDecimal } from './format';
-import { pluralForm } from './plural';
+import { pluralForm } from '@peopleforge/i18n';
 import { requestFigures } from './request-figures';
 import { EVIDENCE_ERROR_KEYS, REQUEST_ERROR_KEYS } from './request-errors';
 import { localised } from './viewer-display';

@@ -13,6 +13,8 @@ export interface MigrationOptions {
   module: string;
   /** Role granted data access in the SQL via {{APP_ROLE}}. */
   appRole: string;
+  /** The email worker's role (ADR-012), via {{WORKER_ROLE}}. Default `peopleforge_worker`. */
+  workerRole?: string;
   /** Lines of progress output. */
   report?: (line: string) => void;
 }
@@ -25,6 +27,7 @@ export class MigrationError extends Error {
 }
 
 const IDENTIFIER = /^[a-z_][a-z0-9_]{0,62}$/;
+export const DEFAULT_WORKER_ROLE = 'peopleforge_worker';
 const FILE = /^(\d{4}_[a-z0-9_]+)\.(up|down)\.sql$/;
 // Constant per database, shared by every module, so two deployments never migrate at once.
 const LOCK_ID = 7_300_421;
@@ -44,7 +47,9 @@ async function readSql(options: MigrationOptions, name: string, direction: 'up' 
   // `name` comes from the directory listing, filtered by the strict pattern above.
   // eslint-disable-next-line security/detect-non-literal-fs-filename -- not user input
   const text = await readFile(path.join(options.directory, `${name}.${direction}.sql`), 'utf8');
-  return text.replaceAll('{{APP_ROLE}}', `"${options.appRole}"`);
+  return text
+    .replaceAll('{{APP_ROLE}}', `"${options.appRole}"`)
+    .replaceAll('{{WORKER_ROLE}}', `"${options.workerRole ?? DEFAULT_WORKER_ROLE}"`);
 }
 
 async function inTransaction(client: pg.Client, work: () => Promise<void>): Promise<void> {
@@ -71,6 +76,8 @@ export async function runMigrations(
     throw new MigrationError('Module is not a plain identifier');
   if (!IDENTIFIER.test(options.appRole))
     throw new MigrationError('App role is not a plain identifier');
+  if (!IDENTIFIER.test(options.workerRole ?? DEFAULT_WORKER_ROLE))
+    throw new MigrationError('Worker role is not a plain identifier');
   const report = options.report ?? (() => undefined);
   const table = `migrations.${options.module}`;
 

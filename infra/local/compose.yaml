@@ -1,0 +1,39 @@
+# PeopleForge — optional local services for `pnpm dev` (development only, never deployed).
+# PostgreSQL and Keycloak come from ~/sirius/local-infra. Everything here listens on 127.0.0.1.
+#
+#   docker compose -f infra/local/compose.yaml up -d                       # Mailpit (emails)
+#   docker compose -f infra/local/compose.yaml --profile evidence up -d    # + S3Mock, ClamAV
+#
+# Pin versions; check for security fixes before bumping (Mailpit: >= v1.30.5, CVE-2026-67447).
+name: peopleforge-local
+
+services:
+  # Catches every email the worker sends (no real delivery). Inbox: http://localhost:8025
+  mailpit:
+    image: axllent/mailpit:v1.30.5
+    ports:
+      - '127.0.0.1:1025:1025' # SMTP (apps/worker/.env: SMTP_PORT=1025, SMTP_REQUIRE_TLS=false)
+      - '127.0.0.1:8025:8025' # web inbox
+    environment:
+      MP_MAX_MESSAGES: '500'
+      MP_SMTP_AUTH_ACCEPT_ANY: '1'
+      MP_SMTP_AUTH_ALLOW_INSECURE: '1'
+    restart: unless-stopped
+
+  # S3-compatible evidence store (ADR-010). apps/api/.env: OBJECT_STORE_DRIVER=s3 (commented values).
+  s3:
+    image: adobe/s3mock:5.1.0
+    profiles: [evidence]
+    ports:
+      - '127.0.0.1:9090:9090'
+    environment:
+      COM_ADOBE_TESTING_S3MOCK_STORE_INITIAL_BUCKETS: peopleforge-evidence
+    restart: unless-stopped
+
+  # Malware scanning (R1-04). First start downloads signatures: wait for "socket found, clamd started".
+  clamav:
+    image: clamav/clamav-debian:1.4
+    profiles: [evidence]
+    ports:
+      - '127.0.0.1:3310:3310'
+    restart: unless-stopped

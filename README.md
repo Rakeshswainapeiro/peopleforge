@@ -7,7 +7,7 @@ Sirius Group HR Digital Transformation Programme — Phase 1, delivered by Infin
 
 Requirements: BRD `SIRIUS-HR-BRD-001` · Scope: SOW `SIRIUS-HR-SOW-P1-001` · Progress: [docs/traceability.md](docs/traceability.md)
 
-> **Current state:** sign-in, and the first R1 slices: subsidiary HR raises a draft increment request, adds employees with a % or amount proposal (S2), and assesses each employee against the eligibility criteria with a justification and evidence files that are type-checked and malware-scanned (S3). Submitting to Sirius HR comes next (S4). The 5 criteria are placeholders until Sirius HR defines them (A1).
+> **Current state:** sign-in and R1 up to submission: subsidiary HR raises a draft increment request, adds employees with a % or amount proposal (S2), assesses each employee against the eligibility criteria with a justification and evidence files that are type-checked and malware-scanned (S3), and submits it to Sirius HR with an audit trail, in-app notifications and emails (S4a, S4b). "My increment requests" tracks requests and employees; each request has a detail page (S4c). Sirius HR's review comes next (S5). The 5 criteria are placeholders until Sirius HR defines them (A1).
 
 ## Local setup (under 10 minutes)
 
@@ -25,10 +25,12 @@ cp apps/api/.env.example apps/api/.env
 cp apps/web/.env.example apps/web/.env.local     # then set AUTH_SECRET: openssl rand -base64 48
 cp packages/db/.env.example packages/db/.env     # then set DATA_ENCRYPTION_KEYS (command in the file)
                                                  # and copy both DATA_ENCRYPTION_* lines into apps/api/.env
+cp apps/worker/.env.example apps/worker/.env     # the email worker (see "Email locally")
 pnpm build
+                    # once per database: create the worker role ("Email locally" below)
 pnpm db:migrate     # core schema + placeholder criteria (packages/db), then sign-in tables (web)
 pnpm db:seed        # synthetic subsidiaries A/B/C, pf.alpha.hr → A, pf.beta.hr → B, employees
-pnpm dev            # web on http://localhost:3000, api on http://localhost:4000
+pnpm dev            # web on http://localhost:3000, api on http://localhost:4000, worker probes on :4200
 ```
 
 Check it works:
@@ -49,29 +51,45 @@ Open http://localhost:3000: you are sent to the sign-in screen. Sign in as `pf.r
 The copied `apps/api/.env` stores evidence under `/tmp/peopleforge-evidence` and skips the malware scan (`MALWARE_SCANNER=none`; refused in UAT and production). To run the real path — an S3-compatible store and ClamAV — start both in Docker, then switch to the commented `s3`/`clamav` values in `apps/api/.env` and restart the API:
 
 ```bash
-docker run -d --name peopleforge-s3 -p 9090:9090 \
-  -e COM_ADOBE_TESTING_S3MOCK_STORE_INITIAL_BUCKETS=peopleforge-evidence adobe/s3mock:5.1.0
-docker run -d --name peopleforge-clamav -p 3310:3310 clamav/clamav-debian:1.4
-docker logs -f peopleforge-clamav    # first start downloads signatures: wait for "socket found, clamd started"
+docker compose -f infra/local/compose.yaml --profile evidence up -d
+docker compose -f infra/local/compose.yaml logs -f clamav   # first start downloads signatures: wait for "socket found, clamd started"
 ```
 
 MinIO isn't used: the project is archived and no longer publishes images (ADR-010). Uploading a PDF that contains the EICAR test string shows the malware refusal.
 
+### Email locally
+
+Submitting a request queues emails; the worker (`apps/worker`, ADR-012) sends them. It connects as its own database role, created once per database (add it to `~/sirius/local-infra` too). With the superuser of your local PostgreSQL:
+
+```sql
+CREATE ROLE peopleforge_worker LOGIN PASSWORD 'local-pf-worker-2026';
+GRANT CONNECT ON DATABASE peopleforge TO peopleforge_worker;
+GRANT CONNECT ON DATABASE peopleforge_test TO peopleforge_worker;
+```
+
+Then `pnpm db:migrate` (the email migrations stop with a clear message if the role is missing). Start Mailpit, which catches every email, and open its inbox at http://localhost:8025:
+
+```bash
+docker compose -f infra/local/compose.yaml up -d
+```
+
+Submit a request as `pf.alpha.hr`: two emails arrive, one to `pf.alpha.hr@…` and one to the reviewers' mailbox `pf.reviewers@sirius.local` (seeded). Without Docker, set `EMAIL_TRANSPORT=file` in `apps/worker/.env` to get `.eml` files instead.
+
 ### Database integration tests
 
-`packages/db` tests run against the real `peopleforge_test` database (Row-Level Security can't be mocked): they drop and recreate the core schema each run. Override with `TEST_DATABASE_URL` / `TEST_DATABASE_OWNER_URL`. Don't run them at the same time as the E2E tests, which use the same database.
+`packages/db` tests run against the real `peopleforge_test` database (Row-Level Security can't be mocked): they drop and recreate the core schema each run. Override with `TEST_DATABASE_URL` / `TEST_DATABASE_OWNER_URL` / `TEST_DATABASE_WORKER_URL`. They also apply the web app's sign-in migrations (the email outbox reads its address view). Don't run them at the same time as the E2E tests, which use the same database.
 
 ### End-to-end tests
 
 Playwright runs the production builds against a local test OpenID provider (no Keycloak needed) and a separate test database, `peopleforge_test` (created by local-infra; never the development database):
 
 ```bash
-pnpm build && pnpm --filter @peopleforge/api build
+pnpm build      # web, api and worker (the E2E run starts all three)
 pnpm --filter @peopleforge/web exec playwright install   # once
 pnpm test:e2e
 ```
 
-Override the database with `E2E_DATABASE_URL` / `E2E_DATABASE_OWNER_URL`.
+Override the database with `E2E_DATABASE_URL` / `E2E_DATABASE_OWNER_URL` / `E2E_DATABASE_WORKER_URL`. The worker writes the run's emails as `.eml` files to `/tmp/peopleforge-e2e-mail` (`E2E_EMAIL_DIR`).
 
 ## Common commands
 
@@ -90,11 +108,15 @@ Override the database with `E2E_DATABASE_URL` / `E2E_DATABASE_OWNER_URL`.
 apps/
   api/            NestJS API — bootstrap, auth (policy guard, principal), http, health, modules/*
   web/            Next.js App Router — i18n (en/ar), proxy (CSP), app/(portal)/*, components/*, e2e/
+  worker/         Email worker — sends the notification outbox (ADR-012); probes on :4200
 packages/
   contracts/      API contract shared by api and web: roles, permissions, request/response schemas
   ui/             Design system: Figma tokens + components (ADR-009, docs/design/design-system.md)
   db/             SQL migrations, migration runner, RLS scope (withScope), field encryption, dev seed
-infra/docker/     Production Dockerfiles
+  i18n/           Message catalogues: English fallback, interpolation, plural forms (web and worker)
+  integrations/   Object storage, ClamAV, email (SMTP / .eml), circuit breaker
+infra/docker/     Production Dockerfiles (api, web, worker)
+infra/local/      Optional local services for development (Mailpit, S3Mock, ClamAV)
 docs/             ADRs, API (OpenAPI), database conventions, runbooks, traceability
 ```
 

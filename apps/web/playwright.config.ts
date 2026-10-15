@@ -64,6 +64,24 @@ export default defineConfig({
       },
     },
     {
+      // The email worker (ADR-012), writing each email as an .eml file the tests read.
+      command: 'node ../worker/dist/main.js',
+      url: `http://127.0.0.1:${String(E2E.workerPort)}/health/ready`,
+      reuseExistingServer: !process.env.CI,
+      timeout: 30_000,
+      env: {
+        APP_ENV: 'test',
+        LOG_LEVEL: 'warn',
+        WORKER_DATABASE_URL: E2E.workerDatabaseUrl,
+        HEALTH_PORT: String(E2E.workerPort),
+        PORTAL_URL: WEB_URL,
+        EMAIL_TRANSPORT: 'file',
+        EMAIL_FILE_DIR: E2E.emailDir,
+        EMAIL_FROM: 'no-reply@peopleforge.local',
+        OUTBOX_POLL_MS: '500',
+      },
+    },
+    {
       command: `pnpm exec next start --port ${String(E2E.webPort)}`,
       url: `${WEB_URL}/sign-in`,
       reuseExistingServer: !process.env.CI,

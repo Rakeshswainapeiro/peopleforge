@@ -41,6 +41,14 @@ export const SEED_ASSIGNMENTS = [
   { userId: '7d6a1c3e-2b4f-4c8a-9e10-000000000005', entityId: SEED_ENTITIES[1].id },
 ] as const;
 
+/**
+ * Where Sirius HR reviewers' notifications are emailed locally (Mailpit catches everything).
+ * Real mailboxes are configuration agreed with Sirius IT (A6), never seeded.
+ */
+export const SEED_ROLE_MAILBOXES = [
+  { role: 'PeopleForge.Reviewer', address: 'pf.reviewers@sirius.local' },
+] as const;
+
 const [SUB_A, SUB_B, SUB_C] = SEED_ENTITIES;
 
 const EMPLOYEES: readonly [(typeof SEED_ENTITIES)[number], string, string, string, string][] = [
@@ -88,6 +96,13 @@ export async function seedDevelopmentData(options: SeedOptions): Promise<void> {
         `INSERT INTO core.user_entity (user_id, entity_id, created_by) VALUES ($1, $2, 'seed')
          ON CONFLICT DO NOTHING`,
         [assignment.userId, assignment.entityId],
+      );
+    }
+    for (const mailbox of SEED_ROLE_MAILBOXES) {
+      await client.query(
+        `INSERT INTO notify.role_mailbox (role, address, updated_by) VALUES ($1, $2, 'seed')
+         ON CONFLICT (role) DO UPDATE SET address = EXCLUDED.address`,
+        [mailbox.role, mailbox.address],
       );
     }
     for (const [entity, number, name, grade, salary] of EMPLOYEES) {

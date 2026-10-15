@@ -1,6 +1,6 @@
 # Schemas `core`, `increments`, `audit` and `notify` (slices S1–S4b)
 
-Migrations: `packages/db/migrations/core/0001_core_schema`, `0002_placeholder_configuration`, `0003_increment_requests`, `0004_criteria_evidence`, `0005_submission_audit_notifications`, `0006_dashboard`, `0007_submitter_name` (up/down), recorded in `migrations.core`. Decisions: ADR-002 (data access, RLS), ADR-008 (field encryption), ADR-010 (evidence files), ADR-011 (audit trail and notifications). Design: `docs/design/r1-increment-portal.md` §3a.
+Migrations: `packages/db/migrations/core/0001_core_schema`, `0002_placeholder_configuration`, `0003_increment_requests`, `0004_criteria_evidence`, `0005_submission_audit_notifications`, `0006_dashboard`, `0007_submitter_name`, `0008_email_worker` (up/down), recorded in `migrations.core`. Decisions: ADR-002 (data access, RLS), ADR-008 (field encryption), ADR-010 (evidence files), ADR-011 (audit trail and notifications). Design: `docs/design/r1-increment-portal.md` §3a.
 
 Every table here also carries `created_at`, `created_by`, `updated_at`, `updated_by` (UTC timestamps, user IDs), and `version` (optimistic locking) where rows are edited. `created_by`/`updated_by` is `seed` for migration and seed rows.
 
@@ -221,7 +221,32 @@ Actions recorded in S4a: `increment_request.created`, `.draft_saved`, `.submitte
 | `action_needed`       | `boolean`     | No   | Shown as "Action needed"; filterable                                                                                      | Internal     |
 | `created_at`          | `timestamptz` | No   | UTC                                                                                                                       | Internal     |
 
-`notification_read (notification_id, user_id, read_at)`: per-user read state (a role-addressed notification is read separately by each reviewer). `email_outbox (notification_id, created_at, sent_at, attempts, last_error)`: one row per notification, written in the same transaction; the sending worker arrives in S4b with the email provider (A6), and the app role may only insert.
+`notification_read (notification_id, user_id, read_at)`: per-user read state (a role-addressed notification is read separately by each reviewer).
+
+| Column (email_outbox) | Type          | Null | Meaning                                                                                                      | Sensitivity |
+| --------------------- | ------------- | ---- | ------------------------------------------------------------------------------------------------------------ | ----------- |
+| `id`                  | `uuid`        | No   | Primary key                                                                                                  | Internal    |
+| `notification_id`     | `uuid`        | No   | → `notification`: what to tell, and to whom. Written in the same transaction as the event (ADR-011)          | Internal    |
+| `created_at`          | `timestamptz` | No   | When it was queued                                                                                           | Internal    |
+| `status`              | `text`        | No   | `pending`, `sent`, `dead` (gave up) or `skipped` (no address, or content refused) (0008)                     | Internal    |
+| `next_attempt_at`     | `timestamptz` | No   | When it may be claimed: due now, after a backoff, or after a claimed batch's lease (0008)                    | Internal    |
+| `attempts`            | `integer`     | No   | Send attempts so far                                                                                         | Internal    |
+| `last_error`          | `text`        | Yes  | A reason code only (`smtp_550`, `timeout`, `no_address`; CHECK `^[a-z0-9_]{1,64}$`), never the server's text | Internal    |
+| `sent_at`             | `timestamptz` | Yes  | Set exactly when `status` is `sent` (CHECK)                                                                  | Internal    |
+| `message_id`          | `text`        | Yes  | The provider's Message-ID, to trace a delivery with the provider (0008)                                      | Internal    |
+
+No addresses are stored on the outbox: the worker looks them up when it sends (ADR-012).
+
+### `notify.role_mailbox` — where a role's notifications are emailed (0008, configuration)
+
+| Column       | Type          | Null | Meaning                                                                                               | Sensitivity |
+| ------------ | ------------- | ---- | ----------------------------------------------------------------------------------------------------- | ----------- |
+| `role`       | `text`        | No   | Primary key: an IdP app role, e.g. `PeopleForge.Reviewer`                                             | Internal    |
+| `address`    | `text`        | No   | A shared mailbox or distribution list agreed with Sirius IT (A6); one plain address, ≤ 320 characters | Internal    |
+| `updated_at` | `timestamptz` | No   | Last change                                                                                           | Internal    |
+| `updated_by` | `text`        | No   | Who set it (the DBA until the admin screen exists, S7)                                                | Internal    |
+
+No row for a role: its emails are skipped (`no_address`), the in-app notification is unaffected. The dev/test seed sets `PeopleForge.Reviewer → pf.reviewers@sirius.local`.
 
 ### `increments.idempotency_key` and `increments.request_sequence`
 
@@ -243,7 +268,8 @@ Session settings, set per transaction by `withScope` (`set_config(…, true)`): 
 | `audit.audit_log`                                                                                                    | Insert: `actor = core.current_user_id()` and the entity accessible. Read: group scope only (`audit:read` checked in the API)                                            |
 | `notify.notification`                                                                                                | Read: own (`recipient_user_id`), or role-addressed in group scope (the API matches the caller's roles); entity accessible. Insert: anyone acting, within their entities |
 | `notify.notification_read`                                                                                           | Own rows only                                                                                                                                                           |
-| `notify.email_outbox`                                                                                                | Insert: anyone acting. Read: group scope (for the sender); the app role has no `SELECT` grant                                                                           |
+| `notify.email_outbox`                                                                                                | Insert: anyone acting. Read and update: group scope (owner, runbook), and the worker role (`outbox_worker`); the app role has no `SELECT`/`UPDATE` grant                |
+| `notify.notification` (worker)                                                                                       | The worker role reads every notification (`notification_worker`), to email it                                                                                           |
 | `core.increment_cycle`, `increments.criteria_set`, `increments.criterion`, `increments.request_sequence`             | No RLS: configuration (or a counter) readable by every signed-in user; configuration writes need `criteria:configure` (API)                                             |
 
 RLS is `FORCE`d, so the owner is bound too (the seed sets group scope explicitly). Proven in `packages/db/src/rls.test.ts`.
@@ -253,6 +279,10 @@ RLS is `FORCE`d, so the owner is bound too (the seed sets group scope explicitly
 - `SELECT, INSERT, UPDATE` on entity, cycle, employee, the criteria tables, `increment_request`, `request_line`, `request_sequence`, `criterion_result` and `evidence_file`.
 - `SELECT, INSERT` on `idempotency_key`, `status_event`, `audit_log`, `notification` and `notification_read`; `INSERT` only on `email_outbox`.
 - `UPDATE`/`DELETE`/`TRUNCATE` on `audit_log` and `status_event` are refused by trigger for every role.
+- `SELECT` on `role_mailbox` (for the admin screen, S7).
+
+**Grants to the worker role** (`peopleforge_worker`, ADR-012, 0008): `USAGE` on schema `notify`; `SELECT` on `notification` and `role_mailbox`; `SELECT` and `UPDATE (status, attempts, last_error, next_attempt_at, sent_at, message_id)` on `email_outbox`; and, from web migration 0002, `SELECT` on the view `auth.recipient_email`. Nothing else: no requests, employees, salaries, justifications, audit trail or sign-in tables (`email-outbox.test.ts` proves each refusal).
+
 - `SELECT, INSERT, DELETE` on `user_entity`. No `DELETE` on business tables (soft delete), no DDL, no `BYPASSRLS`.
 
 ## Indexes

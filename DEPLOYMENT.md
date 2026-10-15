@@ -1,25 +1,25 @@
 # Deployment Guide — PeopleForge
 
-> **Status (2026-10-14): slices S1–S4b-1 (foundation, increment request drafts, criteria and evidence, submission with audit trail and in-app notifications, the "My increment requests" dashboard).** Hosting, identity provider, email provider, object store and malware scanner products are pending Sirius IT (BRD assumption A6). Sections marked **TBC (A6)** are completed when ADR-001 is accepted. Everything else is current and must be kept in sync with the code: any change that adds an env var, service, port, migration or dependency updates this file in the same PR.
+> **Status (2026-10-15): slices S1–S4c and S4b-2 (foundation, increment request drafts, criteria and evidence, submission with audit trail and notifications, the "My increment requests" dashboard and request detail, and the email worker).** Hosting, identity provider, email provider, object store and malware scanner products are pending Sirius IT (BRD assumption A6). Sections marked **TBC (A6)** are completed when ADR-001 is accepted. Everything else is current and must be kept in sync with the code: any change that adds an env var, service, port, migration or dependency updates this file in the same PR.
 
 ## 1. Architecture overview
 
 ```
 Browser ──HTTPS──▶ Load balancer / WAF ──▶ web (Next.js, :3000)
-                                       └─▶ api (NestJS, :4000) ──▶ PostgreSQL, Redis, object storage
-                                                 worker (queues, schedules) ──▶ same dependencies
+                                       └─▶ api (NestJS, :4000) ──▶ PostgreSQL, object storage, clamd
+                     worker (email outbox; probes on :4200) ──▶ PostgreSQL (worker role), SMTP provider
 ```
 
-| Component        | Image                               | Port                      | Depends on                                       | Status                                       |
-| ---------------- | ----------------------------------- | ------------------------- | ------------------------------------------------ | -------------------------------------------- |
-| web              | `infra/docker/web.Dockerfile`       | 3000                      | api, PostgreSQL                                  | Built                                        |
-| api              | `infra/docker/api.Dockerfile`       | 4000                      | PostgreSQL, IdP, object storage, malware scanner | Built                                        |
-| worker           | —                                   | none (no inbound)         | Redis, PostgreSQL, email                         | Planned (S4b: sends `notify.email_outbox`)   |
-| PostgreSQL 16+   | managed                             | 5432                      | —                                                | Required (ADR-002)                           |
-| Redis            | managed                             | 6379                      | —                                                | Planned                                      |
-| Object storage   | S3-compatible, private bucket       | 443                       | —                                                | Required (R1-04; ADR-010) — product TBC (A6) |
-| Email (SMTP/API) | provider                            | 587/443                   | —                                                | TBC (A6)                                     |
-| Malware scanner  | ClamAV `clamd` (sidecar or service) | 3310 (TCP, internal only) | signature updates (freshclam)                    | Required (R1-04; ADR-010)                    |
+| Component       | Image                               | Port                      | Depends on                                       | Status                                       |
+| --------------- | ----------------------------------- | ------------------------- | ------------------------------------------------ | -------------------------------------------- |
+| web             | `infra/docker/web.Dockerfile`       | 3000                      | api, PostgreSQL                                  | Built                                        |
+| api             | `infra/docker/api.Dockerfile`       | 4000                      | PostgreSQL, IdP, object storage, malware scanner | Built                                        |
+| worker          | `infra/docker/worker.Dockerfile`    | 4200 (probes only)        | PostgreSQL (worker role), SMTP provider          | Built (sends `notify.email_outbox`, ADR-012) |
+| PostgreSQL 16+  | managed                             | 5432                      | —                                                | Required (ADR-002)                           |
+| Redis           | managed                             | 6379                      | —                                                | Not needed yet (ADR-012; revisit with S7)    |
+| Object storage  | S3-compatible, private bucket       | 443                       | —                                                | Required (R1-04; ADR-010) — product TBC (A6) |
+| Email (SMTP)    | provider, in-region                 | 587 (STARTTLS) / 465      | —                                                | Required (R1-07, R1-13) — product TBC (A6)   |
+| Malware scanner | ClamAV `clamd` (sidecar or service) | 3310 (TCP, internal only) | signature updates (freshclam)                    | Required (R1-04; ADR-010)                    |
 
 All components, backups and logs must run in the approved region (assumed UAE).
 
@@ -145,15 +145,61 @@ Validated on the first request (so `next build` needs no secrets); a bad value f
 | `PEOPLEFORGE_API_URL`        | API origin, called server-side only (never from the browser)                                          | Yes      | —                      | `http://api:4000`                                                      | Deployment config |
 | `PEOPLEFORGE_API_TIMEOUT_MS` | Timeout for each API call                                                                             | No       | `5000`                 | `5000`                                                                 | Deployment config |
 
+### worker
+
+Validated at startup like the API's (key names only, exit code 1). Runs as a long-lived service with one or more replicas (§11).
+
+| Name                         | Purpose                                                                                                                                                      | Required    | Default       | Example                                               | Store             |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------- | ------------- | ----------------------------------------------------- | ----------------- |
+| `APP_ENV`                    | Environment name; `uat`/`prod` require SMTP with TLS and an HTTPS `PORTAL_URL`                                                                               | Yes         | —             | `prod`                                                | Deployment config |
+| `LOG_LEVEL`                  | `fatal`…`trace`, `silent`                                                                                                                                    | No          | `info`        | `info`                                                | Deployment config |
+| `HEALTH_PORT`                | Probe port (`/health/live`, `/health/ready`); no other traffic                                                                                               | No          | `4200`        | `4200`                                                | Deployment config |
+| `WORKER_DATABASE_URL`        | PostgreSQL as the **worker role** `peopleforge_worker` (reads the outbox, notifications, role mailboxes and the address view; updates delivery columns only) | Yes         | —             | `postgres://peopleforge_worker:…@db:5432/peopleforge` | Secrets manager   |
+| `DATABASE_POOL_MAX`          | Pool size per replica                                                                                                                                        | No          | `4`           | `4`                                                   | Deployment config |
+| `PORTAL_URL`                 | The web app's public origin, for the link in each email. **HTTPS-only in `uat`/`prod`**                                                                      | Yes         | —             | `https://hr.sirius.ae`                                | Deployment config |
+| `EMAIL_TRANSPORT`            | `smtp`, or `file` (each email as an `.eml` file) for dev/test only. **`smtp` only in `uat`/`prod`**                                                          | Yes         | —             | `smtp`                                                | Deployment config |
+| `EMAIL_FILE_DIR`             | Folder for the `file` transport                                                                                                                              | With `file` | —             | `/tmp/peopleforge-mail`                               | Deployment config |
+| `EMAIL_FROM`                 | Sender address (one plain address), agreed with Sirius IT (A6); SPF/DKIM/DMARC for its domain must authorise the provider                                    | Yes         | —             | `no-reply@hr.sirius.ae`                               | Deployment config |
+| `EMAIL_FROM_NAME`            | Sender display name                                                                                                                                          | No          | `PeopleForge` | `Sirius HR (PeopleForge)`                             | Deployment config |
+| `SMTP_HOST`                  | Provider's SMTP host (in the approved region)                                                                                                                | With `smtp` | —             | `smtp.<provider>`                                     | Deployment config |
+| `SMTP_PORT`                  | 587 (STARTTLS) or 465 (implicit TLS)                                                                                                                         | No          | `587`         | `587`                                                 | Deployment config |
+| `SMTP_SECURE`                | `true` for implicit TLS (465)                                                                                                                                | No          | `false`       | `false`                                               | Deployment config |
+| `SMTP_REQUIRE_TLS`           | Refuse to send unless STARTTLS succeeds. **`SMTP_SECURE` or this must be `true` in `uat`/`prod`**; only local Mailpit runs without                           | No          | `true`        | `true`                                                | Deployment config |
+| `SMTP_USER`                  | SMTP login; set with `SMTP_PASSWORD` or not at all                                                                                                           | No          | —             | —                                                     | Secrets manager   |
+| `SMTP_PASSWORD`              | As above                                                                                                                                                     | No          | —             | —                                                     | Secrets manager   |
+| `SMTP_TIMEOUT_MS`            | Connect, greeting and socket timeout per email                                                                                                               | No          | `10000`       | `10000`                                               | Deployment config |
+| `OUTBOX_POLL_MS`             | Wait between polls when nothing is due                                                                                                                       | No          | `5000`        | `5000`                                                | Deployment config |
+| `OUTBOX_BATCH_SIZE`          | Emails claimed per batch (sent one at a time)                                                                                                                | No          | `10`          | `10`                                                  | Deployment config |
+| `OUTBOX_MAX_ATTEMPTS`        | Attempts before an email is marked dead (backoff 1 min, 5 min, 30 min, 2 h, 6 h)                                                                             | No          | `6`           | `6`                                                   | Deployment config |
+| `OUTBOX_LEASE_MS`            | How long a claimed batch is held; must be ≥ `OUTBOX_BATCH_SIZE` × `SMTP_TIMEOUT_MS` × 2                                                                      | No          | `300000`      | `300000`                                              | Deployment config |
+| `OUTBOX_STATS_INTERVAL_MS`   | How often `email_outbox_stats` is logged                                                                                                                     | No          | `60000`       | `60000`                                               | Deployment config |
+| `OUTBOX_ALERT_AFTER_S`       | `email_outbox_alert` when the oldest due email has waited longer than this (or any is dead)                                                                  | No          | `900`         | `900`                                                 | Deployment config |
+| `READINESS_CHECK_TIMEOUT_MS` | Per-dependency readiness timeout                                                                                                                             | No          | `2000`        | `2000`                                                | Deployment config |
+| `SHUTDOWN_TIMEOUT_MS`        | Hard deadline for graceful shutdown (finishes the email in progress); less than the termination grace period                                                 | No          | `25000`       | `25000`                                               | Deployment config |
+
+**Readiness:** `/health/ready` checks `database` (`SELECT 1`) and `email` (SMTP connect, TLS and login, or the folder for `file`). **Liveness:** `/health/live` is 503 when no batch has succeeded for three lease periods, so the orchestrator restarts a stuck worker.
+
+**Network:** egress from the worker to `SMTP_HOST:SMTP_PORT` only (plus PostgreSQL). It needs no ingress except the probes.
+
+**Role mailboxes (R1-07):** email to "all Sirius HR reviewers" goes to the mailbox configured for the role in `notify.role_mailbox` (a shared mailbox or distribution list, A6). Until the admin screen exists (S7), the DBA sets it (runbook `docs/runbooks/email-outbox.md`):
+
+```sql
+INSERT INTO notify.role_mailbox (role, address, updated_by)
+VALUES ('PeopleForge.Reviewer', 'sirius-hr-reviewers@<sirius-domain>', '<name>');
+```
+
+Without a row, reviewers still see the notification in the portal; the email is skipped and logged (`email_skipped`, `no_address`).
+
 ### Migration job (`@peopleforge/db`, one-off before each rollout)
 
-| Name                         | Purpose                                                                                    | Required  | Default           | Store                            |
-| ---------------------------- | ------------------------------------------------------------------------------------------ | --------- | ----------------- | -------------------------------- |
-| `DATABASE_OWNER_URL`         | Schema **owner** connection (DDL). Used only by the migration job, never by `api` or `web` | Yes       | —                 | Secrets manager                  |
-| `DATABASE_APP_ROLE`          | Role granted data access by the migrations                                                 | No        | `peopleforge_app` | Deployment config                |
-| `APP_ENV`                    | The synthetic seed refuses anything but `dev`/`test`                                       | Seed only | —                 | Deployment config                |
-| `DATA_ENCRYPTION_KEYS`       | Salary field keys (ADR-008) for the dev/test seed; same values as the API's                | Seed only | —                 | Secrets manager (KMS-backed, A6) |
-| `DATA_ENCRYPTION_ACTIVE_KEY` | Key ID used for new writes; older IDs stay in the list until re-encryption finishes        | Seed only | —                 | Secrets manager                  |
+| Name                         | Purpose                                                                                    | Required  | Default              | Store                            |
+| ---------------------------- | ------------------------------------------------------------------------------------------ | --------- | -------------------- | -------------------------------- |
+| `DATABASE_OWNER_URL`         | Schema **owner** connection (DDL). Used only by the migration job, never by `api` or `web` | Yes       | —                    | Secrets manager                  |
+| `DATABASE_APP_ROLE`          | Role granted data access by the migrations                                                 | No        | `peopleforge_app`    | Deployment config                |
+| `DATABASE_WORKER_ROLE`       | The email worker's role, granted outbox access by the migrations (ADR-012)                 | No        | `peopleforge_worker` | Deployment config                |
+| `APP_ENV`                    | The synthetic seed refuses anything but `dev`/`test`                                       | Seed only | —                    | Deployment config                |
+| `DATA_ENCRYPTION_KEYS`       | Salary field keys (ADR-008) for the dev/test seed; same values as the API's                | Seed only | —                    | Secrets manager (KMS-backed, A6) |
+| `DATA_ENCRYPTION_ACTIVE_KEY` | Key ID used for new writes; older IDs stay in the list until re-encryption finishes        | Seed only | —                    | Secrets manager                  |
 
 **Key loss means salary loss** (ADR-008): back up every data key in the secrets manager before first use, and never remove an ID from `DATA_ENCRYPTION_KEYS` while rows still use it.
 
@@ -194,9 +240,10 @@ Hand-written SQL (`NNNN_name.up.sql` / `.down.sql`) applied by the shared runner
 ```sql
 CREATE ROLE peopleforge_owner LOGIN PASSWORD '…';   -- owns the schemas, runs migrations
 CREATE ROLE peopleforge_app   LOGIN PASSWORD '…';   -- used by api and web; no DDL, no BYPASSRLS
+CREATE ROLE peopleforge_worker LOGIN PASSWORD '…';  -- the email worker: outbox only (ADR-012)
 CREATE DATABASE peopleforge OWNER peopleforge_owner;
 REVOKE CONNECT ON DATABASE peopleforge FROM PUBLIC;
-GRANT CONNECT ON DATABASE peopleforge TO peopleforge_app;
+GRANT CONNECT ON DATABASE peopleforge TO peopleforge_app, peopleforge_worker;
 ```
 
 **Per release:**
@@ -229,17 +276,23 @@ GRANT CONNECT ON DATABASE peopleforge TO peopleforge_app;
 
 **Release S4c — migration `0007_submitter_name`:** adds the nullable column `increment_request.submitted_by_name` with a length CHECK. Adding a nullable column without a default is a catalogue-only change (no table rewrite, a brief lock). Existing submitted requests keep `null` and their page leaves out "by …". No new env vars. Rolling back drops the column.
 
+**Release S4b-2 — migrations core `0008_email_worker` and web `0002_recipient_email`:** **create the role `peopleforge_worker` first** (one-time setup above; the migration stops with "Role … does not exist" otherwise). 0008 adds delivery columns to `notify.email_outbox` (`status`, `next_attempt_at`, `message_id`; catalogue-only adds, no rewrite), swaps its pending index, creates `notify.role_mailbox`, and grants the worker role its narrow access. Web 0002 adds the view `auth.recipient_email` (account ID → email) for the worker. Run core first, then web, as always. Then deploy the worker (new service, `infra/docker/worker.Dockerfile`) and set the reviewers' mailbox (§4 worker). Emails queued since S4a are sent when the worker starts: before the first start in a shared environment, decide whether old ones should go (runbook, "Requeue", in reverse: mark them `skipped`). Rolling back: stop the worker, then roll back web 0002 and core 0008.
+
 **Never in UAT or Prod:** `pnpm db:seed` (synthetic data; it refuses unless `APP_ENV` is `dev` or `test`). Production configuration (real entities, assignments, criteria) is entered through the admin screens once they exist. Until then (A1/A3 pending) the core migrations include the clearly marked `[Placeholder]` criteria set and increment cycle (R1-05).
 
 ## 7. Health endpoints
 
-| Endpoint                  | Use                                                    | Healthy                                                                |
-| ------------------------- | ------------------------------------------------------ | ---------------------------------------------------------------------- |
-| `GET /health/live` (api)  | Liveness probe                                         | `200 {"status":"alive"}`                                               |
-| `GET /health/ready` (api) | Readiness probe; checks each dependency with a timeout | `200`; `503` if any dependency is down **or the instance is draining** |
-| `GET /` (web)             | Liveness/readiness                                     | `200`                                                                  |
+| Endpoint                            | Use                                                        | Healthy                                                                |
+| ----------------------------------- | ---------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `GET /health/live` (api)            | Liveness probe                                             | `200 {"status":"alive"}`                                               |
+| `GET /health/ready` (api)           | Readiness probe; checks each dependency with a timeout     | `200`; `503` if any dependency is down **or the instance is draining** |
+| `GET /` (web)                       | Liveness/readiness                                         | `200`                                                                  |
+| `GET /health/live` (worker, :4200)  | Liveness: a batch has succeeded within three lease periods | `200 {"status":"live"}`; `503` when stalled                            |
+| `GET /health/ready` (worker, :4200) | Readiness: `database` and `email` (SMTP login / folder)    | `200`; `503` with the failing check named                              |
 
 Recommended probes: liveness every 15 s, failure threshold 3; readiness every 5 s, failure threshold 2. Health endpoints are unauthenticated and not rate limited; they expose dependency names and up/down only. Block `/health/*` at the public load balancer if it is internet-facing.
+
+**Worker shutdown:** on `SIGTERM` the worker stops claiming, finishes the email in progress, closes the probe port and the database pool, then exits; past `SHUTDOWN_TIMEOUT_MS` it exits with code 1. Emails it had claimed but not sent are taken again when their lease ends.
 
 **Graceful shutdown:** on `SIGTERM` the API makes readiness return 503, stops accepting connections, finishes in-flight requests, closes dependencies, then exits. If draining exceeds `SHUTDOWN_TIMEOUT_MS` it exits with code 1. Set the orchestrator's termination grace period above this value (e.g. 30 s for the 25 s default).
 
@@ -248,6 +301,7 @@ Recommended probes: liveness every 15 s, failure threshold 3; readiness every 5 
 - **Logs:** JSON lines on stdout, one per request plus application events. Every line carries `service` and request ID (`X-Request-Id` is accepted from upstream if safe, otherwise generated, and returned on every response). Request logs contain method, path (no query string), status and duration — no headers, bodies, tokens, PII or salary values. Ship to the in-region log store; retention TBC with Sirius (NFR-PRIV-01).
 - **Metrics/tracing:** OpenTelemetry instrumentation is added with the first database-backed feature; exporter endpoint must be in-region.
 - **Alerts (initial):** readiness failing > 2 min; 5xx rate > 1% over 5 min; p95 latency > 3 s on dashboard endpoints (NFR-PERF-01); container restarts > 3 in 15 min; certificate expiry < 21 days.
+- **Email (worker, ADR-012):** alert on any `email_outbox_alert` log line (emails dead, or the oldest due one waiting longer than `OUTBOX_ALERT_AFTER_S`) and on `email_batch_failed` repeating for 5 minutes; chart `email_outbox_stats` (`pending`, `due`, `dead`, `oldestDueSeconds`). Logs name outbox row IDs and roles, never addresses. Runbook: `docs/runbooks/email-outbox.md`.
 - **Availability target:** ≥ 99% during business hours (NFR-AVAIL-01). Business hours and maintenance windows: TBC with Sirius HR.
 
 ## 9. Backup and disaster recovery
@@ -266,16 +320,18 @@ TBC (A6), proposed targets for agreement:
 - [ ] Home page loads over HTTPS; response has `Content-Security-Policy` with a `nonce-` and `Strict-Transport-Security`.
 - [ ] `GET /health/ready` shows `"database":"up"`, `"object_store":"up"` and `"malware_scanner":"up"`.
 - [ ] As a Subsidiary HR test user, Home shows **My increment requests** with the cards, "Needs your action" for a draft, and the draft in the table; searching its reference narrows the list; **By employee** → **View Status** opens the employee's page. A user of another subsidiary searching that reference finds nothing.
-- [ ] As a Subsidiary HR test user, complete a draft and **Submit to Sirius HR** → the request shows "Waiting for Sirius HR" and is read-only; the bell shows 1 unread. As a Sirius HR reviewer, the notifications page lists "New request from …", and View opens it.
+- [ ] As a Subsidiary HR test user, complete a draft and **Submit to Sirius HR** → the request detail page opens with "Where this request is" at Criterion 1 ("Sirius HR reviewing") and is read-only; the bell shows 1 unread. As a Sirius HR reviewer, the notifications page lists "New request from …", and View opens it.
 - [ ] On a draft: attach a small PDF to a criterion → it appears and downloads; attaching the EICAR test file (inside a PDF) is refused by the malware scan.
 - [ ] As a Subsidiary HR test user: New Request → add an employee → the draft opens with their current salary; save a 5% proposal and see the new monthly salary.
 - [ ] Signing in as a Subsidiary HR test user shows only their subsidiary in the sidebar; a Sirius HR user sees "All subsidiaries".
 - [ ] Language switch to العربية sets `<html dir="rtl">`, and back.
+- [ ] Worker: `GET :4200/health/ready` shows `"database":"up"` and `"email":"up"`. After the submit above, the submitter's mailbox and the reviewers' mailbox each receive an email with the reference and a working "View in PeopleForge" link; the worker logs `email_sent` twice.
 - [ ] No errors in logs for the deployed version during the first 10 minutes.
 
 ## 11. Scaling
 
 - `web` and `api` are stateless; scale horizontally behind the load balancer.
+- `worker`: one replica is enough for Phase 1 volumes; a second for availability is safe (rows are claimed with `SKIP LOCKED`, ADR-012). Raise `OUTBOX_BATCH_SIZE` (and the lease) before adding replicas for throughput.
 - **Before running more than one API replica**, move the rate limiter to a shared Redis store — the current in-memory store limits per replica only.
 - Start with 2 replicas each in UAT/Prod for availability; size from the load test (ADR-004) before UAT.
 
@@ -296,4 +352,7 @@ TBC (A6), proposed targets for agreement:
 | `/health/ready` reports `"malware_scanner":"down"`, or uploads fail with "Files can't be handled right now"                      | clamd not running, still loading signatures (first start takes minutes), or `CLAMAV_HOST`/`CLAMAV_PORT` wrong                                                                        | `echo PING \| nc <host> 3310` should answer `PONG`; wait for freshclam on first start                               |
 | An upload fails with "That file is too large" below 10 MB, or the browser shows a network error                                  | A proxy in front of web or api limits request bodies                                                                                                                                 | Raise it to 11 MB (§4, Uploads)                                                                                     |
 | Subsidiary HR user signs in but sees "No subsidiary assigned"                                                                    | No row in `core.user_entity` for their Entra object ID                                                                                                                               | Assign them (admin screen, later slice); locally: the seed assigns `pf.alpha.hr`/`pf.beta.hr`                       |
+| Worker exits with `Invalid or missing environment variables: OUTBOX_LEASE_MS`                                                    | The lease is shorter than a batch of timeouts                                                                                                                                        | Raise `OUTBOX_LEASE_MS` or lower `OUTBOX_BATCH_SIZE` / `SMTP_TIMEOUT_MS` (§4 worker)                                |
+| Migration fails with `Role "peopleforge_worker" does not exist`                                                                  | The worker role wasn't created (one-time setup, §6)                                                                                                                                  | Create it, grant `CONNECT`, run the migrations again                                                                |
+| No emails arrive; worker logs `email_retry` / `email_dead` / `email_skipped`                                                     | Provider unreachable or refusing (`timeout`, `connection`, `smtp_auth`, `smtp_5xx`), or no address (`no_address`: role mailbox missing, or the user never signed in)                 | Runbook `docs/runbooks/email-outbox.md`                                                                             |
 | `/api/v1/*` returns 401 without a token                                                                                          | Expected: every `/api/v1` route needs `Authorization: Bearer <access token>`                                                                                                         | Sign in through the web app, or use `scripts/token.sh` in local-infra                                               |

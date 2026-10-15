@@ -222,13 +222,33 @@ export interface NotificationReadTable {
   read_at: Generated<Date>;
 }
 
+export type EmailStatus = 'pending' | 'sent' | 'dead' | 'skipped';
+
 export interface EmailOutboxTable {
   id: Generated<string>;
   notification_id: string;
   created_at: Generated<Date>;
   sent_at: Date | null;
   attempts: Generated<number>;
+  /** A reason code (e.g. `smtp_550`), never server text. */
   last_error: string | null;
+  status: Generated<EmailStatus>;
+  next_attempt_at: Generated<Date>;
+  message_id: string | null;
+}
+
+/** Where role-addressed notifications are emailed (0008, configuration). */
+export interface RoleMailboxTable {
+  role: string;
+  address: string;
+  updated_at: Generated<Date>;
+  updated_by: string;
+}
+
+/** Web migration 0002: identity-provider account ID → work email, for the worker only. */
+export interface RecipientEmailView {
+  user_id: ColumnType<string, never, never>;
+  email: ColumnType<string, never, never>;
 }
 
 /** Tables the application reads and writes, by schema-qualified name. */
@@ -250,4 +270,6 @@ export interface Database {
   'notify.notification': NotificationTable;
   'notify.notification_read': NotificationReadTable;
   'notify.email_outbox': EmailOutboxTable;
+  'notify.role_mailbox': RoleMailboxTable;
+  'auth.recipient_email': RecipientEmailView;
 }
