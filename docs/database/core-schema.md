@@ -1,6 +1,6 @@
-# Schemas `core`, `increments`, `audit` and `notify` (slices S1–S4a)
+# Schemas `core`, `increments`, `audit` and `notify` (slices S1–S4b)
 
-Migrations: `packages/db/migrations/core/0001_core_schema`, `0002_placeholder_configuration`, `0003_increment_requests`, `0004_criteria_evidence`, `0005_submission_audit_notifications` (up/down), recorded in `migrations.core`. Decisions: ADR-002 (data access, RLS), ADR-008 (field encryption), ADR-010 (evidence files), ADR-011 (audit trail and notifications). Design: `docs/design/r1-increment-portal.md` §3a.
+Migrations: `packages/db/migrations/core/0001_core_schema`, `0002_placeholder_configuration`, `0003_increment_requests`, `0004_criteria_evidence`, `0005_submission_audit_notifications`, `0006_dashboard` (up/down), recorded in `migrations.core`. Decisions: ADR-002 (data access, RLS), ADR-008 (field encryption), ADR-010 (evidence files), ADR-011 (audit trail and notifications). Design: `docs/design/r1-increment-portal.md` §3a.
 
 Every table here also carries `created_at`, `created_by`, `updated_at`, `updated_by` (UTC timestamps, user IDs), and `version` (optimistic locking) where rows are edited. `created_by`/`updated_by` is `seed` for migration and seed rows.
 
@@ -32,7 +32,7 @@ erDiagram
   INCREMENT_CYCLE { uuid id PK; jsonb name; date starts_on; date ends_on; date submission_deadline; text status }
   CRITERIA_SET { uuid id PK; int version UK; text status }
   CRITERION { uuid id PK; uuid criteria_set_id FK; smallint position; text code; jsonb name; jsonb description; text evidence_policy }
-  INCREMENT_REQUEST { uuid id PK; text reference UK; uuid entity_id FK; uuid cycle_id FK; uuid criteria_set_id FK; text status; int version; timestamptz submitted_at; text submitted_by }
+  INCREMENT_REQUEST { uuid id PK; text reference UK; uuid entity_id FK; uuid cycle_id FK; uuid criteria_set_id FK; text status; int version; timestamptz submitted_at; text submitted_by; timestamptz status_changed_at }
   REQUEST_LINE { uuid id PK; uuid request_id FK; uuid entity_id FK; uuid employee_id FK; text grade; bytea current_salary; char3 currency; text proposed_kind; bytea proposed_value }
   IDEMPOTENCY_KEY { text user_id PK; text key PK; uuid request_id FK }
   REQUEST_SEQUENCE { uuid cycle_id PK; int last_number }
@@ -110,18 +110,19 @@ Primary key `(user_id, entity_id)`. Rows are inserted and deleted, never updated
 
 ### `increments.increment_request` — a subsidiary's request in a cycle (R1-02)
 
-| Column            | Type          | Null | Meaning                                                                    | Sensitivity |
-| ----------------- | ------------- | ---- | -------------------------------------------------------------------------- | ----------- |
-| `id`              | `uuid`        | No   | Primary key (chosen by the API before insert)                              | Internal    |
-| `reference`       | `text`        | No   | `INC-<cycle start year>-<NNNN>`, unique; numbered per cycle                | Internal    |
-| `entity_id`       | `uuid`        | No   | → `core.entity`; drives RLS                                                | Internal    |
-| `cycle_id`        | `uuid`        | No   | → `core.increment_cycle` (must be `open` at creation)                      | Internal    |
-| `criteria_set_id` | `uuid`        | No   | The criteria set active at creation; later changes don't affect it (R1-05) | Internal    |
-| `status`          | `text`        | No   | `draft` or `submitted` (S4a); review and decision statuses arrive in S5    | Internal    |
-| `submitted_at`    | `timestamptz` | Yes  | When it was submitted; set exactly when `status` isn't `draft` (CHECK)     | Internal    |
-| `submitted_by`    | `text`        | Yes  | User ID of the submitter; set with `submitted_at`                          | Internal    |
-| `version`         | `integer`     | No   | Bumped by every change; a save with a stale version is refused (409)       | Internal    |
-| `deleted_at`      | `timestamptz` | Yes  | Soft delete                                                                | Internal    |
+| Column              | Type          | Null | Meaning                                                                                                                               | Sensitivity |
+| ------------------- | ------------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
+| `id`                | `uuid`        | No   | Primary key (chosen by the API before insert)                                                                                         | Internal    |
+| `reference`         | `text`        | No   | `INC-<cycle start year>-<NNNN>`, unique; numbered per cycle                                                                           | Internal    |
+| `entity_id`         | `uuid`        | No   | → `core.entity`; drives RLS                                                                                                           | Internal    |
+| `cycle_id`          | `uuid`        | No   | → `core.increment_cycle` (must be `open` at creation)                                                                                 | Internal    |
+| `criteria_set_id`   | `uuid`        | No   | The criteria set active at creation; later changes don't affect it (R1-05)                                                            | Internal    |
+| `status`            | `text`        | No   | `draft` or `submitted` (S4a); review and decision statuses arrive in S5                                                               | Internal    |
+| `submitted_at`      | `timestamptz` | Yes  | When it was submitted; set exactly when `status` isn't `draft` (CHECK)                                                                | Internal    |
+| `submitted_by`      | `text`        | Yes  | User ID of the submitter; set with `submitted_at`                                                                                     | Internal    |
+| `status_changed_at` | `timestamptz` | No   | Last status change (creation for a draft); the dashboard's Age and Last update (0006, backfilled from `submitted_at` or `created_at`) | Internal    |
+| `version`           | `integer`     | No   | Bumped by every change; a save with a stale version is refused (409)                                                                  | Internal    |
+| `deleted_at`        | `timestamptz` | Yes  | Soft delete                                                                                                                           | Internal    |
 
 Unique `(id, entity_id)` exists so lines can reference the pair. A submitted request is read-only: every change (lines, proposals, criteria, evidence) locks the request and refuses a non-draft (`not_draft`, 409). Submitting is idempotent per user and key (the `idempotency_key` table is reused).
 
@@ -253,31 +254,38 @@ RLS is `FORCE`d, so the owner is bound too (the seed sets group scope explicitly
 
 ## Indexes
 
-| Index                                                                                      | Serves                                                      |
-| ------------------------------------------------------------------------------------------ | ----------------------------------------------------------- |
-| `entity.code` unique                                                                       | Lookup by code, uniqueness                                  |
-| `user_entity` PK `(user_id, entity_id)`                                                    | Resolving a caller's subsidiaries on every request          |
-| `user_entity_entity_idx (entity_id)`                                                       | "Who acts for this subsidiary" (admin screen, reminders)    |
-| `employee_entity_number_uidx` (live rows)                                                  | Uniqueness and lookup of an employee number per subsidiary  |
-| `employee_entity_name_idx (entity_id, lower(full_name))`                                   | Employee search when adding to a request                    |
-| `criteria_set_one_active_uidx`                                                             | Enforces a single active criteria set                       |
-| `criterion (criteria_set_id, position/code)` unique                                        | Loading a set in order                                      |
-| `employee_id_entity_uidx (id, entity_id)`                                                  | Target of the line's composite foreign key                  |
-| `increment_request_entity_cycle_idx (entity_id, cycle_id, status, updated_at desc)` (live) | Lists and dashboards per subsidiary and cycle               |
-| `increment_request.reference` unique                                                       | Lookup by reference, uniqueness                             |
-| `request_line_employee_uidx (request_id, employee_id)` (live)                              | An employee once per request (backstop to the locked check) |
-| `request_line_entity_idx (entity_id)`                                                      | RLS filter and per-subsidiary queries                       |
-| `request_line_id_entity_key (id, entity_id)` unique                                        | Target of the result and evidence composite foreign keys    |
-| `criterion_result (line_id, criterion_id)` unique                                          | One result per employee and criterion; loading a request    |
-| `criterion_result_entity_idx (entity_id)`                                                  | RLS filter                                                  |
-| `evidence_file.object_key` unique                                                          | One record per stored object                                |
-| `evidence_file_line_idx (line_id, criterion_id, created_at)` (live)                        | Files of a request in order; the 5-file count               |
-| `evidence_file_entity_idx (entity_id)`                                                     | RLS filter                                                  |
-| `increment_request_submitted_idx (status, submitted_at desc)` (live)                       | Sirius queue of submitted requests                          |
-| `status_event_request_idx (request_id, at)`, `status_event_entity_idx (entity_id, at)`     | A request's history; per-subsidiary TAT (R1-11)             |
-| `audit_log_subject_idx`, `audit_log_actor_idx`, `audit_log_entity_idx` (each with `at`)    | Trail of a record, of a user, of a subsidiary               |
-| `notification_user_idx`, `notification_role_idx` (partial, `created_at desc`)              | The notifications page and bell                             |
-| `email_outbox_pending_idx (created_at) where sent_at is null`                              | The sender's queue                                          |
+| Index                                                                                                    | Serves                                                      |
+| -------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| `entity.code` unique                                                                                     | Lookup by code, uniqueness                                  |
+| `user_entity` PK `(user_id, entity_id)`                                                                  | Resolving a caller's subsidiaries on every request          |
+| `user_entity_entity_idx (entity_id)`                                                                     | "Who acts for this subsidiary" (admin screen, reminders)    |
+| `employee_entity_number_uidx` (live rows)                                                                | Uniqueness and lookup of an employee number per subsidiary  |
+| `employee_entity_name_idx (entity_id, lower(full_name))`                                                 | Employee search when adding to a request                    |
+| `criteria_set_one_active_uidx`                                                                           | Enforces a single active criteria set                       |
+| `criterion (criteria_set_id, position/code)` unique                                                      | Loading a set in order                                      |
+| `employee_id_entity_uidx (id, entity_id)`                                                                | Target of the line's composite foreign key                  |
+| `increment_request_entity_cycle_idx (entity_id, cycle_id, status, updated_at desc)` (live)               | Lists and dashboards per subsidiary and cycle               |
+| `increment_request.reference` unique                                                                     | Lookup by reference, uniqueness                             |
+| `request_line_employee_uidx (request_id, employee_id)` (live)                                            | An employee once per request (backstop to the locked check) |
+| `request_line_entity_idx (entity_id)`                                                                    | RLS filter and per-subsidiary queries                       |
+| `request_line_id_entity_key (id, entity_id)` unique                                                      | Target of the result and evidence composite foreign keys    |
+| `criterion_result (line_id, criterion_id)` unique                                                        | One result per employee and criterion; loading a request    |
+| `criterion_result_entity_idx (entity_id)`                                                                | RLS filter                                                  |
+| `evidence_file.object_key` unique                                                                        | One record per stored object                                |
+| `evidence_file_line_idx (line_id, criterion_id, created_at)` (live)                                      | Files of a request in order; the 5-file count               |
+| `evidence_file_entity_idx (entity_id)`                                                                   | RLS filter                                                  |
+| `increment_request_submitted_idx (status, submitted_at desc)` (live)                                     | Sirius queue of submitted requests                          |
+| `status_event_request_idx (request_id, at)`, `status_event_entity_idx (entity_id, at)`                   | A request's history; per-subsidiary TAT (R1-11)             |
+| `audit_log_subject_idx`, `audit_log_actor_idx`, `audit_log_entity_idx` (each with `at`)                  | Trail of a record, of a user, of a subsidiary               |
+| `notification_user_idx`, `notification_role_idx` (partial, `created_at desc`)                            | The notifications page and bell                             |
+| `email_outbox_pending_idx (created_at) where sent_at is null`                                            | The sender's queue                                          |
+| `increment_request_cycle_idx (cycle_id, status, created_at desc)` (live)                                 | Sirius HR's dashboard: every subsidiary in a cycle          |
+| `request_line_name_trgm_idx`, `request_line_number_trgm_idx` (GIN, `lower(…)` with `gin_trgm_ops`, live) | Dashboard search anywhere in an employee's name or number   |
+| `increment_request_reference_trgm_idx` (GIN, `lower(reference)`, live)                                   | Dashboard search by request reference                       |
+
+## Dashboard queries (S4b, `packages/db/src/dashboard.ts`)
+
+"My increment requests" reads requests, employees and counts under the same Row-Level Security as everything else. It never reads justifications or files, only whether they exist (`justification is not null`, a count of live files), and the API judges completeness from those facts with the same rule as the request page. Search is a parameterised `lower(column) LIKE lower($1)` with the user's `%`, `_` and `\` escaped. It uses the `pg_trgm` trigram indexes above (extension enabled by migration 0006; trusted, so the database owner can create it). Salaries are decrypted only to compute an amount proposal's percentage; lists never return them.
 
 ## Retention (proposal, confirm with Sirius under NFR-PRIV-01)
 

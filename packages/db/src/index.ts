@@ -1,4 +1,13 @@
 export { recordAudit, type AuditEntry } from './audit.js';
+export {
+  createDashboardRepository,
+  type CriterionFacts,
+  type DashboardFilter,
+  type DashboardLineRecord,
+  type DashboardRepository,
+  type DashboardRequestRecord,
+  type DashboardSummaryRecord,
+} from './dashboard.js';
 export { createDatabase, type DatabaseHandle, type DatabaseOptions } from './database.js';
 export { createEntityDirectory, type EntityDirectory, type EntitySummary } from './directory.js';
 export {
@@ -27,7 +36,6 @@ export {
   type Proposal,
   type RequestDataErrorReason,
   type RequestLineRecord,
-  type RequestSummaryRecord,
 } from './increment-requests.js';
 export {
   createNotificationRepository,

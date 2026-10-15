@@ -1,4 +1,10 @@
-import type { IncrementRequestRecord, IncrementRequestRepository } from '@peopleforge/db';
+import type {
+  DashboardLineRecord,
+  DashboardRepository,
+  DashboardRequestRecord,
+  IncrementRequestRecord,
+  IncrementRequestRepository,
+} from '@peopleforge/db';
 import { ROLES } from '@peopleforge/contracts';
 import type { MalwareScanner, ObjectStore } from '@peopleforge/integrations';
 import { vi, type Mock } from 'vitest';
@@ -139,23 +145,6 @@ export function workingRepository(): IncrementRequestRepository & {
     ),
     create: vi.fn(() => Promise.resolve({ id: REQUEST_ID, created: true })),
     get: vi.fn(() => Promise.resolve(record())),
-    list: vi.fn(() =>
-      Promise.resolve({
-        total: 1,
-        items: [
-          {
-            id: REQUEST_ID,
-            reference: 'INC-2026-0001',
-            status: 'draft' as const,
-            entityId: SUB_A,
-            cycleId: CYCLE_ID,
-            employeeCount: 2,
-            createdAt: new Date('2026-10-14T07:00:00Z'),
-            updatedAt: new Date('2026-10-14T07:05:00Z'),
-          },
-        ],
-      }),
-    ),
     addLine: vi.fn(() => Promise.resolve()),
     removeLine: vi.fn(() => Promise.resolve({ discarded: false })),
     saveDraft: vi.fn(() => Promise.resolve()),
@@ -187,6 +176,82 @@ export function workingRepository(): IncrementRequestRepository & {
         sizeBytes: evidenceRecord.sizeBytes,
       }),
     ),
+  };
+}
+
+/** No facts saved for a criterion yet. */
+const notStarted = (criterionId: string) => ({
+  criterionId,
+  result: null,
+  hasJustification: false,
+  evidenceCount: 0,
+});
+
+/** C1 complete for Omar (as in `record()`), nothing else saved. */
+export function dashboardRequest(
+  overrides: Partial<DashboardRequestRecord> = {},
+): DashboardRequestRecord {
+  const { criteria } = record();
+  return {
+    id: REQUEST_ID,
+    reference: 'INC-2026-0001',
+    status: 'draft',
+    entity: { id: SUB_A, code: 'SUB-A' },
+    cycleId: CYCLE_ID,
+    createdAt: new Date('2026-10-14T07:00:00Z'),
+    statusChangedAt: new Date('2026-10-14T07:00:00Z'),
+    criteria,
+    lines: [
+      CRITERION_IDS.map((id, index) =>
+        index === 0
+          ? { criterionId: id, result: 'pass' as const, hasJustification: true, evidenceCount: 1 }
+          : notStarted(id),
+      ),
+      CRITERION_IDS.map(notStarted),
+    ],
+    ...overrides,
+  };
+}
+
+export function dashboardLine(overrides: Partial<DashboardLineRecord> = {}): DashboardLineRecord {
+  const { criteria } = record();
+  return {
+    id: LINE_1,
+    request: {
+      id: REQUEST_ID,
+      reference: 'INC-2026-0001',
+      status: 'draft',
+      entityCode: 'SUB-A',
+      createdAt: new Date('2026-10-14T07:00:00Z'),
+    },
+    employeeNumber: 'EMP-3318',
+    fullName: 'Omar Haddad',
+    grade: 'G7',
+    currency: 'AED',
+    currentSalary: '21500.00',
+    proposedKind: 'amount',
+    proposedValue: '1720.00',
+    criteria,
+    facts: CRITERION_IDS.map((id, index) =>
+      index === 1
+        ? { criterionId: id, result: 'fail' as const, hasJustification: true, evidenceCount: 1 }
+        : index === 0
+          ? { criterionId: id, result: 'pass' as const, hasJustification: true, evidenceCount: 0 }
+          : notStarted(id),
+    ),
+    updatedAt: new Date('2026-10-14T07:05:00Z'),
+    ...overrides,
+  };
+}
+
+/** A dashboard repository returning one request and one employee. */
+export function workingDashboard(): DashboardRepository & {
+  [K in keyof DashboardRepository]: Mock;
+} {
+  return {
+    summary: vi.fn(() => Promise.resolve({ byStatus: { draft: 2 }, requests: 2, employees: 3 })),
+    requests: vi.fn(() => Promise.resolve({ items: [dashboardRequest()], total: 1 })),
+    lines: vi.fn(() => Promise.resolve({ items: [dashboardLine()], total: 1 })),
   };
 }
 

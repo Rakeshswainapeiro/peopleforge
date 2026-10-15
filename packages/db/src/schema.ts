@@ -111,6 +111,8 @@ export interface IncrementRequestTable {
   deleted_at: Date | null;
   submitted_at: Date | null;
   submitted_by: string | null;
+  /** Last status change (Age, Last update on the dashboard); set by every status change. */
+  status_changed_at: Generated<Date>;
 }
 
 export type ProposedKind = 'percent' | 'amount';

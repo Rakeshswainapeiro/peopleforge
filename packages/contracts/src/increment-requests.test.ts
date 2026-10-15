@@ -5,7 +5,10 @@ import {
   EmployeeSearchQuerySchema,
   IncrementRequestSchema,
   ListIncrementRequestsQuerySchema,
+  ListRequestLinesQuerySchema,
   EvidenceUploadSchema,
+  MAX_SEARCH_LENGTH,
+  RequestStageSchema,
   MAX_JUSTIFICATION_LENGTH,
   SaveDraftSchema,
   SubmitRequestSchema,
@@ -137,6 +140,46 @@ describe('ListIncrementRequestsQuerySchema', () => {
   it('refuses page sizes outside the offered ones', () => {
     expect(ListIncrementRequestsQuerySchema.safeParse({ pageSize: '1000' }).success).toBe(false);
     expect(ListIncrementRequestsQuerySchema.safeParse({ page: '0' }).success).toBe(false);
+  });
+  it('filters by cycle, status and a trimmed, NFC-normalised search; an empty box is no search', () => {
+    // "e" + combining acute (NFD) becomes the single "é" (NFC), as the database stores names.
+    expect(
+      ListIncrementRequestsQuerySchema.parse({ cycleId: ID, search: '  Rene\u0301  ' }),
+    ).toEqual({ cycleId: ID, search: 'René', page: 1, pageSize: 10 });
+    expect(ListIncrementRequestsQuerySchema.parse({ search: '   ' }).search).toBeUndefined();
+    expect(
+      ListIncrementRequestsQuerySchema.safeParse({ search: 'x'.repeat(MAX_SEARCH_LENGTH + 1) })
+        .success,
+    ).toBe(false);
+    expect(ListIncrementRequestsQuerySchema.safeParse({ cycleId: 'q3-2026' }).success).toBe(false);
+    expect(ListIncrementRequestsQuerySchema.safeParse({ status: 'approved' }).success).toBe(false);
+    expect(ListIncrementRequestsQuerySchema.safeParse({ sort: 'name' }).success).toBe(false);
+  });
+});
+
+describe('ListRequestLinesQuerySchema', () => {
+  it('adds an optional request to the same filters and paging', () => {
+    expect(ListRequestLinesQuerySchema.parse({ requestId: ID, pageSize: '50' })).toEqual({
+      requestId: ID,
+      page: 1,
+      pageSize: 50,
+    });
+    expect(ListRequestLinesQuerySchema.safeParse({ requestId: 'INC-1' }).success).toBe(false);
+  });
+});
+
+describe('RequestStageSchema', () => {
+  it('is not submitted, or at a criterion of the set', () => {
+    expect(RequestStageSchema.parse({ kind: 'not_submitted', of: 5 })).toEqual({
+      kind: 'not_submitted',
+      of: 5,
+    });
+    expect(RequestStageSchema.parse({ kind: 'criterion', criterion: 1, of: 5 })).toMatchObject({
+      criterion: 1,
+    });
+    expect(RequestStageSchema.safeParse({ kind: 'criterion', criterion: 0, of: 5 }).success).toBe(
+      false,
+    );
   });
 });
 

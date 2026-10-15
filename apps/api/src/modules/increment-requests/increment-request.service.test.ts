@@ -100,11 +100,6 @@ describe('IncrementRequestService', () => {
     const repository = workingRepository();
     const service = new IncrementRequestService(repository);
     await expect(service.get(reviewer, REQUEST_ID)).rejects.toThrow(NotFoundError);
-    await service.list(reviewer, { page: 1, pageSize: 10 });
-    expect(repository.list).toHaveBeenCalledWith(
-      { userId: 'reviewer', kind: 'group' },
-      { includeDrafts: false, limit: 10, offset: 0 },
-    );
   });
 
   it('answers not found for a request outside the caller’s scope', async () => {
@@ -173,19 +168,6 @@ describe('IncrementRequestService', () => {
         { entityId: SUB_B, limit: 50, search: 'omar', excludeRequestId: REQUEST_ID },
       ],
     ]);
-  });
-
-  it('pages the list', async () => {
-    const repository = workingRepository();
-    const service = new IncrementRequestService(repository);
-    const page = await service.list(alphaHr, { status: 'draft', page: 3, pageSize: 10 });
-    await service.list(alphaHr, { page: 1, pageSize: 25 });
-    expect(repository.list.mock.calls).toEqual([
-      [scopeA, { includeDrafts: true, limit: 10, offset: 20, status: 'draft' }],
-      [scopeA, { includeDrafts: true, limit: 25, offset: 0 }],
-    ]);
-    expect(page).toMatchObject({ page: 3, pageSize: 10, total: 1 });
-    expect(page.items[0]?.updatedAt).toBe('2026-10-14T07:05:00.000Z');
   });
 
   it('adds and removes employees, returning the updated request', async () => {

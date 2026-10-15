@@ -9,6 +9,7 @@ import { APP_FILTER } from '@nestjs/core';
 import type {
   EntityDirectory,
   IncrementRequestRepository,
+  DashboardRepository,
   NotificationRepository,
 } from '@peopleforge/db';
 import type { MalwareScanner, ObjectStore } from '@peopleforge/integrations';
@@ -27,10 +28,12 @@ import { MeController } from '../modules/identity/me.controller.js';
 import { NotificationService } from '../modules/notifications/notification.service.js';
 import { NotificationsController } from '../modules/notifications/notifications.controller.js';
 import { API_V1 } from './routes.js';
+import { DashboardService } from '../modules/increment-requests/dashboard.service.js';
 import { IncrementRequestService } from '../modules/increment-requests/increment-request.service.js';
 import {
   EmployeesController,
   IncrementCyclesController,
+  IncrementRequestLinesController,
   IncrementRequestsController,
 } from '../modules/increment-requests/increment-requests.controller.js';
 import {
@@ -38,6 +41,7 @@ import {
   ENV,
   EVIDENCE_SERVICE,
   NOTIFICATION_SERVICE,
+  DASHBOARD_SERVICE,
   INCREMENT_REQUEST_SERVICE,
   LOGGER,
   READINESS_CHECKS,
@@ -59,6 +63,8 @@ export interface AppDependencies {
   /** Private storage for evidence files (ADR-010) and the scan every upload must pass (R1-04). */
   objectStore: ObjectStore;
   malwareScanner: MalwareScanner;
+  /** "My increment requests": counts, requests and employees (R1-10). */
+  dashboard: DashboardRepository;
   /** The caller's in-app notifications (R1-07, R1-13). */
   notifications: NotificationRepository;
   readinessChecks: readonly ReadinessCheck[];
@@ -88,6 +94,7 @@ export class AppModule implements NestModule {
         IncrementRequestsController,
         IncrementCyclesController,
         EmployeesController,
+        IncrementRequestLinesController,
         EvidenceController,
         NotificationsController,
       ],
@@ -96,6 +103,7 @@ export class AppModule implements NestModule {
         { provide: LOGGER, useValue: deps.logger },
         { provide: ENTITY_DIRECTORY, useValue: deps.directory },
         { provide: INCREMENT_REQUEST_SERVICE, useValue: requests },
+        { provide: DASHBOARD_SERVICE, useValue: new DashboardService(deps.dashboard) },
         {
           provide: NOTIFICATION_SERVICE,
           useValue: new NotificationService(deps.notifications),

@@ -29,7 +29,7 @@ export async function createApp(deps: AppDependencies): Promise<NestExpressAppli
   app.use(requestLogger(logger));
   app.use(securityHeaders());
   app.use(corsPolicy(env));
-  app.use(`/${API_V1}`, rateLimiter(env));
+  app.use(`/${API_V1}`, ...rateLimiter(env));
 
   await app.init();
   assertEveryRouteHasPolicy(app);

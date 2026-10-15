@@ -26,7 +26,10 @@ test.describe('language and direction switch', () => {
 
     await expect(html).toHaveAttribute('lang', 'ar');
     await expect(html).toHaveAttribute('dir', 'rtl');
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText('مرحباً');
+    // Translated text shows in Arabic; untranslated text falls back to English (Arabic content
+    // is scaffolded only, a change request at go-live).
+    await expect(page.getByRole('group', { name: 'اللغة' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Increment requests');
 
     // Mirrored: the start is now on the right.
     expect(await centre(page, avatar)).toBeGreaterThan(0.5);

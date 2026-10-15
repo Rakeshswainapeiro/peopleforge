@@ -99,10 +99,15 @@ test('subsidiary HR completes a draft and submits it to Sirius HR', async ({ pag
   await expect(page.getByRole('button', { name: 'Save draft' })).toHaveCount(0);
   await expect(page.getByRole('textbox')).toHaveCount(0);
   await expect(page.getByRole('region', { name: '2. Eligibility criteria' })).toHaveCount(0);
-  // No longer under "Needs your action" on Home.
-  await page.goto('/');
+  // On Home it leaves "Needs your action" and shows as Submitted, at its first criterion.
+  await page.goto(`/?q=${reference}`);
   const id = requestUrl.split('/').at(-1) ?? '';
-  await expect(page.locator(`a[href="/requests/${id}"]`)).toHaveCount(0);
+  const action = page.getByRole('region', { name: 'Needs your action' });
+  await expect(action.locator(`a[href="/requests/${id}"]`)).toHaveCount(0);
+  const row = page.getByRole('row').filter({ hasText: reference });
+  await expect(row).toContainText('Submitted');
+  await expect(row).toContainText('Criterion 1 of 5');
+  await expect(row).toContainText('Sirius HR');
   expect(errors).toEqual([]);
 });
 

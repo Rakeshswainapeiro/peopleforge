@@ -53,6 +53,15 @@ describe('Field', () => {
     expect(screen.getByRole('combobox', { name: 'Big select' })).toHaveClass('h-12');
   });
 
+  it('offers a small size for toolbar controls', () => {
+    render(
+      <Select aria-label="Rows per page" controlSize="sm">
+        <option>10</option>
+      </Select>,
+    );
+    expect(screen.getByRole('combobox', { name: 'Rows per page' })).toHaveClass('h-8', 'text-xs');
+  });
+
   it('renders a plain input and a select with a chevron', async () => {
     render(
       <>

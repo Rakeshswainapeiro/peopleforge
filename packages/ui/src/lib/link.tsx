@@ -5,7 +5,7 @@ export interface LinkProps {
   className?: string;
   children: ReactNode;
   'aria-current'?: 'page' | undefined;
-  'aria-label'?: string;
+  'aria-label'?: string | undefined;
 }
 
 /**

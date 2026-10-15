@@ -3,6 +3,7 @@ import type { BadgeTone } from '@peopleforge/ui';
 import type { Locale } from '@sirius/shared-types';
 import type { MessageKey, Translate } from '@/i18n/translator';
 import { formatDateTime } from './format';
+import { pluralForm } from './plural';
 
 /** One row of the notifications list (Figma "Notifications"), worded for the reader. */
 export interface NotificationRowView {
@@ -19,10 +20,6 @@ function text(value: string | number | undefined): string {
   return value === undefined ? '' : String(value);
 }
 
-function plural(count: number, locale: Locale): 'one' | 'other' {
-  return new Intl.PluralRules(locale).select(count) === 'one' ? 'one' : 'other';
-}
-
 /** The sentence for a notification, in the reader's language, from its kind and values. */
 function messageOf(notification: Notification, locale: Locale, t: Translate): string {
   const count = Number(notification.params.employees ?? 0);
@@ -31,7 +28,7 @@ function messageOf(notification: Notification, locale: Locale, t: Translate): st
     entity: text(notification.params.entity),
     actor: text(notification.params.actor),
   };
-  const key: MessageKey = `notifications.kinds.${notification.kind}.${plural(count, locale)}`;
+  const key: MessageKey = `notifications.kinds.${notification.kind}.${pluralForm(count, locale)}`;
   return t(key, values);
 }
 

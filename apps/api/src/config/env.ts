@@ -40,7 +40,10 @@ const EnvSchema = z
     TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(5).default(1),
     REQUEST_BODY_LIMIT_KB: z.coerce.number().int().min(1).max(10240).default(100),
     RATE_LIMIT_WINDOW_MS: z.coerce.number().int().min(1000).default(60_000),
+    /** Requests per caller (access token, else IP) per window. */
     RATE_LIMIT_MAX: z.coerce.number().int().min(1).default(300),
+    /** Requests per client IP per window: the web server's whole traffic comes from one IP. */
+    RATE_LIMIT_IP_MAX: z.coerce.number().int().min(1).default(3000),
     READINESS_CHECK_TIMEOUT_MS: z.coerce.number().int().min(100).max(30_000).default(2_000),
     SHUTDOWN_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(120_000).default(25_000),
   })

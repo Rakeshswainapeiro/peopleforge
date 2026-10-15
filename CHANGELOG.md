@@ -4,6 +4,28 @@ All notable changes are recorded here. Format: [Keep a Changelog](https://keepac
 
 ## [Unreleased]
 
+### Added — slice S4b-1: "My increment requests" dashboard (R1-10, DASH-D1, R1-06)
+
+- **Home is now the dashboard** for Subsidiary HR and Sirius HR, following the Figma:
+  - KPI cards: Drafts, With Sirius HR, Needs your reply, Approved, Rejected. Replies and decisions count zero until S5.
+  - "Needs your action": each draft with "n employees added · criteria x of y complete" and **Continue draft**. ✕ hides it until the next visit.
+  - **By request**: request, created, employees (with **View**), review stage bar, status, age (calendar days since the last status change, Dubai), and who has it now ("You" for a draft, "Sirius HR" once submitted).
+  - **By employee**: proposed %, a ✓/✗/○ mark per criterion, employee status, last update, and **View Status**.
+  - Filters for search (employee name or ID, or request reference, matched anywhere and Arabic-aware), period (increment cycle, default the open one) and status. They apply as you type or choose, without a page reload. Rows per page 10/25/50 and pagination. Everything is in the URL, so links and Back work.
+  - Sirius HR sees every subsidiary's submitted requests with a Subsidiary column, no drafts and no Drafts card. Roles without request access keep the welcome page.
+- **Employee status page** (`/requests/{id}/employees/{lineId}`): breadcrumb, current salary, proposed % and amount, new salary if approved, criteria passed with what's left, progress, and the criteria table with justifications and evidence downloads.
+- API: `GET /api/v1/increment-requests` takes `cycleId` and `search`, and each item now has `entity`, `statusChangedAt`, `stage` and `criteria` progress. New `GET /api/v1/increment-requests/summary` and `GET /api/v1/increment-request-lines` (no salaries). OpenAPI 0.7.0.
+- Migration `0006_dashboard`: `status_changed_at`, a cycle index, and trigram search indexes (enables `pg_trgm`; DEPLOYMENT.md).
+- Design system: `StageMeter`, a marks-only `CriteriaProgress` variant, a small (`sm`) control size, and `aria-label` on `ButtonLink`. Portal pages share one loading skeleton, one Progress card, one pagination-label helper and one plural helper.
+
+### Fixed
+
+- **All users shared one API rate limit.** The limit was per IP, and every user reaches the API through the web server, so about 50 dashboard views a minute across the company would have refused everyone. Each caller now has its own budget (`RATE_LIMIT_MAX`, keyed on a hash of the access token), and a per-IP ceiling (`RATE_LIMIT_IP_MAX`, default 3,000/min) still stops floods. New env var: DEPLOYMENT.md §4.
+
+### Changed
+
+- The request list's items no longer carry `entityId` and `updatedAt` (replaced by `entity` and `statusChangedAt`); the web app is the only client.
+
 ### Fixed — UX polish after S4a review
 
 - **The confirmation dialog opened in the top-left corner** in some browsers. It relied on the browser's default `<dialog>` centring, which Tailwind's reset removes in some engines. The dialog now lays itself out explicitly: a full-window layer that centres the panel and draws its own blurred backdrop. An end-to-end test checks it is centred in the viewport.

@@ -6,7 +6,7 @@ import {
   type TextareaHTMLAttributes,
 } from 'react';
 import { Icon, type IconName } from '../icons/icon.js';
-import { cn } from '../lib/cn.js';
+import { cn, variantClass } from '../lib/cn.js';
 import { focusRing, transition } from '../lib/focus.js';
 
 const control = cn(
@@ -74,11 +74,19 @@ export function Field({
   );
 }
 
-export type ControlSize = 'md' | 'lg';
+export type ControlSize = 'sm' | 'md' | 'lg';
 
-/** md: filters and forms (40px). lg: the Figma table value boxes (48px, larger text). */
+const SIZES = new Map<ControlSize, string>([
+  // Compact controls inside a toolbar, e.g. "Rows per page" (32px).
+  ['sm', 'h-8 text-xs'],
+  // Filters and forms (40px).
+  ['md', 'h-10'],
+  // The Figma table value boxes (48px, larger text).
+  ['lg', 'h-12 text-base'],
+]);
+
 function sizeClasses(size: ControlSize): string {
-  return size === 'lg' ? 'h-12 text-base' : 'h-10';
+  return variantClass(SIZES, size);
 }
 
 export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {

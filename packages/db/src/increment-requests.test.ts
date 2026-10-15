@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { MAX_EVIDENCE_PER_CRITERION } from '@peopleforge/contracts';
 import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { createDashboardRepository, type DashboardRepository } from './dashboard.js';
 import { createDatabase, type DatabaseHandle } from './database.js';
 import {
   createIncrementRequestRepository,
@@ -23,6 +24,7 @@ const sirius: Scope = { userId: 'sirius-reviewer', kind: 'group' };
 
 let handle: DatabaseHandle;
 let repo: IncrementRequestRepository;
+let dashboard: DashboardRepository;
 const owner = new pg.Client({ connectionString: TEST_OWNER_URL });
 
 /** Seeded employee IDs by number (IDs are random per seed). */
@@ -38,6 +40,12 @@ async function asOwner(statement: string, values: unknown[] = []): Promise<void>
   await owner.query("SELECT set_config('app.scope', 'group', true)");
   await owner.query(statement, values);
   await owner.query('COMMIT');
+}
+
+/** The IDs of the requests a caller sees, drafts included. */
+async function visibleRequests(scope: Scope): Promise<string[]> {
+  const page = await dashboard.requests(scope, { includeDrafts: true, limit: 500, offset: 0 });
+  return page.items.map((item) => item.id);
 }
 
 function key(): string {
@@ -75,6 +83,7 @@ beforeAll(async () => {
   for (const row of rows.rows) ids.set(row.employee_number, row.id);
   handle = createDatabase({ connectionString: TEST_APP_URL, poolMax: 4 });
   repo = createIncrementRequestRepository(handle.db, testCipher);
+  dashboard = createDashboardRepository(handle.db, testCipher);
 });
 
 afterAll(async () => {
@@ -242,7 +251,7 @@ describe('create', () => {
   });
 
   it('refuses another subsidiary’s employee, and duplicates, saving nothing', async () => {
-    const before = await repo.list(alpha, { includeDrafts: true, limit: 100, offset: 0 });
+    const before = await visibleRequests(alpha);
     const foreign = await refusal(
       repo.create(alpha, {
         entityId: SUB_A.id,
@@ -264,9 +273,7 @@ describe('create', () => {
       reason: 'duplicate_employee',
       subject: employee('EMP-1101'),
     });
-    expect((await repo.list(alpha, { includeDrafts: true, limit: 100, offset: 0 })).total).toBe(
-      before.total,
-    );
+    expect(await visibleRequests(alpha)).toEqual(before);
   });
 
   it('refuses when no criteria set is active', async () => {
@@ -302,11 +309,7 @@ describe('visibility [R1-01, R2-12]', () => {
     const id = await draft();
     await expect(repo.get(beta, id)).resolves.toBeNull();
     await expect(repo.get(sirius, id)).resolves.toMatchObject({ id });
-    expect(
-      (await repo.list(beta, { includeDrafts: true, limit: 100, offset: 0 })).items.map(
-        (r) => r.id,
-      ),
-    ).not.toContain(id);
+    expect(await visibleRequests(beta)).not.toContain(id);
     expect(await refusal(repo.addLine(beta, id, employee('EMP-2201')))).toMatchObject({
       reason: 'not_found',
     });
@@ -323,39 +326,6 @@ describe('visibility [R1-01, R2-12]', () => {
       ),
     ).rejects.toThrow(/foreign key/);
     await owner.query('ROLLBACK');
-  });
-});
-
-describe('list', () => {
-  it('pages summaries, newest first, with live employee counts', async () => {
-    const id = await draft(['EMP-1101', 'EMP-1103']);
-    const page = await repo.list(alpha, {
-      status: 'draft',
-      includeDrafts: true,
-      limit: 1,
-      offset: 0,
-    });
-    expect(page.items).toEqual([
-      expect.objectContaining({
-        id,
-        status: 'draft',
-        entityId: SUB_A.id,
-        cycleId: CYCLE,
-        employeeCount: 2,
-      }),
-    ]);
-    expect(page.total).toBeGreaterThan(1);
-    const next = await repo.list(alpha, { includeDrafts: true, limit: 1, offset: 1 });
-    expect(next.items[0]?.id).not.toBe(id);
-  });
-
-  it('leaves drafts out unless asked (Sirius sees submitted requests only)', async () => {
-    await expect(
-      repo.list(sirius, { includeDrafts: false, limit: 100, offset: 0 }),
-    ).resolves.toEqual({
-      items: [],
-      total: 0,
-    });
   });
 });
 
@@ -384,8 +354,7 @@ describe('editing a draft', () => {
     const lineId = String((await repo.get(alpha, id))?.lines[0]?.id);
     await expect(repo.removeLine(alpha, id, lineId)).resolves.toEqual({ discarded: true });
     await expect(repo.get(alpha, id)).resolves.toBeNull();
-    const drafts = await repo.list(alpha, { includeDrafts: true, limit: 100, offset: 0 });
-    expect(drafts.items.map((item) => item.id)).not.toContain(id);
+    expect(await visibleRequests(alpha)).not.toContain(id);
     expect(await refusal(repo.addLine(alpha, id, employee('EMP-1102')))).toMatchObject({
       reason: 'not_found',
     });

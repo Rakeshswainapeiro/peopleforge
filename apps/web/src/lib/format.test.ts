@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  daysBetween,
+  formatAge,
   formatDate,
   formatDateTime,
   formatFileSize,
@@ -67,5 +69,27 @@ describe('formatDate / formatDateTime', () => {
 
   it('formats Arabic in Arabic', () => {
     expect(formatDate('2026-10-14T08:00:00.000Z', 'ar')).not.toContain('Oct');
+  });
+});
+
+describe('daysBetween / formatAge [R1-10]', () => {
+  const now = new Date('2026-10-15T06:00:00Z'); // 10:00 in Dubai
+
+  it('counts calendar days in Dubai, not 24-hour periods', () => {
+    expect(daysBetween('2026-10-15T01:00:00Z', now)).toBe(0);
+    expect(daysBetween('2026-10-13T06:00:00Z', now)).toBe(2);
+    // 21:30 UTC on the 14th is already 01:30 on the 15th in Dubai: same day.
+    expect(daysBetween('2026-10-14T21:30:00Z', now)).toBe(0);
+    // 19:59 UTC on the 14th is 23:59 in Dubai: yesterday.
+    expect(daysBetween('2026-10-14T19:59:00Z', now)).toBe(1);
+    // Month and year boundaries.
+    expect(daysBetween('2025-12-31T10:00:00Z', new Date('2026-01-01T10:00:00Z'))).toBe(1);
+    // A clock slightly ahead never gives a negative age.
+    expect(daysBetween('2026-10-16T06:00:00Z', now)).toBe(0);
+  });
+
+  it('writes the age with the locale’s narrow day unit', () => {
+    expect(formatAge('2026-10-13T06:00:00Z', now, 'en')).toBe('2d');
+    expect(formatAge('2026-10-13T06:00:00Z', now, 'ar')).toMatch(/٢|2/u);
   });
 });

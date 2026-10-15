@@ -4,9 +4,7 @@ import type {
   Cycle,
   EmployeeOption,
   IncrementRequest,
-  IncrementRequestPage,
   RemoveLineResult,
-  RequestStatus,
   SaveDraft,
   SubmitRequest,
 } from '@peopleforge/contracts';
@@ -101,7 +99,7 @@ function resolveEntity(caller: Principal, requested: string | undefined): string
 }
 
 /** Drafts belong to the subsidiary preparing them; Sirius sees a request once it is submitted. */
-function seesDrafts(caller: Principal): boolean {
+export function seesDrafts(caller: Principal): boolean {
   return permissionsOfPrincipal(caller).has('increment_request:create');
 }
 
@@ -252,28 +250,6 @@ export class IncrementRequestService {
       throw new NotFoundError('Increment request not found');
     }
     return toDto(record);
-  }
-
-  async list(
-    caller: Principal,
-    query: { status?: RequestStatus | undefined; page: number; pageSize: number },
-  ): Promise<IncrementRequestPage> {
-    const { items, total } = await this.repository.list(scopeOf(caller), {
-      includeDrafts: seesDrafts(caller),
-      limit: query.pageSize,
-      offset: (query.page - 1) * query.pageSize,
-      ...(query.status === undefined ? {} : { status: query.status }),
-    });
-    return {
-      page: query.page,
-      pageSize: query.pageSize,
-      total,
-      items: items.map((item) => ({
-        ...item,
-        createdAt: item.createdAt.toISOString(),
-        updatedAt: item.updatedAt.toISOString(),
-      })),
-    };
   }
 
   async addLine(caller: Principal, id: string, employeeId: string): Promise<IncrementRequest> {

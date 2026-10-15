@@ -138,6 +138,8 @@ export interface ButtonLinkProps extends Omit<ContentProps, 'children'> {
   size?: ButtonSize;
   fullWidth?: boolean;
   className?: string;
+  /** When the visible text isn't enough on its own, e.g. "View Status" → "View the status of Omar". */
+  'aria-label'?: string | undefined;
   as?: LinkComponent;
 }
 
@@ -151,10 +153,15 @@ export function ButtonLink({
   icon,
   trailingIcon,
   children,
+  'aria-label': ariaLabel,
   as: LinkAs = PlainLink,
 }: ButtonLinkProps) {
   return (
-    <LinkAs href={href} className={cn(buttonClasses({ variant, size, fullWidth }), className)}>
+    <LinkAs
+      href={href}
+      aria-label={ariaLabel}
+      className={cn(buttonClasses({ variant, size, fullWidth }), className)}
+    >
       <ButtonContent icon={icon} trailingIcon={trailingIcon}>
         {children}
       </ButtonContent>

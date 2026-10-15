@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import {
   createDatabase,
   createEntityDirectory,
+  createDashboardRepository,
   createIncrementRequestRepository,
   createNotificationRepository,
   type FieldCipher,
@@ -48,6 +49,7 @@ async function start(): Promise<void> {
     incrementRequests: createIncrementRequestRepository(database.db, cipher),
     objectStore,
     malwareScanner,
+    dashboard: createDashboardRepository(database.db, cipher),
     notifications: createNotificationRepository(database.db),
     // Uploads need both: without them the API is not ready to serve R1-04.
     readinessChecks: [

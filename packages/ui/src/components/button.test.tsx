@@ -104,6 +104,17 @@ describe('ButtonLink', () => {
     expect(link).toHaveClass('bg-brand-600', 'x');
   });
 
+  it('takes an accessible name when the text alone is ambiguous', () => {
+    render(
+      <ButtonLink href="/x" aria-label="View the status of Omar Haddad">
+        View Status
+      </ButtonLink>,
+    );
+    expect(screen.getByRole('link', { name: 'View the status of Omar Haddad' })).toHaveTextContent(
+      'View Status',
+    );
+  });
+
   it('uses the app router link when given one', () => {
     function RouterLink(props: LinkProps) {
       return <a data-router="yes" {...props} />;

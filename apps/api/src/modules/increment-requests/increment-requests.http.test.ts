@@ -15,6 +15,7 @@ import {
   record,
   REQUEST_ID,
   reviewer,
+  workingDashboard,
   workingRepository,
 } from '../../test-support/increment-requests.js';
 
@@ -25,6 +26,7 @@ async function app(
   return buildApp({
     resolvePrincipal: caller === null ? anonymous : resolveAs(caller),
     incrementRequests: repository,
+    dashboard: workingDashboard(),
   });
 }
 

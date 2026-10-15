@@ -1,5 +1,5 @@
 import { MAX_JUSTIFICATION_LENGTH } from '@peopleforge/contracts';
-import { Alert, Button, Card, CardHeader, PageHeader, ProgressSteps } from '@peopleforge/ui';
+import { Alert, Button, Card, CardHeader, PageHeader } from '@peopleforge/ui';
 import { randomUUID } from 'node:crypto';
 import { notFound, redirect } from 'next/navigation';
 import { z } from 'zod';
@@ -8,6 +8,7 @@ import { CriteriaEditor } from '@/components/requests/criteria-editor';
 import { DraftForm } from '@/components/requests/draft-form';
 import { ProposalsTable } from '@/components/requests/proposals-table';
 import { ReadyPanel } from '@/components/requests/ready-panel';
+import { RequestProgress } from '@/components/requests/request-progress';
 import { getRequestLocale } from '@/i18n/request-locale';
 import { createTranslator } from '@/i18n/translator';
 import { hasAnyPermission } from '@/lib/navigation';
@@ -16,7 +17,6 @@ import {
   criteriaCards,
   criteriaLabels,
   evidenceMessages,
-  progressSteps,
   proposalRows,
   readyView,
   saveMessages,
@@ -110,20 +110,7 @@ export default async function RequestPage({ params, searchParams }: RequestPageP
           <Alert tone="info" title={t('request.waitingTitle')} className="mt-6">
             {t('request.waitingBody', { date: formatDate(request.submittedAt, locale) })}
           </Alert>
-          <Card className="mt-6" label={t('request.progress')}>
-            <CardHeader title={t('request.progress')} />
-            <div className="px-6 pt-4 pb-6">
-              <ProgressSteps
-                label={t('request.progress')}
-                steps={progressSteps(request, locale, t)}
-                stateLabels={{
-                  done: t('request.progressStates.done'),
-                  current: t('request.progressStates.current'),
-                  todo: t('request.progressStates.todo'),
-                }}
-              />
-            </div>
-          </Card>
+          <RequestProgress request={request} locale={locale} t={t} />
         </>
       )}
       {error === undefined ? null : (

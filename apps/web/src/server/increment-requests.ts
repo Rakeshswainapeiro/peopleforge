@@ -1,17 +1,22 @@
 import {
   CycleSchema,
+  DashboardSummarySchema,
   EmployeeOptionSchema,
   EvidenceFileSchema,
   IncrementRequestPageSchema,
   IncrementRequestSchema,
   RemoveLineResultSchema,
+  RequestLinePageSchema,
   type CreateIncrementRequest,
   type Cycle,
+  type DashboardFilter,
+  type DashboardSummary,
   type EmployeeOption,
   type EvidenceFile,
   type IncrementRequest,
   type IncrementRequestPage,
   type RemoveLineResult,
+  type RequestLinePage,
   type SaveDraft,
 } from '@peopleforge/contracts';
 import { z } from 'zod';
@@ -39,14 +44,49 @@ export function searchEmployees(
   return callApi(`/api/v1/employees?${query.toString()}`, z.array(EmployeeOptionSchema));
 }
 
-export function listRequests(
-  options: { status?: 'draft'; page?: number; pageSize?: number } = {},
-): Promise<ApiResult<IncrementRequestPage>> {
+/** Dashboard filters and paging as API query parameters (R1-10); IDs validated first. */
+export interface DashboardQuery extends DashboardFilter {
+  page?: number;
+  pageSize?: number;
+  requestId?: string | undefined;
+}
+
+function dashboardParams(options: DashboardQuery, paged: boolean): string {
   const query = new URLSearchParams();
+  if (options.cycleId !== undefined) query.set('cycleId', Id.parse(options.cycleId));
   if (options.status !== undefined) query.set('status', options.status);
-  query.set('page', String(options.page ?? 1));
-  query.set('pageSize', String(options.pageSize ?? 10));
-  return callApi(`${BASE}?${query.toString()}`, IncrementRequestPageSchema);
+  if (options.search !== undefined) query.set('search', options.search);
+  if (options.requestId !== undefined) query.set('requestId', Id.parse(options.requestId));
+  if (paged) {
+    query.set('page', String(options.page ?? 1));
+    query.set('pageSize', String(options.pageSize ?? 10));
+  }
+  return query.toString();
+}
+
+/** "My increment requests", By request. */
+export function listRequests(
+  options: DashboardQuery = {},
+): Promise<ApiResult<IncrementRequestPage>> {
+  return callApi(`${BASE}?${dashboardParams(options, true)}`, IncrementRequestPageSchema);
+}
+
+/** The KPI cards and tab counts. */
+export function dashboardSummary(
+  filter: DashboardFilter = {},
+): Promise<ApiResult<DashboardSummary>> {
+  const query = dashboardParams(filter, false);
+  return callApi(`${BASE}/summary${query === '' ? '' : `?${query}`}`, DashboardSummarySchema);
+}
+
+/** "My increment requests", By employee: no salaries, the proposed percentage only. */
+export function listRequestLines(
+  options: DashboardQuery = {},
+): Promise<ApiResult<RequestLinePage>> {
+  return callApi(
+    `/api/v1/increment-request-lines?${dashboardParams(options, true)}`,
+    RequestLinePageSchema,
+  );
 }
 
 export function getRequest(id: string): Promise<ApiResult<IncrementRequest>> {

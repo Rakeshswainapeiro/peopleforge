@@ -15,6 +15,7 @@ import type { ProposalRowView, ProposalsTableLabels } from '@/components/request
 import type { ReadyPanelProps } from '@/components/requests/ready-panel';
 import type { MessageKey, Translate } from '@/i18n/translator';
 import { formatDate, formatFileSize, formatMoney, formatPercent, trimDecimal } from './format';
+import { pluralForm } from './plural';
 import { EVIDENCE_ERROR_KEYS, REQUEST_ERROR_KEYS } from './request-errors';
 import { localised } from './viewer-display';
 
@@ -174,7 +175,7 @@ export function evidenceMessages(t: Translate): [string, string][] {
 
 /** "1 criterion incomplete" / "5 criteria incomplete", by the locale's plural rules. */
 function criteriaIncomplete(count: number, locale: Locale, t: Translate): string {
-  const form = new Intl.PluralRules(locale).select(count) === 'one' ? 'one' : 'other';
+  const form = pluralForm(count, locale);
   return t(`request.criteriaIncomplete.${form}`, {
     count: new Intl.NumberFormat(locale).format(count),
   });
@@ -238,10 +239,9 @@ export function readyView(
       submitting: t('request.submitting'),
       cancel: t('request.cancel'),
       title: t('request.submitConfirmTitle', { reference: request.reference }),
-      body: t(
-        `request.submitConfirmBody.${new Intl.PluralRules(locale).select(request.lines.length) === 'one' ? 'one' : 'other'}`,
-        { count: employees },
-      ),
+      body: t(`request.submitConfirmBody.${pluralForm(request.lines.length, locale)}`, {
+        count: employees,
+      }),
       unsaved: t('request.submitConfirmUnsaved'),
     },
     caption: t('request.submitCaption'),
@@ -309,7 +309,7 @@ export function saveMessages(t: Translate): [string, string][] {
 
 /** "1 employee added" / "4 employees added", by the locale's plural rules. */
 export function employeesAdded(count: number, locale: Locale, t: Translate): string {
-  const form = new Intl.PluralRules(locale).select(count) === 'one' ? 'one' : 'other';
+  const form = pluralForm(count, locale);
   return t(`request.employeesAdded.${form}`, {
     count: new Intl.NumberFormat(locale).format(count),
   });

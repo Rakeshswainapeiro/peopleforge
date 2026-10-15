@@ -1,4 +1,4 @@
-import { BUSINESS_TIME_ZONE } from '@peopleforge/contracts';
+import { BUSINESS_TIME_ZONE, businessDay } from '@peopleforge/contracts';
 import type { Locale } from '@sirius/shared-types';
 
 /**
@@ -75,4 +75,25 @@ export function formatDateTime(iso: string, locale: Locale): string {
     hourCycle: 'h23',
     timeZone: BUSINESS_TIME_ZONE,
   }).format(new Date(iso));
+}
+
+const DAY_MS = 86_400_000;
+
+/**
+ * Whole calendar days between two instants, counted on Dubai business days (Q6 default:
+ * calendar days, not working days; ADR-006 to confirm). 23:59 → 00:01 the next day is 1 day.
+ */
+export function daysBetween(fromIso: string, now: Date): number {
+  const from = Date.parse(businessDay(new Date(fromIso)));
+  const to = Date.parse(businessDay(now));
+  return Math.max(0, Math.round((to - from) / DAY_MS));
+}
+
+/** The dashboard's Age: "2d" (narrow day unit, in the locale's digits and order). */
+export function formatAge(fromIso: string, now: Date, locale: Locale): string {
+  return new Intl.NumberFormat(locale, {
+    style: 'unit',
+    unit: 'day',
+    unitDisplay: 'narrow',
+  }).format(daysBetween(fromIso, now));
 }

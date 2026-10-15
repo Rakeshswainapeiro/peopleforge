@@ -250,6 +250,23 @@ describe('CriteriaProgress', () => {
     expect(container.querySelector('ul')).toHaveAttribute('aria-hidden', 'true');
   });
 
+  it('can show the marks alone, the summary read to screen readers only', () => {
+    const { container } = render(
+      <CriteriaProgress
+        variant="marks"
+        label="C1 pass, C2 not complete"
+        stateLabels={stateLabels}
+        results={[
+          { code: 'C1', state: 'pass' },
+          { code: 'C2', state: 'pending' },
+        ]}
+      />,
+    );
+    expect(screen.getByText('C1 pass, C2 not complete')).toHaveClass('sr-only');
+    expect(container.firstElementChild?.className).not.toContain('border');
+    expect(container.querySelectorAll('li')).toHaveLength(2);
+  });
+
   it('highlights a complete set, and treats no criteria as incomplete', () => {
     render(
       <CriteriaProgress

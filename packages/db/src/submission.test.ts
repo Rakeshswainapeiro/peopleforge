@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { createDashboardRepository } from './dashboard.js';
 import { createDatabase, type DatabaseHandle } from './database.js';
 import {
   createIncrementRequestRepository,
@@ -207,7 +208,11 @@ describe('submit [R1-07]', () => {
     const submitted = await draft();
     await submit(submitted);
     const stillDraft = await draft();
-    const page = await repo.list(reviewer, { includeDrafts: false, limit: 200, offset: 0 });
+    const page = await createDashboardRepository(handle.db, testCipher).requests(reviewer, {
+      includeDrafts: false,
+      limit: 500,
+      offset: 0,
+    });
     const ids = page.items.map((item) => item.id);
     expect(ids).toContain(submitted);
     expect(ids).not.toContain(stillDraft);

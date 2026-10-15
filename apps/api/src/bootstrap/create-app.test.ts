@@ -239,6 +239,30 @@ describe('rate limiting', () => {
     expect(res.status).toBe(429);
     expect(errorOf(res).code).toBe('RATE_LIMITED');
   });
+
+  it('gives each caller (access token) its own budget, though all share one IP (the web server)', async () => {
+    const server = (await buildApp({ env: testEnv({ RATE_LIMIT_MAX: '2' }) })).getHttpServer();
+    const as = (token: string) =>
+      request(server).get('/api/v1/me').set('Authorization', `Bearer ${token}`);
+    await as('alpha');
+    await as('alpha');
+    expect((await as('alpha')).status).toBe(429);
+    // Another signed-in user through the same web server is not affected.
+    expect((await as('beta')).status).toBe(401);
+  });
+
+  it('still caps everything from one IP, so made-up tokens can’t dodge the limit', async () => {
+    const server = (
+      await buildApp({ env: testEnv({ RATE_LIMIT_MAX: '100', RATE_LIMIT_IP_MAX: '3' }) })
+    ).getHttpServer();
+    for (const token of ['a', 'b', 'c']) {
+      expect(
+        (await request(server).get('/api/v1/me').set('Authorization', `Bearer ${token}`)).status,
+      ).toBe(401);
+    }
+    const res = await request(server).get('/api/v1/me').set('Authorization', 'Bearer d');
+    expect(res.status).toBe(429);
+  });
 });
 
 describe('unexpected errors', () => {

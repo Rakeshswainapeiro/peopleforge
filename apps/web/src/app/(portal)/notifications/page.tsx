@@ -7,6 +7,7 @@ import { NotificationList } from '@/components/notifications/notification-list';
 import { getRequestLocale } from '@/i18n/request-locale';
 import { createTranslator } from '@/i18n/translator';
 import { NOTIFICATION_FILTERS, notificationRows, notificationsHref } from '@/lib/notification-view';
+import { pageCount, paginationLabels } from '@/lib/pagination';
 import { roleLabel } from '@/lib/viewer-display';
 import { listNotifications } from '@/server/notifications';
 import { requireViewer } from '@/server/session';
@@ -32,7 +33,7 @@ export default async function NotificationsPage({ searchParams }: NotificationsP
   if (result.kind === 'unauthenticated') redirect('/session-ended');
   if (result.kind !== 'ok') throw new Error('Notification API unavailable');
   const { data } = result;
-  const pages = Math.max(1, Math.ceil(data.total / data.pageSize));
+  const pages = pageCount(data.total, data.pageSize);
   const number = new Intl.NumberFormat(locale);
 
   return (
@@ -85,17 +86,7 @@ export default async function NotificationsPage({ searchParams }: NotificationsP
               pageCount={pages}
               hrefFor={(target) => notificationsHref(filter, target)}
               as={Link}
-              labels={{
-                navigation: t('notifications.pagination.navigation'),
-                pageOf: t('notifications.pagination.pageOf', {
-                  page: number.format(page),
-                  pages: number.format(pages),
-                }),
-                first: t('notifications.pagination.first'),
-                previous: t('notifications.pagination.previous'),
-                next: t('notifications.pagination.next'),
-                last: t('notifications.pagination.last'),
-              }}
+              labels={paginationLabels('notifications', page, pages, locale, t)}
             />
           ) : null}
         </div>

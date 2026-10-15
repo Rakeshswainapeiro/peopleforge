@@ -1,6 +1,6 @@
 import type { CriterionRecord } from '@peopleforge/db';
 import { describe, expect, it } from 'vitest';
-import { assessmentOf, effectiveMaxFileMb, missingFor } from './criteria.js';
+import { assessmentOf, effectiveMaxFileMb, markOf, missingFor, withFacts } from './criteria.js';
 
 const criterion: CriterionRecord = {
   id: '44444444-4444-4444-8444-444444444440',
@@ -65,6 +65,44 @@ describe('missingFor [R1-03, R1-06]', () => {
     };
     expect(missingFor(relaxed, assessment)).toEqual([]);
     expect(missingFor({ ...relaxed, evidencePolicy: 'none' }, assessment)).toEqual([]);
+  });
+  it('judges the dashboard’s facts (no content) exactly like a full assessment', () => {
+    const facts = {
+      criterionId: criterion.id,
+      result: 'fail' as const,
+      hasJustification: true,
+      evidenceCount: 0,
+    };
+    expect(missingFor(criterion, facts)).toEqual(['evidence']);
+    expect(missingFor(criterion, { ...facts, evidenceCount: 2 })).toEqual([]);
+    expect(missingFor(criterion, { ...facts, result: null, hasJustification: false })).toEqual([
+      'result',
+      'justification',
+      'evidence',
+    ]);
+  });
+});
+
+describe('markOf', () => {
+  it('shows pass or fail only once the criterion is complete, otherwise pending', () => {
+    expect(markOf('pass', [])).toBe('pass');
+    expect(markOf('fail', [])).toBe('fail');
+    expect(markOf('pass', ['evidence'])).toBe('pending');
+    expect(markOf(null, ['result'])).toBe('pending');
+  });
+});
+
+describe('withFacts', () => {
+  it('pairs each criterion with its facts, in the criteria’s order, skipping any without', () => {
+    const second = { ...criterion, id: '44444444-4444-4444-8444-444444444441', code: 'C2' };
+    const facts = (criterionId: string) => ({ criterionId, result: null });
+    expect(withFacts([criterion, second], [facts(second.id), facts(criterion.id)])).toEqual([
+      { criterion, facts: facts(criterion.id) },
+      { criterion: second, facts: facts(second.id) },
+    ]);
+    expect(withFacts([criterion, second], [facts(second.id)])).toEqual([
+      { criterion: second, facts: facts(second.id) },
+    ]);
   });
 });
 

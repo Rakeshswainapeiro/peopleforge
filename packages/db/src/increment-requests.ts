@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { MAX_EVIDENCE_PER_CRITERION } from '@peopleforge/contracts';
 import { sql, type Kysely, type Transaction } from 'kysely';
 import { recordAudit, type AuditEntry } from './audit.js';
+import { loadCriteriaSets, type CriterionRecord } from './criteria-sets.js';
+import { JUSTIFICATION, PROPOSED, SALARY } from './encrypted-fields.js';
 import type { FieldCipher } from './field-crypto.js';
 import { insertNotifications, type NewNotification } from './notifications.js';
 import type {
@@ -36,19 +38,7 @@ export interface EmployeeOption {
   grade: string;
 }
 
-export type EvidencePolicy = 'required' | 'optional' | 'none';
-
-/** One criterion of the request's pinned set, with what it asks for (R1-03, R1-05). */
-export interface CriterionRecord {
-  id: string;
-  code: string;
-  name: LocalisedText;
-  description: LocalisedText;
-  justificationRequired: boolean;
-  evidencePolicy: EvidencePolicy;
-  allowedMediaTypes: string[];
-  maxFileMb: number;
-}
+export type { CriterionRecord, EvidencePolicy } from './criteria-sets.js';
 
 export interface EvidenceRecord {
   id: string;
@@ -97,17 +87,6 @@ export interface IncrementRequestRecord {
   updatedAt: Date;
   submittedAt: Date | null;
   lines: RequestLineRecord[];
-}
-
-export interface RequestSummaryRecord {
-  id: string;
-  reference: string;
-  status: RequestStatus;
-  entityId: string;
-  cycleId: string;
-  employeeCount: number;
-  createdAt: Date;
-  updatedAt: Date;
 }
 
 export interface Proposal {
@@ -198,10 +177,6 @@ export interface IncrementRequestRepository {
     },
   ) => Promise<{ id: string; created: boolean }>;
   get: (scope: Scope, id: string) => Promise<IncrementRequestRecord | null>;
-  list: (
-    scope: Scope,
-    query: { status?: RequestStatus; includeDrafts: boolean; limit: number; offset: number },
-  ) => Promise<{ items: RequestSummaryRecord[]; total: number }>;
   addLine: (scope: Scope, requestId: string, employeeId: string) => Promise<void>;
   /**
    * Removes an employee. Removing the last one discards the draft (soft delete): an empty
@@ -241,10 +216,6 @@ export interface IncrementRequestRepository {
 }
 
 type Trx = Transaction<Database>;
-
-const SALARY = { table: 'increments.request_line', column: 'current_salary' } as const;
-const PROPOSED = { table: 'increments.request_line', column: 'proposed_value' } as const;
-const JUSTIFICATION = { table: 'increments.criterion_result', column: 'justification' } as const;
 
 export function createIncrementRequestRepository(
   db: Kysely<Database>,
@@ -575,21 +546,9 @@ export function createIncrementRequestRepository(
           .where('r.deleted_at', 'is', null)
           .executeTakeFirst();
         if (request === undefined) return null;
-        const criteria = await trx
-          .selectFrom('increments.criterion')
-          .select([
-            'id',
-            'code',
-            'name',
-            'description',
-            'justification_required',
-            'evidence_policy',
-            'allowed_media_types',
-            'max_file_mb',
-          ])
-          .where('criteria_set_id', '=', request.criteria_set_id)
-          .orderBy('position')
-          .execute();
+        const criteria = (await loadCriteriaSets(trx, [request.criteria_set_id])).of(
+          request.criteria_set_id,
+        );
         const lines = await trx
           .selectFrom('increments.request_line')
           .selectAll()
@@ -665,16 +624,7 @@ export function createIncrementRequestRepository(
             submissionDeadline: request.deadline,
           },
           criteriaSetId: request.criteria_set_id,
-          criteria: criteria.map((criterion) => ({
-            id: criterion.id,
-            code: criterion.code,
-            name: criterion.name,
-            description: criterion.description,
-            justificationRequired: criterion.justification_required,
-            evidencePolicy: criterion.evidence_policy,
-            allowedMediaTypes: criterion.allowed_media_types,
-            maxFileMb: criterion.max_file_mb,
-          })),
+          criteria,
           version: request.version,
           createdAt: request.created_at,
           updatedAt: request.updated_at,
@@ -693,53 +643,6 @@ export function createIncrementRequestRepository(
                 ? null
                 : cipher.decrypt(line.proposed_value, { ...PROPOSED, rowId: line.id }),
             criteria: assessmentsFor(line.id),
-          })),
-        };
-      }),
-
-    list: (scope, query) =>
-      withScope(db, scope, async (trx) => {
-        let base = trx
-          .selectFrom('increments.increment_request as r')
-          .where('r.deleted_at', 'is', null);
-        if (query.status !== undefined) base = base.where('r.status', '=', query.status);
-        // Drafts are the subsidiary's work in progress: Sirius sees a request once it's submitted.
-        if (!query.includeDrafts) base = base.where('r.status', '!=', 'draft');
-        const total = await base
-          .select((eb) => eb.fn.countAll<string>().as('n'))
-          .executeTakeFirstOrThrow();
-        const rows = await base
-          .select((eb) => [
-            'r.id',
-            'r.reference',
-            'r.status',
-            'r.entity_id',
-            'r.cycle_id',
-            'r.created_at',
-            'r.updated_at',
-            eb
-              .selectFrom('increments.request_line as l')
-              .select((inner) => inner.fn.countAll<string>().as('n'))
-              .whereRef('l.request_id', '=', 'r.id')
-              .where('l.deleted_at', 'is', null)
-              .as('employee_count'),
-          ])
-          .orderBy('r.updated_at', 'desc')
-          .orderBy('r.id')
-          .limit(query.limit)
-          .offset(query.offset)
-          .execute();
-        return {
-          total: Number(total.n),
-          items: rows.map((row) => ({
-            id: row.id,
-            reference: row.reference,
-            status: row.status,
-            entityId: row.entity_id,
-            cycleId: row.cycle_id,
-            employeeCount: Number(row.employee_count),
-            createdAt: row.created_at,
-            updatedAt: row.updated_at,
           })),
         };
       }),
@@ -963,6 +866,7 @@ export function createIncrementRequestRepository(
           .set({
             status: 'submitted',
             submitted_at: sql`now()`,
+            status_changed_at: sql`now()`,
             submitted_by: scope.userId,
             version: sql`version + 1`,
             updated_at: sql`now()`,

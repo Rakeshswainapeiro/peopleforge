@@ -115,15 +115,51 @@ export type EvidenceUpload = z.infer<typeof EvidenceUploadSchema>;
 
 export const PAGE_SIZES = [10, 25, 50] as const;
 
-export const ListIncrementRequestsQuerySchema = z.strictObject({
+/** Longest dashboard search (employee name or ID, or request reference). */
+export const MAX_SEARCH_LENGTH = 100;
+
+/**
+ * Dashboard search text: trimmed and NFC-normalised (so Arabic and accented names match however
+ * they were typed); an empty box means no search.
+ */
+export const SearchTextSchema = z.preprocess(
+  (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
+  z
+    .string()
+    .trim()
+    .max(MAX_SEARCH_LENGTH)
+    .transform((text) => text.normalize('NFC'))
+    .optional(),
+);
+
+/** The filters of "My increment requests" (R1-10), shared by its counts, requests and employees. */
+export const DashboardFilterSchema = z.strictObject({
+  /** Increment cycle (the Figma's "Period"). */
+  cycleId: z.uuid().optional(),
   status: RequestStatusSchema.optional(),
+  search: SearchTextSchema,
+});
+export type DashboardFilter = z.infer<typeof DashboardFilterSchema>;
+
+const pageQuery = {
   page: z.coerce.number().int().min(1).max(10_000).default(1),
   pageSize: z.coerce
     .number()
     .int()
     .refine((size) => (PAGE_SIZES as readonly number[]).includes(size), 'page_size')
     .default(10),
+};
+
+export const ListIncrementRequestsQuerySchema = DashboardFilterSchema.extend(pageQuery);
+export type ListIncrementRequestsQuery = z.infer<typeof ListIncrementRequestsQuerySchema>;
+
+/** GET /increment-request-lines: the dashboard's "By employee" tab. */
+export const ListRequestLinesQuerySchema = DashboardFilterSchema.extend({
+  ...pageQuery,
+  /** Only this request's employees (the "View" next to a request's employee count). */
+  requestId: z.uuid().optional(),
 });
+export type ListRequestLinesQuery = z.infer<typeof ListRequestLinesQuerySchema>;
 
 export const EmployeeSearchQuerySchema = z.strictObject({
   entityId: z.uuid(),
@@ -235,15 +271,35 @@ export const IncrementRequestSchema = z.object({
 });
 export type IncrementRequest = z.infer<typeof IncrementRequestSchema>;
 
+/**
+ * Where a request stands in Sirius HR's review (R1-10, "Review stage"). S4b: a draft is not
+ * submitted; a submitted request waits at the first criterion. Per-criterion review and the
+ * decision stage arrive with S5 (Q7: does Sirius HR verify criteria in order?).
+ */
+export const RequestStageSchema = z.discriminatedUnion('kind', [
+  // `of`: the request's criteria count, so the stage bar has the same length either way.
+  z.object({ kind: z.literal('not_submitted'), of: z.number().int().min(1) }),
+  z.object({
+    kind: z.literal('criterion'),
+    criterion: z.number().int().min(1),
+    of: z.number().int().min(1),
+  }),
+]);
+export type RequestStage = z.infer<typeof RequestStageSchema>;
+
 export const IncrementRequestSummarySchema = z.object({
   id: z.uuid(),
   reference: z.string(),
   status: RequestStatusSchema,
-  entityId: z.uuid(),
+  entity: z.object({ id: z.uuid(), code: z.string() }),
   cycleId: z.uuid(),
   employeeCount: z.number().int().min(0),
   createdAt: z.iso.datetime(),
-  updatedAt: z.iso.datetime(),
+  /** The last status change: the dashboard's Age (Q6 default: calendar days since then). */
+  statusChangedAt: z.iso.datetime(),
+  stage: RequestStageSchema,
+  /** Criteria complete across all employees, e.g. 15 of 20 (Figma "Needs your action"). */
+  criteria: z.object({ complete: z.number().int().min(0), total: z.number().int().min(0) }),
 });
 export type IncrementRequestSummary = z.infer<typeof IncrementRequestSummarySchema>;
 
@@ -254,6 +310,54 @@ export const IncrementRequestPageSchema = z.object({
   total: z.number().int().min(0),
 });
 export type IncrementRequestPage = z.infer<typeof IncrementRequestPageSchema>;
+
+/** GET /increment-requests/summary: the KPI cards and tab counts of the dashboard. */
+export const DashboardSummarySchema = z.object({
+  /** Requests per status in the cycle (zero for none); ignores the status and search filters. */
+  byStatus: z.record(RequestStatusSchema, z.number().int().min(0)),
+  /** Requests and employees matching every filter. */
+  requests: z.number().int().min(0),
+  employees: z.number().int().min(0),
+});
+export type DashboardSummary = z.infer<typeof DashboardSummarySchema>;
+
+/** A criterion as the lists show it: ✓ pass, ✗ fail (both complete), ○ not complete yet. */
+export const CriterionMarkSchema = z.enum(['pass', 'fail', 'pending']);
+export type CriterionMark = z.infer<typeof CriterionMarkSchema>;
+
+/**
+ * One employee in the "By employee" tab. No salary: lists show the proposed percentage only
+ * (data minimisation); the employee's status page shows the money.
+ */
+export const RequestLineSummarySchema = z.object({
+  id: z.uuid(),
+  request: z.object({
+    id: z.uuid(),
+    reference: z.string(),
+    status: RequestStatusSchema,
+    entityCode: z.string(),
+  }),
+  employeeNumber: z.string(),
+  fullName: z.string(),
+  grade: z.string(),
+  /** The increase as a percentage of the current salary (2 decimals); null until proposed. */
+  proposedPercent: DecimalString.nullable(),
+  criteria: z.array(
+    z.object({ criterionId: z.uuid(), code: z.string(), mark: CriterionMarkSchema }),
+  ),
+  /** The employee's status: the request's until per-employee decisions arrive (S5). */
+  status: RequestStatusSchema,
+  updatedAt: z.iso.datetime(),
+});
+export type RequestLineSummary = z.infer<typeof RequestLineSummarySchema>;
+
+export const RequestLinePageSchema = z.object({
+  items: z.array(RequestLineSummarySchema),
+  page: z.number().int().min(1),
+  pageSize: z.number().int().min(1),
+  total: z.number().int().min(0),
+});
+export type RequestLinePage = z.infer<typeof RequestLinePageSchema>;
 
 /**
  * DELETE …/lines/{lineId}. Removing the last employee discards the draft: `discarded` is true

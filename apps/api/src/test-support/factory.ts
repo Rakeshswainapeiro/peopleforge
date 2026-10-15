@@ -3,6 +3,7 @@ import type { NestExpressApplication } from '@nestjs/platform-express';
 import { pino, type Logger } from 'pino';
 import { ApiErrorSchema, type ApiError } from '@sirius/shared-types';
 import type {
+  DashboardRepository,
   EntityDirectory,
   IncrementRequestRepository,
   NotificationRepository,
@@ -88,7 +89,6 @@ export function unusedRepository(): IncrementRequestRepository {
     searchEmployees: fail,
     create: fail,
     get: fail,
-    list: fail,
     addLine: fail,
     removeLine: fail,
     saveDraft: fail,
@@ -113,6 +113,12 @@ export const unusedScanner: MalwareScanner = {
   engine: 'unused',
   scan: unexpected,
   ping: unexpected,
+};
+
+export const unusedDashboard: DashboardRepository = {
+  summary: unexpected,
+  requests: unexpected,
+  lines: unexpected,
 };
 
 export const unusedNotifications: NotificationRepository = {
@@ -151,6 +157,7 @@ export async function buildApp(
       incrementRequests: unusedRepository(),
       objectStore: unusedObjectStore,
       malwareScanner: unusedScanner,
+      dashboard: unusedDashboard,
       notifications: unusedNotifications,
       readinessChecks: [],
       isShuttingDown: () => false,

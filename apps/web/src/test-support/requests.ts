@@ -1,4 +1,11 @@
-import type { CriterionAssessment, IncrementRequest } from '@peopleforge/contracts';
+import type {
+  CriterionAssessment,
+  Cycle,
+  DashboardSummary,
+  IncrementRequest,
+  IncrementRequestPage,
+  RequestLinePage,
+} from '@peopleforge/contracts';
 
 /** Synthetic request fixtures for the web tests (shape: @peopleforge/contracts). */
 export const REQUEST_ID = '11111111-1111-4111-8111-111111111111';
@@ -8,7 +15,8 @@ export const EVIDENCE_ID = '55555555-5555-4555-8555-555555555551';
 export const CRITERION_IDS = [0, 1, 2, 3, 4].map(
   (index) => `44444444-4444-4444-8444-44444444444${String(index)}`,
 );
-const ENTITY = '00000000-0000-4000-8000-0000000e000a';
+export const ENTITY = '00000000-0000-4000-8000-0000000e000a';
+export const CYCLE_ID = '00000000-0000-4000-8000-00000000c026';
 const PDF = 'application/pdf';
 const XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
@@ -137,4 +145,78 @@ export function draftRequest(overrides: Partial<IncrementRequest> = {}): Increme
 export function must<T>(value: T | undefined): T {
   if (value === undefined) throw new Error('Fixture value missing');
   return value;
+}
+
+export const OPEN_CYCLE: Cycle = {
+  id: CYCLE_ID,
+  name: { en: 'Increment cycle 2026' },
+  startsOn: '2026-01-01',
+  endsOn: '2026-12-31',
+  submissionDeadline: '2026-11-30',
+  status: 'open',
+};
+
+export function dashboardSummaryFixture(
+  overrides: Partial<DashboardSummary> = {},
+): DashboardSummary {
+  return { byStatus: { draft: 1, submitted: 2 }, requests: 3, employees: 7, ...overrides };
+}
+
+type RequestSummary = IncrementRequestPage['items'][number];
+
+/** A draft with 4 employees, 15 of 20 criteria complete (Figma "Needs your action"). */
+export function requestSummary(overrides: Partial<RequestSummary> = {}): RequestSummary {
+  return {
+    id: REQUEST_ID,
+    reference: 'INC-2026-0150',
+    status: 'draft',
+    entity: { id: ENTITY, code: 'SUB-A' },
+    cycleId: CYCLE_ID,
+    employeeCount: 4,
+    createdAt: '2026-10-08T07:00:00.000Z',
+    statusChangedAt: '2026-10-08T07:00:00.000Z',
+    stage: { kind: 'not_submitted', of: 5 },
+    criteria: { complete: 15, total: 20 },
+    ...overrides,
+  };
+}
+
+export function requestPage(
+  items: RequestSummary[] = [requestSummary()],
+  overrides: Partial<IncrementRequestPage> = {},
+): IncrementRequestPage {
+  return { items, page: 1, pageSize: 10, total: items.length, ...overrides };
+}
+
+type LineSummary = RequestLinePage['items'][number];
+
+export function lineSummary(overrides: Partial<LineSummary> = {}): LineSummary {
+  return {
+    id: LINE_1,
+    request: {
+      id: REQUEST_ID,
+      reference: 'INC-2026-0152',
+      status: 'submitted',
+      entityCode: 'SUB-A',
+    },
+    employeeNumber: 'EMP-3318',
+    fullName: 'Omar Haddad',
+    grade: 'G7',
+    proposedPercent: '8.00',
+    criteria: CRITERION_IDS.map((criterionId, index) => ({
+      criterionId,
+      code: `C${String(index + 1)}`,
+      mark: index === 4 ? 'fail' : 'pass',
+    })),
+    status: 'submitted',
+    updatedAt: '2026-10-10T07:00:00.000Z',
+    ...overrides,
+  };
+}
+
+export function linePage(
+  items: LineSummary[] = [lineSummary()],
+  overrides: Partial<RequestLinePage> = {},
+): RequestLinePage {
+  return { items, page: 1, pageSize: 10, total: items.length, ...overrides };
 }

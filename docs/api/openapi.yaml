@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: PeopleForge API
-  version: 0.6.0
+  version: 0.7.0
   description: >
     Phase 1 API (BRD SIRIUS-HR-BRD-001). Every /api/v1 route requires an access token from the
     Sirius identity provider (Microsoft Entra ID; Keycloak locally) sent as
@@ -104,10 +104,15 @@ paths:
   /api/v1/increment-requests:
     get:
       tags: [increment-requests]
-      summary: The caller's increment requests, newest first (R1-02)
-      description: Requires `increment_request:read`. Drafts are listed only for callers who can create requests; Sirius sees a request once it is submitted.
+      summary: '"My increment requests", By request: newest first, filtered (R1-10)'
+      description: >
+        Requires `increment_request:read`. Drafts are listed only for callers who can create
+        requests; Sirius sees a request once it is submitted. Each item carries its stage, its
+        criteria progress and when its status last changed (the Age).
       parameters:
+        - { $ref: '#/components/parameters/CycleFilter' }
         - { name: status, in: query, schema: { type: string, enum: [draft, submitted] } }
+        - { $ref: '#/components/parameters/SearchFilter' }
         - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
         - { name: pageSize, in: query, schema: { type: integer, enum: [10, 25, 50], default: 10 } }
       responses:
@@ -154,6 +159,51 @@ paths:
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/increment-requests/summary:
+    get:
+      tags: [increment-requests]
+      summary: Counts for the dashboard's cards and tabs (R1-10)
+      description: >
+        `byStatus` counts the cycle's requests per status (every status present, zero when none),
+        ignoring the status and search filters; `requests` and `employees` count what matches
+        every filter.
+      parameters:
+        - { $ref: '#/components/parameters/CycleFilter' }
+        - { name: status, in: query, schema: { type: string, enum: [draft, submitted] } }
+        - { $ref: '#/components/parameters/SearchFilter' }
+      responses:
+        '200':
+          description: The counts
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DashboardSummary' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/v1/increment-request-lines:
+    get:
+      tags: [increment-requests]
+      summary: '"My increment requests", By employee (R1-10)'
+      description: >
+        Requires `increment_request:read`. One item per employee in the caller's requests, with
+        the proposed percentage and a mark per criterion. No salaries (data minimisation): the
+        request itself has the money.
+      parameters:
+        - { $ref: '#/components/parameters/CycleFilter' }
+        - { name: status, in: query, schema: { type: string, enum: [draft, submitted] } }
+        - { $ref: '#/components/parameters/SearchFilter' }
+        - { name: requestId, in: query, schema: { type: string, format: uuid } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: pageSize, in: query, schema: { type: integer, enum: [10, 25, 50], default: 10 } }
+      responses:
+        '200':
+          description: A page of employees
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RequestLinePage' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
   /api/v1/increment-requests/{id}:
     get:
       tags: [increment-requests]
@@ -456,6 +506,18 @@ components:
         production, pending Sirius IT, A6; Keycloak locally). Roles come from the `roles` claim.
   parameters:
     RequestId: { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    CycleFilter:
+      name: cycleId
+      in: query
+      description: Increment cycle (the dashboard's Period); all cycles when left out
+      schema: { type: string, format: uuid }
+    SearchFilter:
+      name: search
+      in: query
+      description: >
+        Matches anywhere in an employee's name or number, or the request reference; case- and
+        script-aware (NFC). `%` and `_` are literal. Empty means no search.
+      schema: { type: string, maxLength: 100 }
   headers:
     RequestId:
       description: Correlation ID, echoed or generated per request.
@@ -680,15 +742,116 @@ components:
           items:
             type: object
             required:
-              [id, reference, status, entityId, cycleId, employeeCount, createdAt, updatedAt]
+              [
+                id,
+                reference,
+                status,
+                entity,
+                cycleId,
+                employeeCount,
+                createdAt,
+                statusChangedAt,
+                stage,
+                criteria,
+              ]
             properties:
               id: { type: string, format: uuid }
               reference: { type: string }
               status: { type: string, enum: [draft, submitted] }
-              entityId: { type: string, format: uuid }
+              entity:
+                type: object
+                required: [id, code]
+                properties: { id: { type: string, format: uuid }, code: { type: string } }
               cycleId: { type: string, format: uuid }
               employeeCount: { type: integer }
               createdAt: { type: string, format: date-time }
+              statusChangedAt:
+                { type: string, format: date-time, description: 'Last status change (Age)' }
+              stage: { $ref: '#/components/schemas/RequestStage' }
+              criteria:
+                type: object
+                description: Criteria complete across the request's employees, e.g. 15 of 20
+                required: [complete, total]
+                properties: { complete: { type: integer }, total: { type: integer } }
+    RequestStage:
+      description: >
+        Where the request stands in Sirius HR's review. Until per-criterion review exists (S5) a
+        submitted request is at criterion 1. `of` is the criteria count.
+      oneOf:
+        - type: object
+          required: [kind, of]
+          properties:
+            kind: { type: string, const: not_submitted }
+            of: { type: integer, minimum: 1 }
+        - type: object
+          required: [kind, criterion, of]
+          properties:
+            kind: { type: string, const: criterion }
+            criterion: { type: integer, minimum: 1 }
+            of: { type: integer, minimum: 1 }
+    DashboardSummary:
+      type: object
+      required: [byStatus, requests, employees]
+      properties:
+        byStatus:
+          type: object
+          required: [draft, submitted]
+          properties: { draft: { type: integer }, submitted: { type: integer } }
+        requests: { type: integer }
+        employees: { type: integer }
+    RequestLinePage:
+      type: object
+      required: [items, page, pageSize, total]
+      properties:
+        page: { type: integer }
+        pageSize: { type: integer }
+        total: { type: integer }
+        items:
+          type: array
+          items:
+            type: object
+            required:
+              [
+                id,
+                request,
+                employeeNumber,
+                fullName,
+                grade,
+                proposedPercent,
+                criteria,
+                status,
+                updatedAt,
+              ]
+            properties:
+              id: { type: string, format: uuid }
+              request:
+                type: object
+                required: [id, reference, status, entityCode]
+                properties:
+                  id: { type: string, format: uuid }
+                  reference: { type: string }
+                  status: { type: string, enum: [draft, submitted] }
+                  entityCode: { type: string }
+              employeeNumber: { type: string }
+              fullName: { type: string }
+              grade: { type: string }
+              proposedPercent: { $ref: '#/components/schemas/NullableDecimal' }
+              criteria:
+                type: array
+                items:
+                  type: object
+                  required: [criterionId, code, mark]
+                  properties:
+                    criterionId: { type: string, format: uuid }
+                    code: { type: string }
+                    mark:
+                      type: string
+                      enum: [pass, fail, pending]
+                      description: Pass or fail once complete; pending until then
+              status:
+                type: string
+                enum: [draft, submitted]
+                description: The employee's status (the request's until per-employee decisions, S5)
               updatedAt: { type: string, format: date-time }
     Notification:
       type: object

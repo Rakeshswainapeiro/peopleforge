@@ -3,7 +3,22 @@ import { render, screen, within } from '@testing-library/react';
 import { usePathname } from 'next/navigation';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getRequestLocale } from '@/i18n/request-locale';
-import { listRequests } from '@/server/increment-requests';
+import {
+  dashboardSummary,
+  listRequestLines,
+  listRequests,
+  openCycles,
+} from '@/server/increment-requests';
+import {
+  CYCLE_ID,
+  dashboardSummaryFixture,
+  LINE_1,
+  linePage,
+  OPEN_CYCLE,
+  REQUEST_ID,
+  requestPage,
+  requestSummary,
+} from '@/test-support/requests';
 import { notificationSummary } from '@/server/notifications';
 import { requireViewer } from '@/server/session';
 import PortalLayout from './layout';
@@ -15,10 +30,19 @@ vi.mock('@/i18n/request-locale', () => ({ getRequestLocale: vi.fn() }));
 vi.mock('@/app/actions/set-locale', () => ({ setLocale: vi.fn() }));
 vi.mock('@/app/sign-in/actions', () => ({ signOut: vi.fn(), startSignIn: vi.fn() }));
 vi.mock('@/server/session', () => ({ requireViewer: vi.fn() }));
-vi.mock('@/server/increment-requests', () => ({ listRequests: vi.fn() }));
+vi.mock('@/server/increment-requests', () => ({
+  listRequests: vi.fn(),
+  listRequestLines: vi.fn(),
+  dashboardSummary: vi.fn(),
+  openCycles: vi.fn(),
+}));
 vi.mock('@/server/notifications', () => ({ notificationSummary: vi.fn() }));
 vi.mock('next/navigation', () => ({
   usePathname: vi.fn(() => '/'),
+  useRouter: vi.fn(() => ({ replace: vi.fn(), push: vi.fn() })),
+  redirect: vi.fn((url: string) => {
+    throw new Error(`NEXT_REDIRECT ${url}`);
+  }),
   notFound: vi.fn(() => {
     throw new Error('NEXT_NOT_FOUND');
   }),
@@ -47,6 +71,18 @@ const ALPHA_HR: Me = {
   entities: [{ id: SUB_A, code: 'SUB-A', name: { en: 'Subsidiary A' } }],
 };
 
+/** Sirius HR reviewer as the API describes them: reads every subsidiary's submitted requests. */
+const SIRIUS_READER: Me = {
+  ...REVIEWER,
+  permissions: [...REVIEWER.permissions, 'increment_request:read'],
+};
+
+/** Subsidiary HR preparing requests for Subsidiary A. */
+const PREPARER: Me = {
+  ...ALPHA_HR,
+  permissions: [...ALPHA_HR.permissions, 'increment_request:read'],
+};
+
 async function renderPortal(page: () => Promise<React.ReactNode>) {
   render(await PortalLayout({ children: await page() }));
 }
@@ -55,10 +91,10 @@ beforeEach(() => {
   vi.mocked(getRequestLocale).mockResolvedValue('en');
   vi.mocked(requireViewer).mockResolvedValue(REVIEWER);
   vi.mocked(usePathname).mockReturnValue('/');
-  vi.mocked(listRequests).mockResolvedValue({
-    kind: 'ok',
-    data: { items: [], page: 1, pageSize: 10, total: 0 },
-  });
+  vi.mocked(listRequests).mockResolvedValue({ kind: 'ok', data: requestPage([]) });
+  vi.mocked(listRequestLines).mockResolvedValue({ kind: 'ok', data: linePage([]) });
+  vi.mocked(dashboardSummary).mockResolvedValue({ kind: 'ok', data: dashboardSummaryFixture() });
+  vi.mocked(openCycles).mockResolvedValue({ kind: 'ok', data: [OPEN_CYCLE] });
   vi.mocked(notificationSummary).mockResolvedValue({ kind: 'ok', data: { unread: 0 } });
 });
 
@@ -114,12 +150,13 @@ describe('portal shell', () => {
   });
 });
 
-describe('HomePage', () => {
+describe('HomePage for roles without increment requests', () => {
   it('renders the Phase 1 areas', async () => {
     render(await HomePage());
     expect(screen.getByRole('heading', { level: 1, name: 'Welcome' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Increment requests' })).toBeInTheDocument();
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(dashboardSummary).not.toHaveBeenCalled();
   });
 
   it('renders Arabic where translated and English fallback elsewhere', async () => {
@@ -129,65 +166,214 @@ describe('HomePage', () => {
     expect(screen.getByRole('heading', { name: 'Increment requests' })).toBeInTheDocument();
   });
 
-  it('lists the caller’s drafts under "Needs your action" (Figma)', async () => {
-    vi.mocked(requireViewer).mockResolvedValue(ALPHA_HR);
-    const draft = {
-      id: '11111111-1111-4111-8111-111111111111',
-      reference: 'INC-2026-0150',
-      status: 'draft' as const,
-      entityId: SUB_A,
-      cycleId: '00000000-0000-4000-8000-00000000c026',
-      createdAt: '2026-10-14T07:00:00.000Z',
-      updatedAt: '2026-10-14T07:00:00.000Z',
-    };
-    vi.mocked(listRequests).mockResolvedValue({
-      kind: 'ok',
-      data: {
-        items: [
-          { ...draft, employeeCount: 4 },
-          {
-            ...draft,
-            id: '11111111-1111-4111-8111-111111111112',
-            reference: 'INC-2026-0151',
-            employeeCount: 1,
-          },
-        ],
-        page: 1,
-        pageSize: 10,
-        total: 2,
-      },
-    });
+  it('explains when the role grants no permissions yet', async () => {
+    vi.mocked(requireViewer).mockResolvedValue({ ...REVIEWER, permissions: [] });
     render(await HomePage());
-    const panel = screen.getByRole('region', { name: 'Needs your action' });
-    expect(panel).toHaveTextContent('INC-2026-0150 · Draft not submitted');
-    expect(panel).toHaveTextContent('4 employees added');
-    expect(panel).toHaveTextContent('1 employee added');
-    expect(screen.getAllByRole('link', { name: 'Continue draft' })[0]).toHaveAttribute(
-      'href',
-      `/requests/${draft.id}`,
-    );
-    expect(listRequests).toHaveBeenCalledWith({ status: 'draft', pageSize: 10 });
-  });
-
-  it('shows no drafts panel without drafts or for Sirius roles', async () => {
-    vi.mocked(requireViewer).mockResolvedValue(ALPHA_HR);
-    render(await HomePage());
-    expect(screen.queryByRole('region', { name: 'Needs your action' })).not.toBeInTheDocument();
-    vi.mocked(requireViewer).mockResolvedValue(REVIEWER);
-    vi.mocked(listRequests).mockClear();
-    render(await HomePage());
-    expect(listRequests).not.toHaveBeenCalled();
+    expect(screen.getByRole('status')).toHaveTextContent(/doesn't include any permissions/);
   });
 
   it('confirms a draft discarded by removing its last employee', async () => {
     render(await HomePage({ searchParams: Promise.resolve({ discarded: '1' }) }));
     expect(screen.getByText('Draft discarded: it had no employees left.')).toBeInTheDocument();
   });
+});
 
-  it('explains when the role grants no permissions yet', async () => {
-    vi.mocked(requireViewer).mockResolvedValue({ ...REVIEWER, permissions: [] });
-    render(await HomePage());
-    expect(screen.getByRole('status')).toHaveTextContent(/doesn't include any permissions/);
+const page = (params: Record<string, string> = {}) =>
+  HomePage({ searchParams: Promise.resolve(params) });
+
+describe('HomePage: My increment requests [R1-10, DASH-D1]', () => {
+  beforeEach(() => {
+    vi.mocked(requireViewer).mockResolvedValue(PREPARER);
+    vi.mocked(listRequests).mockImplementation((query = {}) =>
+      Promise.resolve({
+        kind: 'ok',
+        data:
+          query.status === 'draft'
+            ? requestPage()
+            : requestPage([
+                requestSummary({
+                  reference: 'INC-2026-0152',
+                  status: 'submitted',
+                  stage: { kind: 'criterion', criterion: 1, of: 5 },
+                }),
+              ]),
+      }),
+    );
+  });
+
+  it('shows subsidiary HR their cards, drafts to continue, and requests in the open cycle', async () => {
+    render(await page());
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'My increment requests' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('Requests raised by Subsidiary A. Other entities are not visible to you.'),
+    ).toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: 'New increment request' })[0]).toHaveAttribute(
+      'href',
+      '/requests/new',
+    );
+    const cards = screen.getByRole('list', { name: 'Request counts' });
+    expect(within(cards).getAllByRole('listitem')).toHaveLength(5);
+    expect(cards).toHaveTextContent('Drafts1Not yet submitted');
+
+    const action = screen.getByRole('region', { name: 'Needs your action' });
+    expect(action).toHaveTextContent('INC-2026-0150 · Draft not submitted');
+    expect(action).toHaveTextContent('4 employees added · criteria 15 of 20 complete');
+    expect(within(action).getByRole('link', { name: 'Continue draft' })).toHaveAttribute(
+      'href',
+      `/requests/${REQUEST_ID}`,
+    );
+
+    const tabs = screen.getByRole('navigation', { name: 'View' });
+    expect(within(tabs).getByRole('link', { name: /By request/u })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    expect(tabs).toHaveTextContent('By request 3');
+    expect(tabs).toHaveTextContent('By employee 7');
+
+    const table = screen.getByRole('table', { name: 'Increment requests' });
+    expect(within(table).getByRole('link', { name: 'INC-2026-0152' })).toHaveAttribute(
+      'href',
+      `/requests/${REQUEST_ID}`,
+    );
+    expect(table).toHaveTextContent('Criterion 1 of 5');
+    expect(table).toHaveTextContent('Submitted');
+    expect(table).toHaveTextContent('Sirius HR');
+    expect(within(table).queryByRole('columnheader', { name: 'Subsidiary' })).toBeNull();
+    expect(
+      within(table).getByRole('link', { name: 'View the employees of INC-2026-0152' }),
+    ).toHaveAttribute('href', `/?view=employees&request=${REQUEST_ID}`);
+
+    // The first open cycle by default; drafts for the panel from every cycle.
+    expect(dashboardSummary).toHaveBeenCalledWith({ cycleId: CYCLE_ID });
+    expect(listRequests).toHaveBeenCalledWith({ cycleId: CYCLE_ID, page: 1, pageSize: 10 });
+    expect(listRequests).toHaveBeenCalledWith({ status: 'draft', pageSize: 10 });
+    expect(screen.getByRole('combobox', { name: 'Period' })).toHaveValue(CYCLE_ID);
+    expect(screen.queryByRole('navigation', { name: 'Request pages' })).toBeInTheDocument();
+  });
+
+  it('shows employees By employee, optionally for one request', async () => {
+    vi.mocked(listRequestLines).mockResolvedValue({ kind: 'ok', data: linePage() });
+    render(
+      await page({
+        view: 'employees',
+        request: REQUEST_ID,
+        cycle: 'all',
+        status: 'submitted',
+        q: 'omar',
+      }),
+    );
+    expect(listRequestLines).toHaveBeenCalledWith({
+      status: 'submitted',
+      search: 'omar',
+      requestId: REQUEST_ID,
+      page: 1,
+      pageSize: 10,
+    });
+    const table = screen.getByRole('table', { name: 'Employees in increment requests' });
+    expect(table).toHaveTextContent('Omar Haddad');
+    expect(table).toHaveTextContent('EMP-3318 · G7 · INC-2026-0152');
+    expect(table).toHaveTextContent('8%');
+    expect(screen.getByText('C1 pass, C2 pass, C3 pass, C4 pass, C5 fail')).toHaveClass('sr-only');
+    expect(
+      within(table).getByRole('link', { name: 'View the status of Omar Haddad' }),
+    ).toHaveAttribute('href', `/requests/${REQUEST_ID}/employees/${LINE_1}`);
+    expect(screen.getByText('Employees of INC-2026-0152')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Show all employees' })).toHaveAttribute(
+      'href',
+      '/?view=employees&cycle=all&status=submitted&q=omar',
+    );
+    expect(screen.getByRole('combobox', { name: 'Period' })).toHaveValue('all');
+  });
+
+  it('shows Sirius HR every subsidiary without drafts, a Subsidiary column and no New request', async () => {
+    vi.mocked(requireViewer).mockResolvedValue(SIRIUS_READER);
+    render(await page());
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Increment requests' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('Increment requests submitted by every subsidiary.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'New increment request' })).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Needs your action' })).toBeNull();
+    expect(
+      within(screen.getByRole('list', { name: 'Request counts' })).getAllByRole('listitem'),
+    ).toHaveLength(4);
+    expect(screen.getByRole('columnheader', { name: 'Subsidiary' })).toBeInTheDocument();
+    expect(listRequests).not.toHaveBeenCalledWith(expect.objectContaining({ status: 'draft' }));
+  });
+
+  it('shows a Subsidiary column By employee for Sirius HR too', async () => {
+    vi.mocked(requireViewer).mockResolvedValue(SIRIUS_READER);
+    vi.mocked(listRequestLines).mockResolvedValue({ kind: 'ok', data: linePage() });
+    render(await page({ view: 'employees' }));
+    expect(screen.getByRole('columnheader', { name: 'Subsidiary' })).toBeInTheDocument();
+  });
+
+  it('invites a first request when there are none, and Sirius HR to wait', async () => {
+    vi.mocked(listRequests).mockResolvedValue({ kind: 'ok', data: requestPage([]) });
+    render(await page());
+    expect(screen.getByText('No increment requests yet')).toBeInTheDocument();
+    expect(
+      screen.getByText('Start one to propose increments for your employees.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('navigation', { name: 'Request pages' })).toBeNull();
+    // Without an assigned subsidiary, the intro doesn't name one.
+    vi.mocked(requireViewer).mockResolvedValue({ ...SIRIUS_READER, scope: 'entity', entities: [] });
+    render(await page());
+    expect(
+      screen.getAllByText('Requests appear here once a subsidiary submits them.'),
+    ).toHaveLength(1);
+  });
+
+  it('offers to clear filters that match nothing', async () => {
+    vi.mocked(listRequestLines).mockResolvedValue({ kind: 'ok', data: linePage([]) });
+    render(await page({ view: 'employees', request: REQUEST_ID }));
+    expect(screen.getByText('Employees of one request')).toBeInTheDocument();
+    expect(screen.getByText('Nothing matches these filters')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Clear filters' })).toHaveAttribute(
+      'href',
+      '/?view=employees',
+    );
+    vi.mocked(listRequests).mockResolvedValue({ kind: 'ok', data: requestPage([]) });
+    render(await page({ status: 'draft' }));
+    expect(screen.getAllByText('Nothing matches these filters')).toHaveLength(2);
+  });
+
+  it('pages with a rows-per-page choice, and goes to the last page from a stale link', async () => {
+    vi.mocked(listRequests).mockResolvedValue({
+      kind: 'ok',
+      data: requestPage([requestSummary()], { total: 30, page: 2, pageSize: 10 }),
+    });
+    render(await page({ page: '2' }));
+    expect(screen.getByText('Page 2 of 3')).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'Rows per page' })).toHaveValue('10');
+    await expect(page({ page: '9' })).rejects.toThrow('NEXT_REDIRECT /?page=3');
+    // Filtering keeps the chosen page size.
+    const { container } = render(await page({ size: '25' }));
+    expect(container.querySelector('input[type="hidden"][name="size"]')).toHaveValue('25');
+  });
+
+  it('works without an open cycle: every period, nothing to pick', async () => {
+    vi.mocked(openCycles).mockResolvedValue({ kind: 'unavailable' });
+    render(await page());
+    expect(dashboardSummary).toHaveBeenCalledWith({});
+    expect(screen.getByRole('combobox', { name: 'Period' })).toHaveValue('all');
+  });
+
+  it('ends a session the API no longer accepts, and fails loudly when the API is down', async () => {
+    vi.mocked(dashboardSummary).mockResolvedValue({ kind: 'unauthenticated' });
+    await expect(page()).rejects.toThrow('NEXT_REDIRECT /session-ended');
+    vi.mocked(dashboardSummary).mockResolvedValue({ kind: 'unavailable' });
+    await expect(page()).rejects.toThrow('Increment request API unavailable');
+  });
+
+  it('keeps the discarded-draft confirmation under the header', async () => {
+    render(await page({ discarded: '1' }));
+    expect(screen.getByText('Draft discarded: it had no employees left.')).toBeInTheDocument();
   });
 });
 

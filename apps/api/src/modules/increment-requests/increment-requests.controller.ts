@@ -15,22 +15,27 @@ import {
 import {
   AddRequestLineSchema,
   CreateIncrementRequestSchema,
+  DashboardFilterSchema,
   EmployeeSearchQuerySchema,
   ListIncrementRequestsQuerySchema,
+  ListRequestLinesQuerySchema,
   SaveDraftSchema,
   SubmitRequestSchema,
   type Cycle,
+  type DashboardSummary,
   type EmployeeOption,
   type IncrementRequest,
   type IncrementRequestPage,
   type RemoveLineResult,
+  type RequestLinePage,
 } from '@peopleforge/contracts';
 import type { IncomingMessage } from 'node:http';
 import { z } from 'zod';
 import { Authenticated, RequirePermission } from '../../auth/policy.js';
 import { principal } from '../../auth/principal.js';
 import { API_V1 } from '../../bootstrap/routes.js';
-import { INCREMENT_REQUEST_SERVICE } from '../../bootstrap/tokens.js';
+import { DASHBOARD_SERVICE, INCREMENT_REQUEST_SERVICE } from '../../bootstrap/tokens.js';
+import type { DashboardService } from './dashboard.service.js';
 import type { IncrementRequestService } from './increment-request.service.js';
 
 export const Id = z.uuid();
@@ -53,12 +58,24 @@ function idempotencyKeyOf(header: unknown): string {
 export class IncrementRequestsController {
   constructor(
     @Inject(INCREMENT_REQUEST_SERVICE) private readonly service: IncrementRequestService,
+    @Inject(DASHBOARD_SERVICE) private readonly dashboard: DashboardService,
   ) {}
 
+  /** "My increment requests", By request (R1-10): filtered by cycle, status and search. */
   @Get()
   @RequirePermission('increment_request:read')
   list(@Req() req: IncomingMessage, @Query() query: unknown): Promise<IncrementRequestPage> {
-    return this.service.list(principal.require(req), ListIncrementRequestsQuerySchema.parse(query));
+    return this.dashboard.requests(
+      principal.require(req),
+      ListIncrementRequestsQuerySchema.parse(query),
+    );
+  }
+
+  /** The dashboard's KPI cards and tab counts. Declared before `:id`, which would match it. */
+  @Get('summary')
+  @RequirePermission('increment_request:read')
+  summary(@Req() req: IncomingMessage, @Query() query: unknown): Promise<DashboardSummary> {
+    return this.dashboard.summary(principal.require(req), DashboardFilterSchema.parse(query));
   }
 
   @Post()
@@ -135,6 +152,18 @@ export class IncrementRequestsController {
       SubmitRequestSchema.parse(body),
       idempotencyKey,
     );
+  }
+}
+
+/** "My increment requests", By employee (R1-10): no salaries, the proposed percentage only. */
+@Controller(`${API_V1}/increment-request-lines`)
+export class IncrementRequestLinesController {
+  constructor(@Inject(DASHBOARD_SERVICE) private readonly dashboard: DashboardService) {}
+
+  @Get()
+  @RequirePermission('increment_request:read')
+  list(@Req() req: IncomingMessage, @Query() query: unknown): Promise<RequestLinePage> {
+    return this.dashboard.lines(principal.require(req), ListRequestLinesQuerySchema.parse(query));
   }
 }
 
