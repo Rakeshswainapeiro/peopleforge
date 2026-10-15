@@ -10,6 +10,7 @@ import {
   removeEvidence,
   saveDraftChanges,
   searchEmployees,
+  submitRequest,
   uploadEvidence,
 } from './increment-requests';
 import { callApi, downloadFromApi } from './session';
@@ -42,6 +43,7 @@ describe('increment request client', () => {
     const form = new FormData();
     await uploadEvidence(ID, form);
     await removeEvidence(ID, OTHER);
+    await submitRequest(ID, 4, 'key-12345678');
     expect(calls()).toEqual([
       ['/api/v1/increment-cycles/open', undefined],
       [`/api/v1/employees?entityId=${ID}`, undefined],
@@ -61,6 +63,10 @@ describe('increment request client', () => {
       ],
       [`/api/v1/increment-requests/${ID}/evidence`, { method: 'POST', form, timeoutMs: 60_000 }],
       [`/api/v1/increment-requests/${ID}/evidence/${OTHER}`, { method: 'DELETE' }],
+      [
+        `/api/v1/increment-requests/${ID}/submit`,
+        { method: 'POST', body: { version: 4 }, idempotencyKey: 'key-12345678' },
+      ],
     ]);
   });
 

@@ -12,6 +12,8 @@ interface SidebarProps {
   me: Me;
   locale: Locale;
   t: Translate;
+  /** Unread notifications for the bell; 0 when unknown (the API being down hides nothing else). */
+  unread: number;
 }
 
 /** Second line under the name: role, then the subsidiary (or "All subsidiaries" for Sirius). */
@@ -25,13 +27,22 @@ export function scopeText(me: Me, locale: Locale, t: Translate): string {
  * Portal sidebar (Figma: dark rail): wordmark, navigation filtered by permission, language
  * switch and the signed-in user with sign-out. Below 1024px it becomes a header bar.
  */
-export function Sidebar({ me, locale, t }: SidebarProps) {
+export function Sidebar({ me, locale, t, unread }: SidebarProps) {
   const name = displayName(me);
   const items = visibleNavItems(me.permissions).map((item) => ({
     href: item.href,
     icon: item.icon,
     label: t(item.label),
     alsoActiveFor: item.alsoActiveFor,
+    badge:
+      item.showsUnread === true
+        ? {
+            count: unread,
+            label: t('notifications.unreadCount', {
+              count: new Intl.NumberFormat(locale).format(unread),
+            }),
+          }
+        : undefined,
   }));
   return (
     <aside className="flex flex-col gap-6 bg-sidebar px-3 py-4 text-sidebar-ink lg:sticky lg:top-0 lg:h-dvh lg:w-60 lg:shrink-0 lg:py-5">

@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { Sidebar } from '@/components/app-shell/sidebar';
 import { getRequestLocale } from '@/i18n/request-locale';
 import { createTranslator } from '@/i18n/translator';
+import { notificationSummary } from '@/server/notifications';
 import { requireViewer } from '@/server/session';
 
 /**
@@ -34,9 +35,13 @@ export default async function PortalLayout({ children }: { children: ReactNode }
     );
   }
 
+  // The bell is a convenience: if the count can't be read, show none rather than fail the page.
+  const summary = await notificationSummary();
+  const unread = summary.kind === 'ok' ? summary.data.unread : 0;
+
   return (
     <div className="flex min-h-dvh flex-col lg:flex-row">
-      <Sidebar me={me} locale={locale} t={t} />
+      <Sidebar me={me} locale={locale} t={t} unread={unread} />
       <main id="main" className="min-w-0 flex-1 px-4 py-6 sm:px-8 lg:py-8">
         <div className="mx-auto max-w-7xl">{children}</div>
       </main>

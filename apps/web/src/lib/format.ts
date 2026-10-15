@@ -1,3 +1,4 @@
+import { BUSINESS_TIME_ZONE } from '@peopleforge/contracts';
 import type { Locale } from '@sirius/shared-types';
 
 /**
@@ -46,4 +47,32 @@ export function formatFileSize(bytes: number, locale: Locale): string {
     unit,
     maximumFractionDigits: amount < 10 ? 1 : 0,
   }).format(amount);
+}
+
+/** English dates in the UAE read day first ("14 Oct 2026", Figma), as in British English. */
+function dateLocale(locale: Locale): string {
+  return locale === 'en' ? 'en-GB' : locale;
+}
+
+/** A date as Sirius HR reads it: "14 Oct 2026", in the business time zone (Asia/Dubai). */
+export function formatDate(iso: string, locale: Locale): string {
+  return new Intl.DateTimeFormat(dateLocale(locale), {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    timeZone: BUSINESS_TIME_ZONE,
+  }).format(new Date(iso));
+}
+
+/** "06 Oct 2026, 16:05" in the business time zone. */
+export function formatDateTime(iso: string, locale: Locale): string {
+  return new Intl.DateTimeFormat(dateLocale(locale), {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+    timeZone: BUSINESS_TIME_ZONE,
+  }).format(new Date(iso));
 }

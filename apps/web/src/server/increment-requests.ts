@@ -102,6 +102,19 @@ export function removeEvidence(id: string, evidenceId: string): Promise<ApiResul
   });
 }
 
+/** Sends the draft to Sirius HR (R1-07); a repeated key returns the submitted request. */
+export function submitRequest(
+  id: string,
+  version: number,
+  idempotencyKey: string,
+): Promise<ApiResult<IncrementRequest>> {
+  return callApi(requestPath(id, '/submit'), IncrementRequestSchema, {
+    method: 'POST',
+    body: { version },
+    idempotencyKey,
+  });
+}
+
 export function downloadEvidence(id: string, evidenceId: string): Promise<DownloadResult> {
   return downloadFromApi(requestPath(id, `/evidence/${Id.parse(evidenceId)}`));
 }

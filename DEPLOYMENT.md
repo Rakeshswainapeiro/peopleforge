@@ -1,6 +1,6 @@
 # Deployment Guide — PeopleForge
 
-> **Status (2026-10-14): slices S1–S3 (foundation, increment request drafts, criteria and evidence).** Hosting, identity provider, email provider, object store and malware scanner products are pending Sirius IT (BRD assumption A6). Sections marked **TBC (A6)** are completed when ADR-001 is accepted. Everything else is current and must be kept in sync with the code: any change that adds an env var, service, port, migration or dependency updates this file in the same PR.
+> **Status (2026-10-14): slices S1–S4a (foundation, increment request drafts, criteria and evidence, submission with audit trail and in-app notifications).** Hosting, identity provider, email provider, object store and malware scanner products are pending Sirius IT (BRD assumption A6). Sections marked **TBC (A6)** are completed when ADR-001 is accepted. Everything else is current and must be kept in sync with the code: any change that adds an env var, service, port, migration or dependency updates this file in the same PR.
 
 ## 1. Architecture overview
 
@@ -14,7 +14,7 @@ Browser ──HTTPS──▶ Load balancer / WAF ──▶ web (Next.js, :3000)
 | ---------------- | ----------------------------------- | ------------------------- | ------------------------------------------------ | -------------------------------------------- |
 | web              | `infra/docker/web.Dockerfile`       | 3000                      | api, PostgreSQL                                  | Built                                        |
 | api              | `infra/docker/api.Dockerfile`       | 4000                      | PostgreSQL, IdP, object storage, malware scanner | Built                                        |
-| worker           | —                                   | none (no inbound)         | Redis, PostgreSQL                                | Planned (R1-13)                              |
+| worker           | —                                   | none (no inbound)         | Redis, PostgreSQL, email                         | Planned (S4b: sends `notify.email_outbox`)   |
 | PostgreSQL 16+   | managed                             | 5432                      | —                                                | Required (ADR-002)                           |
 | Redis            | managed                             | 6379                      | —                                                | Planned                                      |
 | Object storage   | S3-compatible, private bucket       | 443                       | —                                                | Required (R1-04; ADR-010) — product TBC (A6) |
@@ -217,6 +217,13 @@ GRANT CONNECT ON DATABASE peopleforge TO peopleforge_app;
 
 **Rollback:** redeploy the previous images first. Revert a migration only if it must be undone, one at a time, newest first: `pnpm --filter @peopleforge/web db:rollback`, `pnpm --filter @peopleforge/db migrate:rollback`.
 
+**Release S4a — migration `0005_submission_audit_notifications`:** adds the `submitted` status, `increments.status_event`, the `audit` schema (`audit.audit_log`) and the `notify` schema (notifications, read state, email outbox). It is additive and takes only short locks (one CHECK swap on `increment_request`). No new env vars. Things to know:
+
+- `audit.audit_log` and `increments.status_event` are **append-only**: a trigger refuses `UPDATE`, `DELETE` and `TRUNCATE` for every role, the owner included (ADR-011). Don't plan maintenance that deletes from them; retention will be handled by partitioning and archiving.
+- Rolling back `0005` **drops the audit trail, the status history and all notifications**, and turns submitted requests back into drafts. Export `audit.audit_log` first (`COPY … TO`) if it holds anything from UAT/Prod that must be kept.
+- Emails are queued in `notify.email_outbox` but **not sent** until the worker and the email provider arrive (S4b, A6). Users see notifications in the portal meanwhile.
+- The submission deadline is a business **date** compared in Asia/Dubai (`BUSINESS_TIME_ZONE` in `@peopleforge/contracts`): a request can be submitted until the end of the deadline day, Dubai time. The placeholder cycle's deadline is 30 Nov 2026.
+
 **Never in UAT or Prod:** `pnpm db:seed` (synthetic data; it refuses unless `APP_ENV` is `dev` or `test`). Production configuration (real entities, assignments, criteria) is entered through the admin screens once they exist. Until then (A1/A3 pending) the core migrations include the clearly marked `[Placeholder]` criteria set and increment cycle (R1-05).
 
 ## 7. Health endpoints
@@ -253,6 +260,7 @@ TBC (A6), proposed targets for agreement:
 - [ ] `GET /api/v1/me` without a session returns 401 in the standard error shape with `X-Request-Id`.
 - [ ] Home page loads over HTTPS; response has `Content-Security-Policy` with a `nonce-` and `Strict-Transport-Security`.
 - [ ] `GET /health/ready` shows `"database":"up"`, `"object_store":"up"` and `"malware_scanner":"up"`.
+- [ ] As a Subsidiary HR test user, complete a draft and **Submit to Sirius HR** → the request shows "Waiting for Sirius HR" and is read-only; the bell shows 1 unread. As a Sirius HR reviewer, the notifications page lists "New request from …", and View opens it.
 - [ ] On a draft: attach a small PDF to a criterion → it appears and downloads; attaching the EICAR test file (inside a PDF) is refused by the malware scan.
 - [ ] As a Subsidiary HR test user: New Request → add an employee → the draft opens with their current salary; save a 5% proposal and see the new monthly salary.
 - [ ] Signing in as a Subsidiary HR test user shows only their subsidiary in the sidebar; a Sirius HR user sees "All subsidiaries".

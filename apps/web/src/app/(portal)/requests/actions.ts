@@ -24,8 +24,10 @@ import {
   removeEmployee,
   removeEvidence,
   saveDraftChanges,
+  submitRequest,
   uploadEvidence,
 } from '@/server/increment-requests';
+import { refreshPortalShell } from '@/server/portal-shell';
 
 /**
  * Server Actions for the request editor (R1-02, R1-03, R1-04). POST-only with an Origin check
@@ -195,6 +197,9 @@ export async function saveDraft(
     ...(assessment === undefined ? {} : { assessment: assessment.input }),
   });
   if (result.kind === 'ok') {
+    if (field(formData, 'intent') === 'submit') {
+      await submitSaved(requestId, result.data.version, field(formData, 'submitKey'));
+    }
     if (next.success) redirect(`/requests/${requestId}?employee=${next.data}#criteria`);
     const employee = current.success ? `&employee=${current.data}` : '';
     redirect(`/requests/${requestId}?saved=1${employee}`);
@@ -213,6 +218,25 @@ export async function saveDraft(
     }
   }
   return keep(rowErrors ? 'request.errors.rowsInvalid' : errorKeyFor(result.code, result.details));
+}
+
+/**
+ * "Submit to Sirius HR" in the confirmation dialog (R1-07). It posts the draft form, so what is
+ * on screen is saved first; then the saved version is submitted. Either way the page reloads:
+ * after a refusal the draft's version has moved on, so the form must start afresh.
+ */
+async function submitSaved(requestId: string, version: number, keyInput: string): Promise<never> {
+  const key = Key.safeParse(keyInput);
+  if (!key.success) redirect(`/requests/${requestId}?error=request.errors.generic`);
+  const result = await submitRequest(requestId, version, key.data);
+  if (result.kind === 'ok') {
+    refreshPortalShell();
+    redirect(`/requests/${requestId}?submitted=1`);
+  }
+  if (result.kind === 'unauthenticated') redirect('/session-ended');
+  const error =
+    result.kind === 'error' ? errorKeyFor(result.code, result.details) : 'request.errors.generic';
+  redirect(`/requests/${requestId}?error=${error}`);
 }
 
 export type EvidenceActionResult = { ok: true } | { ok: false; error: EvidenceErrorKey };

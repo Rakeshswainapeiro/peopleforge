@@ -278,9 +278,24 @@ describe('EvidenceFiles [R1-04]', () => {
   });
 });
 
+function readyPanel(canSubmit: boolean) {
+  const view = readyView(draftRequest(), 'en', t, 'submit-key-123');
+  return render(
+    <DraftForm
+      formId="draft-form"
+      requestId={REQUEST_ID}
+      version={3}
+      editable
+      saveLabel="Save draft"
+    >
+      <ReadyPanel {...view} canSubmit={canSubmit} />
+    </DraftForm>,
+  );
+}
+
 describe('ReadyPanel', () => {
   it('lists readiness and keeps Submit disabled with its reason', () => {
-    render(<ReadyPanel {...readyView(draftRequest(), 'en', t)} />);
+    readyPanel(false);
     expect(screen.getByTestId('ready-note')).toHaveTextContent(
       '2 of 2 employees still have incomplete criteria. Submit unlocks when every employee is 5/5.',
     );
@@ -292,23 +307,61 @@ describe('ReadyPanel', () => {
 
   it('marks a ready employee', () => {
     render(
-      <ReadyPanel
-        items={[
-          {
-            lineId: LINE_1,
-            fullName: 'Omar Haddad',
-            ready: true,
-            status: 'All 5 criteria complete',
-          },
-        ]}
-        note="Note"
-        submitLabel="Submit to Sirius HR"
-        caption="Later"
-      />,
+      <DraftForm formId="f" requestId={REQUEST_ID} version={1} editable saveLabel="Save">
+        <ReadyPanel
+          items={[
+            {
+              lineId: LINE_1,
+              fullName: 'Omar Haddad',
+              ready: true,
+              status: 'All 5 criteria complete',
+            },
+          ]}
+          note="Note"
+          canSubmit
+          submitKey="k"
+          submitLabels={{
+            submit: 'Submit',
+            submitting: 'Submitting…',
+            cancel: 'Cancel',
+            title: 'Submit?',
+            body: 'Body',
+            unsaved: 'Saved first',
+          }}
+          caption="Later"
+        />
+      </DraftForm>,
     );
     const row = screen.getByText('All 5 criteria complete').closest('li');
     expect(row).toHaveAttribute('data-ready', 'true');
     expect(row?.querySelector('[data-state]')).toHaveAttribute('data-state', 'pass');
+  });
+
+  it('confirms before submitting, then posts the draft form with intent=submit [R1-07]', async () => {
+    const { container } = readyPanel(true);
+    await userEvent.click(screen.getByRole('button', { name: 'Submit to Sirius HR' }));
+    const dialog = screen.getByRole('dialog', { name: 'Submit INC-2026-0001 to Sirius HR?' });
+    expect(dialog).toHaveTextContent('2 employees go to Sirius HR for review.');
+    expect(dialog).toHaveTextContent('Anything you changed on this page is saved first.');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Submit to Sirius HR' }));
+    const confirm = within(screen.getByRole('dialog')).getByRole('button', {
+      name: 'Submit to Sirius HR',
+    });
+    expect(confirm).toHaveAttribute('form', 'draft-form');
+    expect(confirm).toHaveAttribute('name', 'intent');
+    expect(confirm).toHaveAttribute('value', 'submit');
+    const form = container.querySelector<HTMLFormElement>('form#draft-form');
+    expect(new FormData(form ?? undefined).get('submitKey')).toBe('submit-key-123');
+    await userEvent.click(confirm);
+    await waitFor(() => {
+      expect(saveDraft).toHaveBeenCalled();
+    });
+    const posted = vi.mocked(saveDraft).mock.calls[0]?.[1];
+    expect(posted?.get('intent')).toBe('submit');
+    expect(posted?.get('submitKey')).toBe('submit-key-123');
   });
 });
 

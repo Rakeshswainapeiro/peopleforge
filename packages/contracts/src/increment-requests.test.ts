@@ -8,6 +8,7 @@ import {
   EvidenceUploadSchema,
   MAX_JUSTIFICATION_LENGTH,
   SaveDraftSchema,
+  SubmitRequestSchema,
 } from './increment-requests.js';
 
 const ID = '00000000-0000-4000-8000-0000000e000a';
@@ -100,6 +101,14 @@ describe('SaveDraftSchema', () => {
   });
 });
 
+describe('SubmitRequestSchema', () => {
+  it('needs the version the user saw, nothing else', () => {
+    expect(SubmitRequestSchema.parse({ version: 4 })).toEqual({ version: 4 });
+    expect(SubmitRequestSchema.safeParse({ version: 0 }).success).toBe(false);
+    expect(SubmitRequestSchema.safeParse({ version: 4, status: 'approved' }).success).toBe(false);
+  });
+});
+
 describe('EvidenceUploadSchema', () => {
   it('needs the employee line and criterion, nothing else', () => {
     expect(EvidenceUploadSchema.parse({ lineId: ID, criterionId: ID })).toEqual({
@@ -150,7 +159,7 @@ describe('IncrementRequestSchema', () => {
       reference: 'INC-2026-0001',
       status: 'draft',
       entity: { id: ID, code: 'SUB-A', name: { en: 'Subsidiary A' } },
-      cycle: { id: ID, name: { en: 'Increment cycle 2026' } },
+      cycle: { id: ID, name: { en: 'Increment cycle 2026' }, submissionDeadline: '2026-11-30' },
       criteria: [
         {
           id: ID,
@@ -166,6 +175,7 @@ describe('IncrementRequestSchema', () => {
       version: 2,
       createdAt: '2026-10-14T07:00:00.000Z',
       updatedAt: '2026-10-14T07:05:00.000Z',
+      submittedAt: null,
       lines: [
         {
           id: ID,

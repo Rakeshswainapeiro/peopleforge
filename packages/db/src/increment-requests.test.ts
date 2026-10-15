@@ -697,6 +697,7 @@ describe('evidence [R1-04]', () => {
     await repo.addEvidence(alpha, id, file);
     await expect(repo.getEvidence(alpha, id, file.id)).resolves.toEqual({
       id: file.id,
+      entityId: SUB_A.id,
       requestStatus: 'draft',
       objectKey: file.objectKey,
       fileName: file.fileName,

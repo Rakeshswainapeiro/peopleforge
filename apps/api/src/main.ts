@@ -3,6 +3,7 @@ import {
   createDatabase,
   createEntityDirectory,
   createIncrementRequestRepository,
+  createNotificationRepository,
   type FieldCipher,
 } from '@peopleforge/db';
 import { malwareScannerFromEnv, objectStoreFromEnv } from '@peopleforge/integrations';
@@ -47,6 +48,7 @@ async function start(): Promise<void> {
     incrementRequests: createIncrementRequestRepository(database.db, cipher),
     objectStore,
     malwareScanner,
+    notifications: createNotificationRepository(database.db),
     // Uploads need both: without them the API is not ready to serve R1-04.
     readinessChecks: [
       { name: 'database', check: () => database.ping() },

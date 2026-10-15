@@ -1,7 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import { MAX_EVIDENCE_PER_CRITERION } from '@peopleforge/contracts';
 import { sql, type Kysely, type Transaction } from 'kysely';
+import { recordAudit, type AuditEntry } from './audit.js';
 import type { FieldCipher } from './field-crypto.js';
+import { insertNotifications, type NewNotification } from './notifications.js';
 import type {
   CriterionResultValue,
   Database,
@@ -86,13 +88,14 @@ export interface IncrementRequestRecord {
   reference: string;
   status: RequestStatus;
   entity: { id: string; code: string; name: LocalisedText };
-  cycle: { id: string; name: LocalisedText };
+  cycle: { id: string; name: LocalisedText; submissionDeadline: string | null };
   criteriaSetId: string;
   /** The criteria of the pinned set, in display order. */
   criteria: CriterionRecord[];
   version: number;
   createdAt: Date;
   updatedAt: Date;
+  submittedAt: Date | null;
   lines: RequestLineRecord[];
 }
 
@@ -144,6 +147,7 @@ export interface NewEvidence {
 
 export interface EvidenceLocation {
   id: string;
+  entityId: string;
   requestStatus: RequestStatus;
   objectKey: string;
   fileName: string;
@@ -162,7 +166,9 @@ export type RequestDataErrorReason =
   | 'no_active_criteria'
   | 'criterion_not_found'
   | 'evidence_limit'
-  | 'evidence_not_found';
+  | 'evidence_not_found'
+  | 'not_draft'
+  | 'idempotency_conflict';
 
 /** An expected refusal (bad reference, stale version, …), mapped to 4xx by the API. */
 export class RequestDataError extends Error {
@@ -211,6 +217,21 @@ export interface IncrementRequestRepository {
   addEvidence: (scope: Scope, requestId: string, file: NewEvidence) => Promise<EvidenceRecord>;
   /** Soft-deletes a file; the stored object is kept (retention open, Q10). */
   removeEvidence: (scope: Scope, requestId: string, evidenceId: string) => Promise<void>;
+  /**
+   * Submits a draft to Sirius HR (R1-07): status, history, audit and notifications in one
+   * transaction. A repeated idempotency key for the same request is a replay (no change).
+   */
+  submit: (
+    scope: Scope,
+    requestId: string,
+    input: {
+      version: number;
+      idempotencyKey: string;
+      notifications: (requestReference: string) => readonly NewNotification[];
+    },
+  ) => Promise<{ replayed: boolean }>;
+  /** Records an action that changes nothing here, e.g. a download (R1-15). */
+  recordAction: (scope: Scope, entry: AuditEntry) => Promise<void>;
   /** Where a live file is stored, or null when it isn't visible in this scope. */
   getEvidence: (
     scope: Scope,
@@ -233,13 +254,14 @@ export function createIncrementRequestRepository(
   async function lockDraft(trx: Trx, requestId: string) {
     const request = await trx
       .selectFrom('increments.increment_request')
-      .select(['id', 'entity_id', 'version', 'criteria_set_id'])
+      .select(['id', 'entity_id', 'version', 'criteria_set_id', 'status', 'reference'])
       .where('id', '=', requestId)
       .where('deleted_at', 'is', null)
       .forUpdate()
       .executeTakeFirst();
     if (request === undefined) throw new RequestDataError('not_found');
-    // Only drafts exist until submission arrives (S4), which adds the editable-status check.
+    // A submitted request is Sirius HR's to review: nothing in it changes any more.
+    if (request.status !== 'draft') throw new RequestDataError('not_draft');
     return request;
   }
 
@@ -517,6 +539,13 @@ export function createIncrementRequestRepository(
         for (const employeeId of input.employeeIds) {
           await insertLine(trx, request, employeeId, scope.userId);
         }
+        await recordAudit(trx, scope.userId, {
+          action: 'increment_request.created',
+          entityId: input.entityId,
+          subjectType: 'increment_request',
+          subjectId: id,
+          details: { reference, employees: input.employeeIds.length },
+        });
         return { id, created: true };
       }),
 
@@ -539,6 +568,8 @@ export function createIncrementRequestRepository(
             'e.name as entity_name',
             'c.id as cycle_id',
             'c.name as cycle_name',
+            'r.submitted_at',
+            sql<string | null>`to_char(c.submission_deadline, 'YYYY-MM-DD')`.as('deadline'),
           ])
           .where('r.id', '=', id)
           .where('r.deleted_at', 'is', null)
@@ -628,7 +659,11 @@ export function createIncrementRequestRepository(
           reference: request.reference,
           status: request.status,
           entity: { id: request.entity_id, code: request.entity_code, name: request.entity_name },
-          cycle: { id: request.cycle_id, name: request.cycle_name },
+          cycle: {
+            id: request.cycle_id,
+            name: request.cycle_name,
+            submissionDeadline: request.deadline,
+          },
           criteriaSetId: request.criteria_set_id,
           criteria: criteria.map((criterion) => ({
             id: criterion.id,
@@ -643,6 +678,7 @@ export function createIncrementRequestRepository(
           version: request.version,
           createdAt: request.created_at,
           updatedAt: request.updated_at,
+          submittedAt: request.submitted_at,
           lines: lines.map((line) => ({
             id: line.id,
             employeeId: line.employee_id,
@@ -713,11 +749,18 @@ export function createIncrementRequestRepository(
         const request = await lockDraft(trx, requestId);
         await insertLine(trx, request, employeeId, scope.userId);
         await touch(trx, requestId, scope.userId);
+        await recordAudit(trx, scope.userId, {
+          action: 'request_line.added',
+          entityId: request.entity_id,
+          subjectType: 'increment_request',
+          subjectId: requestId,
+          details: { employeeId },
+        });
       }),
 
     removeLine: (scope, requestId, lineId) =>
       withScope(db, scope, async (trx) => {
-        await lockDraft(trx, requestId);
+        const request = await lockDraft(trx, requestId);
         const removed = await trx
           .updateTable('increments.request_line')
           .set({ deleted_at: sql`now()`, updated_at: sql`now()`, updated_by: scope.userId })
@@ -732,16 +775,24 @@ export function createIncrementRequestRepository(
           .where('request_id', '=', requestId)
           .where('deleted_at', 'is', null)
           .executeTakeFirst();
-        if (remaining === undefined) {
+        const discarded = remaining === undefined;
+        if (discarded) {
           await trx
             .updateTable('increments.increment_request')
             .set({ deleted_at: sql`now()`, updated_at: sql`now()`, updated_by: scope.userId })
             .where('id', '=', requestId)
             .execute();
-          return { discarded: true };
+        } else {
+          await touch(trx, requestId, scope.userId);
         }
-        await touch(trx, requestId, scope.userId);
-        return { discarded: false };
+        await recordAudit(trx, scope.userId, {
+          action: discarded ? 'increment_request.discarded' : 'request_line.removed',
+          entityId: request.entity_id,
+          subjectType: 'increment_request',
+          subjectId: requestId,
+          details: { lineId },
+        });
+        return { discarded };
       }),
 
     saveDraft: (scope, requestId, input) =>
@@ -773,6 +824,17 @@ export function createIncrementRequestRepository(
           await saveAssessment(trx, request, input.assessment, scope.userId);
         }
         await touch(trx, requestId, scope.userId);
+        await recordAudit(trx, scope.userId, {
+          action: 'increment_request.draft_saved',
+          entityId: request.entity_id,
+          subjectType: 'increment_request',
+          subjectId: requestId,
+          details: {
+            version: input.version + 1,
+            proposals: input.proposals.length,
+            assessedLineId: input.assessment?.lineId ?? null,
+          },
+        });
       }),
 
     addEvidence: (scope, requestId, file) =>
@@ -814,6 +876,21 @@ export function createIncrementRequestRepository(
           .set({ updated_at: sql`now()`, updated_by: scope.userId })
           .where('id', '=', requestId)
           .execute();
+        await recordAudit(trx, scope.userId, {
+          action: 'evidence.uploaded',
+          entityId: request.entity_id,
+          subjectType: 'evidence_file',
+          subjectId: file.id,
+          details: {
+            requestId,
+            lineId: file.lineId,
+            criterionId: file.criterionId,
+            mediaType: file.mediaType,
+            sizeBytes: file.sizeBytes,
+            sha256: file.sha256,
+            scanEngine: file.scanEngine,
+          },
+        });
         return {
           id: file.id,
           fileName: file.fileName,
@@ -825,7 +902,7 @@ export function createIncrementRequestRepository(
 
     removeEvidence: (scope, requestId, evidenceId) =>
       withScope(db, scope, async (trx) => {
-        await lockDraft(trx, requestId);
+        const request = await lockDraft(trx, requestId);
         const removed = await trx
           .updateTable('increments.evidence_file')
           .set({ deleted_at: sql`now()`, deleted_by: scope.userId })
@@ -851,6 +928,73 @@ export function createIncrementRequestRepository(
           .set({ updated_at: sql`now()`, updated_by: scope.userId })
           .where('id', '=', requestId)
           .execute();
+        await recordAudit(trx, scope.userId, {
+          action: 'evidence.removed',
+          entityId: request.entity_id,
+          subjectType: 'evidence_file',
+          subjectId: evidenceId,
+          details: { requestId },
+        });
+      }),
+
+    submit: (scope, requestId, input) =>
+      withScope(db, scope, async (trx) => {
+        // Claim the key first: a retry or double click waits here, then sees it as a replay.
+        const claimed = await trx
+          .insertInto('increments.idempotency_key')
+          .values({ user_id: scope.userId, key: input.idempotencyKey, request_id: requestId })
+          .onConflict((oc) => oc.columns(['user_id', 'key']).doNothing())
+          .returning('request_id')
+          .executeTakeFirst();
+        if (claimed === undefined) {
+          const existing = await trx
+            .selectFrom('increments.idempotency_key')
+            .select('request_id')
+            .where('user_id', '=', scope.userId)
+            .where('key', '=', input.idempotencyKey)
+            .executeTakeFirstOrThrow();
+          if (existing.request_id !== requestId) throw new RequestDataError('idempotency_conflict');
+          return { replayed: true };
+        }
+        const request = await lockDraft(trx, requestId);
+        if (request.version !== input.version) throw new RequestDataError('version_conflict');
+        await trx
+          .updateTable('increments.increment_request')
+          .set({
+            status: 'submitted',
+            submitted_at: sql`now()`,
+            submitted_by: scope.userId,
+            version: sql`version + 1`,
+            updated_at: sql`now()`,
+            updated_by: scope.userId,
+          })
+          .where('id', '=', requestId)
+          .execute();
+        await trx
+          .insertInto('increments.status_event')
+          .values({
+            request_id: requestId,
+            entity_id: request.entity_id,
+            from_status: 'draft',
+            to_status: 'submitted',
+            actor: scope.userId,
+            reason: null,
+          })
+          .execute();
+        await recordAudit(trx, scope.userId, {
+          action: 'increment_request.submitted',
+          entityId: request.entity_id,
+          subjectType: 'increment_request',
+          subjectId: requestId,
+          details: { reference: request.reference, from: 'draft', to: 'submitted' },
+        });
+        await insertNotifications(trx, input.notifications(request.reference));
+        return { replayed: false };
+      }),
+
+    recordAction: (scope, entry) =>
+      withScope(db, scope, async (trx) => {
+        await recordAudit(trx, scope.userId, entry);
       }),
 
     getEvidence: (scope, requestId, evidenceId) =>
@@ -865,6 +1009,7 @@ export function createIncrementRequestRepository(
             'f.file_name',
             'f.media_type',
             'f.size_bytes',
+            'f.entity_id',
             'r.status',
           ])
           .where('f.id', '=', evidenceId)
@@ -876,6 +1021,7 @@ export function createIncrementRequestRepository(
         if (row === undefined) return null;
         return {
           id: row.id,
+          entityId: row.entity_id,
           requestStatus: row.status,
           objectKey: row.object_key,
           fileName: row.file_name,

@@ -75,7 +75,7 @@ export function draftRequest(overrides: Partial<IncrementRequest> = {}): Increme
     reference: 'INC-2026-0001',
     status: 'draft',
     entity: { id: ENTITY, code: 'SUB-A', name: { en: 'Subsidiary A' } },
-    cycle: { id: ENTITY, name: { en: 'Increment cycle 2026' } },
+    cycle: { id: ENTITY, name: { en: 'Increment cycle 2026' }, submissionDeadline: '2026-11-30' },
     criteria: CRITERION_IDS.map((id, index) => ({
       id,
       code: `C${String(index + 1)}`,
@@ -89,6 +89,7 @@ export function draftRequest(overrides: Partial<IncrementRequest> = {}): Increme
     version: 3,
     createdAt: '2026-10-14T07:00:00.000Z',
     updatedAt: '2026-10-14T07:05:00.000Z',
+    submittedAt: null,
     lines: [
       {
         id: LINE_1,

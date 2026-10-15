@@ -18,6 +18,7 @@ import {
   EmployeeSearchQuerySchema,
   ListIncrementRequestsQuerySchema,
   SaveDraftSchema,
+  SubmitRequestSchema,
   type Cycle,
   type EmployeeOption,
   type IncrementRequest,
@@ -35,6 +36,13 @@ import type { IncrementRequestService } from './increment-request.service.js';
 export const Id = z.uuid();
 /** Client-generated, e.g. a UUID; unique per user. */
 const IdempotencyKey = z.string().regex(/^[A-Za-z0-9_-]{8,128}$/u);
+
+/** The required Idempotency-Key header; a 400 names the header when it's missing or malformed. */
+function idempotencyKeyOf(header: unknown): string {
+  return z.object({ 'Idempotency-Key': IdempotencyKey }).parse({ 'Idempotency-Key': header })[
+    'Idempotency-Key'
+  ];
+}
 
 /**
  * Increment requests (R1-02). Reads need `increment_request:read` (subsidiary HR and Sirius
@@ -60,13 +68,12 @@ export class IncrementRequestsController {
     @Body() body: unknown,
     @Headers('idempotency-key') key: unknown,
   ): Promise<IncrementRequest> {
-    const idempotencyKey = z
-      .object({ 'Idempotency-Key': IdempotencyKey })
-      .parse({ 'Idempotency-Key': key });
+    // The header first: a missing key is reported before any body problem.
+    const idempotencyKey = idempotencyKeyOf(key);
     return this.service.create(
       principal.require(req),
       CreateIncrementRequestSchema.parse(body),
-      idempotencyKey['Idempotency-Key'],
+      idempotencyKey,
     );
   }
 
@@ -109,6 +116,24 @@ export class IncrementRequestsController {
       principal.require(req),
       Id.parse(id),
       SaveDraftSchema.parse(body),
+    );
+  }
+
+  @Post(':id/submit')
+  @HttpCode(200)
+  @RequirePermission('increment_request:submit')
+  submit(
+    @Req() req: IncomingMessage,
+    @Param('id') id: string,
+    @Body() body: unknown,
+    @Headers('idempotency-key') key: unknown,
+  ): Promise<IncrementRequest> {
+    const idempotencyKey = idempotencyKeyOf(key);
+    return this.service.submit(
+      principal.require(req),
+      Id.parse(id),
+      SubmitRequestSchema.parse(body),
+      idempotencyKey,
     );
   }
 }

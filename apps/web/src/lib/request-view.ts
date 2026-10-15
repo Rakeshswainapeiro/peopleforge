@@ -5,7 +5,7 @@ import {
   type IncrementRequest,
   type RequestLine,
 } from '@peopleforge/contracts';
-import type { CriterionState } from '@peopleforge/ui';
+import type { CriterionState, Step } from '@peopleforge/ui';
 import type { Locale } from '@sirius/shared-types';
 import type {
   CriteriaEditorLabels,
@@ -14,7 +14,7 @@ import type {
 import type { ProposalRowView, ProposalsTableLabels } from '@/components/requests/proposals-table';
 import type { ReadyPanelProps } from '@/components/requests/ready-panel';
 import type { MessageKey, Translate } from '@/i18n/translator';
-import { formatFileSize, formatMoney, formatPercent, trimDecimal } from './format';
+import { formatDate, formatFileSize, formatMoney, formatPercent, trimDecimal } from './format';
 import { EVIDENCE_ERROR_KEYS, REQUEST_ERROR_KEYS } from './request-errors';
 import { localised } from './viewer-display';
 
@@ -189,6 +189,7 @@ export function readyView(
   request: IncrementRequest,
   locale: Locale,
   t: Translate,
+  submitKey: string,
 ): ReadyPanelProps {
   const number = new Intl.NumberFormat(locale);
   const total = request.criteria.length;
@@ -230,7 +231,19 @@ export function readyView(
       };
     }),
     note,
-    submitLabel: t('request.submit'),
+    canSubmit: request.lines.length > 0 && request.totals.ready === request.lines.length,
+    submitKey,
+    submitLabels: {
+      submit: t('request.submit'),
+      submitting: t('request.submitting'),
+      cancel: t('request.cancel'),
+      title: t('request.submitConfirmTitle', { reference: request.reference }),
+      body: t(
+        `request.submitConfirmBody.${new Intl.PluralRules(locale).select(request.lines.length) === 'one' ? 'one' : 'other'}`,
+        { count: employees },
+      ),
+      unsaved: t('request.submitConfirmUnsaved'),
+    },
     caption: t('request.submitCaption'),
   };
 }
@@ -300,4 +313,34 @@ export function employeesAdded(count: number, locale: Locale, t: Translate): str
   return t(`request.employeesAdded.${form}`, {
     count: new Intl.NumberFormat(locale).format(count),
   });
+}
+
+/**
+ * Figma "Progress" for a request: Added → Submitted to Sirius HR → Review → Decision. Review
+ * and decisions arrive with S5, so a submitted request waits at Review.
+ */
+export function progressSteps(request: IncrementRequest, locale: Locale, t: Translate): Step[] {
+  const submitted = request.submittedAt;
+  return [
+    {
+      label: t('request.progressSteps.added'),
+      detail: formatDate(request.createdAt, locale),
+      state: 'done',
+    },
+    {
+      label: t('request.progressSteps.submitted'),
+      detail: submitted === null ? t('request.progressPending') : formatDate(submitted, locale),
+      state: submitted === null ? 'current' : 'done',
+    },
+    {
+      label: t('request.progressSteps.review'),
+      detail: t('request.progressPending'),
+      state: submitted === null ? 'todo' : 'current',
+    },
+    {
+      label: t('request.progressSteps.decision'),
+      detail: t('request.progressPending'),
+      state: 'todo',
+    },
+  ];
 }

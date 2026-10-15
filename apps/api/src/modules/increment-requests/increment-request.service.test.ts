@@ -326,9 +326,142 @@ describe('toDomainError', () => {
     ['criterion_not_found', ValidationError, { path: 'criterionId', code: 'not_found' }],
     ['evidence_limit', ConflictError, { path: 'file', code: 'limit' }],
     ['evidence_not_found', NotFoundError, undefined],
+    ['not_draft', ConflictError, { path: 'status', code: 'not_draft' }],
+    ['idempotency_conflict', ConflictError, { path: 'Idempotency-Key', code: 'reused' }],
   ] as const)('maps %s', (reason: RequestDataErrorReason, type, detail) => {
     const error = toDomainError(new RequestDataError(reason));
     expect(error).toBeInstanceOf(type);
     expect(error.details?.[0]).toEqual(detail);
+  });
+});
+
+/** A request where every employee is ready: proposal and all five criteria complete. */
+function readyRecord() {
+  const ready = record();
+  ready.lines = ready.lines.slice(0, 1).map((line) => ({
+    ...line,
+    criteria: ready.criteria.map((criterion) => ({
+      criterionId: criterion.id,
+      result: 'pass' as const,
+      justification: 'Reason',
+      evidence: [evidenceRecord],
+    })),
+  }));
+  return ready;
+}
+
+describe('IncrementRequestService.submit [R1-07]', () => {
+  const KEY = 'submit-key-1';
+  const beforeDeadline = () => new Date('2026-11-30T19:59:00Z');
+
+  it('submits a ready draft and tells the submitter and every Sirius reviewer', async () => {
+    const repository = workingRepository();
+    repository.get.mockResolvedValue(readyRecord());
+    const service = new IncrementRequestService(repository, beforeDeadline);
+    await service.submit(alphaHr, REQUEST_ID, { version: 3 }, KEY);
+    const [scope, id, input] = (repository.submit.mock.calls[0] ?? []) as unknown[];
+    expect([scope, id]).toEqual([scopeA, REQUEST_ID]);
+    expect(input).toMatchObject({ version: 3, idempotencyKey: KEY });
+    const notices = (input as { notifications: (ref: string) => unknown }).notifications(
+      'INC-2026-0001',
+    );
+    expect(notices).toEqual([
+      {
+        recipient: { userId: 'alpha' },
+        kind: 'request_submitted',
+        entityId: SUB_A,
+        requestId: REQUEST_ID,
+        params: { reference: 'INC-2026-0001', employees: 1 },
+      },
+      {
+        recipient: { role: 'PeopleForge.Reviewer' },
+        kind: 'request_received',
+        entityId: SUB_A,
+        requestId: REQUEST_ID,
+        params: { reference: 'INC-2026-0001', employees: 1, entity: 'SUB-A', actor: 'Alpha HR' },
+        actionNeeded: true,
+      },
+    ]);
+  });
+
+  it('names the actor by sign-in name or ID when there is no display name', async () => {
+    const repository = workingRepository();
+    repository.get.mockResolvedValue(readyRecord());
+    const service = new IncrementRequestService(repository, beforeDeadline);
+    const actorOf = async (caller: typeof alphaHr) => {
+      repository.submit.mockClear();
+      await service.submit(caller, REQUEST_ID, { version: 3 }, KEY);
+      const input = repository.submit.mock.calls[0]?.[2] as {
+        notifications: (ref: string) => { params: Record<string, unknown> }[];
+      };
+      return input.notifications('R')[1]?.params.actor;
+    };
+    await expect(actorOf({ ...alphaHr, name: null })).resolves.toBe('pf.alpha.hr');
+    await expect(actorOf({ ...alphaHr, name: null, username: null })).resolves.toBe('alpha');
+  });
+
+  it('refuses a request with an employee not ready, naming the rows', async () => {
+    const repository = workingRepository();
+    const service = new IncrementRequestService(repository, beforeDeadline);
+    await expect(service.submit(alphaHr, REQUEST_ID, { version: 3 }, KEY)).rejects.toMatchObject({
+      details: [
+        { path: 'lines.0', code: 'incomplete' },
+        { path: 'lines.1', code: 'incomplete' },
+      ],
+    });
+    const empty = record({ lines: [] });
+    repository.get.mockResolvedValue(empty);
+    await expect(service.submit(alphaHr, REQUEST_ID, { version: 3 }, KEY)).rejects.toThrow(
+      ValidationError,
+    );
+    expect(repository.submit).not.toHaveBeenCalled();
+  });
+
+  it('refuses after the deadline’s business day ends in Dubai, not before', async () => {
+    const repository = workingRepository();
+    repository.get.mockResolvedValue(readyRecord());
+    const late = new IncrementRequestService(repository, () => new Date('2026-11-30T20:00:00Z'));
+    await expect(late.submit(alphaHr, REQUEST_ID, { version: 3 }, KEY)).rejects.toMatchObject({
+      details: [{ path: 'cycle', code: 'deadline_passed' }],
+    });
+    const open = readyRecord();
+    open.cycle = { ...open.cycle, submissionDeadline: null };
+    repository.get.mockResolvedValue(open);
+    await expect(late.submit(alphaHr, REQUEST_ID, { version: 3 }, KEY)).resolves.toMatchObject({
+      id: REQUEST_ID,
+    });
+  });
+
+  it('lets the repository answer for a request that is no longer a draft (replay or 409)', async () => {
+    const repository = workingRepository();
+    repository.get.mockResolvedValue(
+      record({ status: 'submitted', submittedAt: new Date('2026-10-14T09:00:00Z') }),
+    );
+    const service = new IncrementRequestService(repository);
+    await expect(service.submit(alphaHr, REQUEST_ID, { version: 4 }, KEY)).resolves.toMatchObject({
+      status: 'submitted',
+      submittedAt: '2026-10-14T09:00:00.000Z',
+    });
+    repository.submit.mockRejectedValueOnce(new RequestDataError('not_draft'));
+    await expect(service.submit(alphaHr, REQUEST_ID, { version: 4 }, 'other-key')).rejects.toThrow(
+      ConflictError,
+    );
+  });
+
+  it('reads the real clock by default', async () => {
+    const repository = workingRepository();
+    const farDeadline = readyRecord();
+    farDeadline.cycle = { ...farDeadline.cycle, submissionDeadline: '9999-12-31' };
+    repository.get.mockResolvedValue(farDeadline);
+    await new IncrementRequestService(repository).submit(alphaHr, REQUEST_ID, { version: 3 }, KEY);
+    expect(repository.submit).toHaveBeenCalledOnce();
+  });
+
+  it('shows submitted requests to Sirius reviewers', async () => {
+    const repository = workingRepository();
+    repository.get.mockResolvedValue(record({ status: 'submitted', submittedAt: new Date() }));
+    await expect(
+      new IncrementRequestService(repository).get(reviewer, REQUEST_ID),
+    ).resolves.toMatchObject({ status: 'submitted' });
   });
 });

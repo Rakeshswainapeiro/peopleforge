@@ -2,7 +2,11 @@ import type { INestApplication } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { pino, type Logger } from 'pino';
 import { ApiErrorSchema, type ApiError } from '@sirius/shared-types';
-import type { EntityDirectory, IncrementRequestRepository } from '@peopleforge/db';
+import type {
+  EntityDirectory,
+  IncrementRequestRepository,
+  NotificationRepository,
+} from '@peopleforge/db';
 import type { MalwareScanner, ObjectStore } from '@peopleforge/integrations';
 import type { Principal } from '../auth/principal.js';
 import type { AppDependencies } from '../bootstrap/app.module.js';
@@ -91,6 +95,8 @@ export function unusedRepository(): IncrementRequestRepository {
     addEvidence: fail,
     removeEvidence: fail,
     getEvidence: fail,
+    submit: fail,
+    recordAction: fail,
   };
 }
 
@@ -107,6 +113,11 @@ export const unusedScanner: MalwareScanner = {
   engine: 'unused',
   scan: unexpected,
   ping: unexpected,
+};
+
+export const unusedNotifications: NotificationRepository = {
+  list: unexpected,
+  markRead: unexpected,
 };
 
 /** A directory whose database is down. */
@@ -140,6 +151,7 @@ export async function buildApp(
       incrementRequests: unusedRepository(),
       objectStore: unusedObjectStore,
       malwareScanner: unusedScanner,
+      notifications: unusedNotifications,
       readinessChecks: [],
       isShuttingDown: () => false,
       ...overrides,

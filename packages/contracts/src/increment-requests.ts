@@ -17,7 +17,8 @@ export const DecimalString = z
 export const ProposedKindSchema = z.enum(['percent', 'amount']);
 export type ProposedKind = z.infer<typeof ProposedKindSchema>;
 
-export const RequestStatusSchema = z.enum(['draft']);
+/** More statuses arrive with review and decisions (S5). */
+export const RequestStatusSchema = z.enum(['draft', 'submitted']);
 export type RequestStatus = z.infer<typeof RequestStatusSchema>;
 
 /** Most employees one request can hold; keeps payloads and screens bounded (ADR-004 to confirm). */
@@ -100,6 +101,10 @@ export const SaveDraftSchema = z.strictObject({
     .optional(),
 });
 export type SaveDraft = z.infer<typeof SaveDraftSchema>;
+
+/** POST …/{id}/submit (with an Idempotency-Key header): the version the user last saw (R1-07). */
+export const SubmitRequestSchema = z.strictObject({ version: z.number().int().min(1) });
+export type SubmitRequest = z.infer<typeof SubmitRequestSchema>;
 
 /** The text fields of POST …/{id}/evidence (multipart/form-data, beside the `file` part). */
 export const EvidenceUploadSchema = z.strictObject({
@@ -217,12 +222,14 @@ export const IncrementRequestSchema = z.object({
   reference: z.string(),
   status: RequestStatusSchema,
   entity: EntitySummarySchema,
-  cycle: CycleSchema.pick({ id: true, name: true }),
+  cycle: CycleSchema.pick({ id: true, name: true, submissionDeadline: true }),
   /** The eligibility criteria this request is assessed against (pinned at creation, R1-05). */
   criteria: z.array(CriterionSchema),
   version: z.number().int().min(1),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
+  /** When it went to Sirius HR; null while a draft. */
+  submittedAt: z.iso.datetime().nullable(),
   lines: z.array(RequestLineSchema),
   totals: RequestTotalsSchema,
 });

@@ -10,6 +10,8 @@ export interface NavLinkItem {
   label: string;
   icon: IconName;
   alsoActiveFor?: readonly string[] | undefined;
+  /** A count after the label (unread notifications), with its screen-reader text. */
+  badge?: { count: number; label: string } | undefined;
 }
 
 /** Client component only to read the current path; labels arrive already translated. */
@@ -25,6 +27,8 @@ export function NavLinks({ items, label }: { items: readonly NavLinkItem[]; labe
               label={item.label}
               icon={item.icon}
               active={isActivePath(pathname, item)}
+              badge={item.badge?.count}
+              badgeLabel={item.badge?.label}
               as={Link}
             />
           </li>

@@ -160,11 +160,14 @@ export class EvidenceService {
       throw new NotFoundError('Evidence not found');
     }
     const body = await this.dependency(this.deps.store.get(location.objectKey));
-    // Interim until the audit trail (R1-15): downloads of personal documents are traceable.
-    this.deps.logger.info(
-      { event: 'evidence_downloaded', userId: caller.userId, requestId, evidenceId },
-      'Evidence downloaded',
-    );
+    // Every download of a personal document is in the audit trail (R1-15).
+    await this.deps.repository.recordAction(scopeOf(caller), {
+      action: 'evidence.downloaded',
+      entityId: location.entityId,
+      subjectType: 'evidence_file',
+      subjectId: location.id,
+      details: { requestId },
+    });
     return { body, fileName: location.fileName, mediaType: location.mediaType };
   }
 

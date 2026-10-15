@@ -1,5 +1,5 @@
 import type { NestExpressApplication } from '@nestjs/platform-express';
-import type { IncrementRequestRepository } from '@peopleforge/db';
+import { RequestDataError, type IncrementRequestRepository } from '@peopleforge/db';
 import { IncrementRequestSchema, IncrementRequestPageSchema } from '@peopleforge/contracts';
 import request from 'supertest';
 import { describe, expect, it } from 'vitest';
@@ -12,6 +12,7 @@ import {
   EMPLOYEE_1,
   executive,
   LINE_1,
+  record,
   REQUEST_ID,
   reviewer,
   workingRepository,
@@ -38,6 +39,7 @@ describe('increment request routes [R1-02, NFR-SEC-01]', () => {
     ['POST', `${base}/${REQUEST_ID}/lines`],
     ['DELETE', `${base}/${REQUEST_ID}/lines/${LINE_1}`],
     ['PUT', `${base}/${REQUEST_ID}/draft`],
+    ['POST', `${base}/${REQUEST_ID}/submit`],
     ['GET', '/api/v1/increment-cycles/open'],
     ['GET', `/api/v1/employees?entityId=${SUB_A}`],
   ])('refuses %s %s without a session (401)', async (method, path) => {
@@ -53,6 +55,7 @@ describe('increment request routes [R1-02, NFR-SEC-01]', () => {
     ['POST', `${base}/${REQUEST_ID}/lines`],
     ['DELETE', `${base}/${REQUEST_ID}/lines/${LINE_1}`],
     ['PUT', `${base}/${REQUEST_ID}/draft`],
+    ['POST', `${base}/${REQUEST_ID}/submit`],
     ['GET', `/api/v1/employees?entityId=${SUB_A}`],
   ])('refuses executives %s %s: no individual salaries (403)', async (method, path) => {
     const server = (await app(executive)).getHttpServer();
@@ -192,5 +195,49 @@ describe('lookups', () => {
       errorOf(await request(server).get(`/api/v1/employees?entityId=${other}`).expect(403)).code,
     ).toBe('FORBIDDEN');
     await request(server).get('/api/v1/employees').expect(400);
+  });
+});
+
+describe('submit route [R1-07]', () => {
+  it('needs the submit permission, an Idempotency-Key and the version', async () => {
+    const server = (await app(reviewer)).getHttpServer();
+    await request(server)
+      .post(`${base}/${REQUEST_ID}/submit`)
+      .set('Idempotency-Key', KEY)
+      .send({ version: 3 })
+      .expect(403);
+    const own = (await app(alphaHr)).getHttpServer();
+    const missingKey = await request(own)
+      .post(`${base}/${REQUEST_ID}/submit`)
+      .send({ version: 3 })
+      .expect(400);
+    expect(errorOf(missingKey).details?.[0]?.path).toBe('Idempotency-Key');
+    const noVersion = await request(own)
+      .post(`${base}/${REQUEST_ID}/submit`)
+      .set('Idempotency-Key', KEY)
+      .send({})
+      .expect(400);
+    expect(errorOf(noVersion).details?.[0]?.path).toBe('version');
+  });
+
+  it('answers 400 naming the employees who are not ready', async () => {
+    const res = await request((await app(alphaHr)).getHttpServer())
+      .post(`${base}/${REQUEST_ID}/submit`)
+      .set('Idempotency-Key', KEY)
+      .send({ version: 3 })
+      .expect(400);
+    expect(errorOf(res).details?.map((detail) => detail.path)).toEqual(['lines.0', 'lines.1']);
+  });
+
+  it('answers 409 when the request is no longer a draft', async () => {
+    const repository = workingRepository();
+    repository.get.mockResolvedValue(record({ status: 'submitted', submittedAt: new Date() }));
+    repository.submit.mockRejectedValueOnce(new RequestDataError('not_draft'));
+    const res = await request((await app(alphaHr, repository)).getHttpServer())
+      .post(`${base}/${REQUEST_ID}/submit`)
+      .set('Idempotency-Key', KEY)
+      .send({ version: 3 })
+      .expect(409);
+    expect(errorOf(res).details).toEqual([{ path: 'status', code: 'not_draft' }]);
   });
 });

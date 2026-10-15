@@ -1,3 +1,4 @@
+import { businessDay, ROLES } from '@peopleforge/contracts';
 import type {
   CreateIncrementRequest,
   Cycle,
@@ -7,9 +8,11 @@ import type {
   RemoveLineResult,
   RequestStatus,
   SaveDraft,
+  SubmitRequest,
 } from '@peopleforge/contracts';
 import {
   RequestDataError,
+  type NewNotification,
   type IncrementRequestRecord,
   type IncrementRequestRepository,
 } from '@peopleforge/db';
@@ -60,6 +63,14 @@ export function toDomainError(error: RequestDataError): DomainError {
       ]);
     case 'evidence_not_found':
       return new NotFoundError('Evidence not found');
+    case 'not_draft':
+      return new ConflictError('Request is no longer a draft', [
+        { path: 'status', code: 'not_draft' },
+      ]);
+    case 'idempotency_conflict':
+      return new ConflictError('Idempotency key already used for another request', [
+        { path: 'Idempotency-Key', code: 'reused' },
+      ]);
   }
 }
 
@@ -149,6 +160,7 @@ function toDto(record: IncrementRequestRecord): IncrementRequest {
     status: record.status,
     entity: record.entity,
     cycle: record.cycle,
+    submittedAt: record.submittedAt === null ? null : record.submittedAt.toISOString(),
     criteria: record.criteria.map((criterion) => ({
       ...criterion,
       maxFileMb: effectiveMaxFileMb(criterion),
@@ -161,12 +173,44 @@ function toDto(record: IncrementRequestRecord): IncrementRequest {
   };
 }
 
+/** Who hears about a submission (R1-07): the submitter, and every Sirius HR reviewer. */
+function submissionNotices(
+  caller: Principal,
+  request: IncrementRequest,
+): (reference: string) => NewNotification[] {
+  const about = { entityId: request.entity.id, requestId: request.id };
+  const employees = request.lines.length;
+  return (reference) => [
+    {
+      ...about,
+      recipient: { userId: caller.userId },
+      kind: 'request_submitted',
+      params: { reference, employees },
+    },
+    {
+      ...about,
+      recipient: { role: ROLES.reviewer },
+      kind: 'request_received',
+      params: {
+        reference,
+        employees,
+        entity: request.entity.code,
+        actor: caller.name ?? caller.username ?? caller.userId,
+      },
+      actionNeeded: true,
+    },
+  ];
+}
+
 /**
  * Increment request use cases (R1-02). Authorisation: the route checks the permission; this
  * checks the subsidiary; Row-Level Security re-checks every row (ADR-002).
  */
 export class IncrementRequestService {
-  constructor(private readonly repository: IncrementRequestRepository) {}
+  constructor(
+    private readonly repository: IncrementRequestRepository,
+    private readonly now: () => Date = () => new Date(),
+  ) {}
 
   openCycles(caller: Principal): Promise<Cycle[]> {
     return this.repository.openCycles(scopeOf(caller));
@@ -285,6 +329,45 @@ export class IncrementRequestService {
           value: proposal.value === null ? null : toMoney(proposal.value),
         })),
         assessment: input.assessment,
+      }),
+    );
+    return this.get(caller, id);
+  }
+
+  /**
+   * Sends a draft to Sirius HR (R1-07). Allowed only when every employee has a proposal and
+   * all criteria complete (R1-03, R1-04) and the cycle's deadline hasn't passed (business
+   * day, Asia/Dubai). A repeated Idempotency-Key returns the submitted request unchanged.
+   */
+  async submit(
+    caller: Principal,
+    id: string,
+    input: SubmitRequest,
+    idempotencyKey: string,
+  ): Promise<IncrementRequest> {
+    const current = await this.get(caller, id);
+    // Not a draft: the repository tells a replay (same key) from a second submission.
+    if (isDraft(current.status)) {
+      const incomplete = current.lines.flatMap((line, index) =>
+        line.proposedValue !== null && line.criteria.every((c) => c.missing.length === 0)
+          ? []
+          : [{ path: `lines.${String(index)}`, code: 'incomplete' }],
+      );
+      if (current.lines.length === 0 || incomplete.length > 0) {
+        throw new ValidationError('Request not ready to submit', incomplete);
+      }
+      const deadline = current.cycle.submissionDeadline;
+      if (deadline !== null && businessDay(this.now()) > deadline) {
+        throw new ValidationError('Submission deadline has passed', [
+          { path: 'cycle', code: 'deadline_passed' },
+        ]);
+      }
+    }
+    await guard(
+      this.repository.submit(scopeOf(caller), id, {
+        version: input.version,
+        idempotencyKey,
+        notifications: submissionNotices(caller, current),
       }),
     );
     return this.get(caller, id);

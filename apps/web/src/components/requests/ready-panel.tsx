@@ -1,4 +1,5 @@
-import { Button, StatusMark } from '@peopleforge/ui';
+import { StatusMark } from '@peopleforge/ui';
+import { SubmitControl, type SubmitControlLabels } from './submit-control';
 
 export interface ReadyItemView {
   lineId: string;
@@ -12,17 +13,25 @@ export interface ReadyPanelProps {
   items: readonly ReadyItemView[];
   /** "3 of 4 employees still have incomplete criteria. Submit unlocks when every employee is 5/5." */
   note: string;
-  submitLabel: string;
+  canSubmit: boolean;
+  submitKey: string;
+  submitLabels: SubmitControlLabels;
   /** What submitting does (Figma caption). */
   caption: string;
 }
 
 /**
  * Figma "3. Ready to submit?": a row per employee (✓ ready, ! not yet), the grey note and the
- * full-width submit button (R1-03, R1-04, R1-06). Submitting arrives with S4; until then the
- * button stays disabled.
+ * full-width submit button with its confirmation (R1-03, R1-04, R1-06, R1-07).
  */
-export function ReadyPanel({ items, note, submitLabel, caption }: ReadyPanelProps) {
+export function ReadyPanel({
+  items,
+  note,
+  canSubmit,
+  submitKey,
+  submitLabels,
+  caption,
+}: ReadyPanelProps) {
   return (
     <div className="flex flex-col gap-3">
       <ul className="flex flex-col gap-2.5">
@@ -46,9 +55,12 @@ export function ReadyPanel({ items, note, submitLabel, caption }: ReadyPanelProp
       >
         {note}
       </p>
-      <Button size="lg" fullWidth disabled aria-describedby="submit-caption">
-        {submitLabel}
-      </Button>
+      <SubmitControl
+        canSubmit={canSubmit}
+        submitKey={submitKey}
+        describedBy="submit-caption"
+        labels={submitLabels}
+      />
       <p id="submit-caption" className="text-xs text-ink">
         {caption}
       </p>

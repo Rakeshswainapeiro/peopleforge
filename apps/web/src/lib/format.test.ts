@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { formatFileSize, formatMoney, formatPercent, trimDecimal } from './format';
+import {
+  formatDate,
+  formatDateTime,
+  formatFileSize,
+  formatMoney,
+  formatPercent,
+  trimDecimal,
+} from './format';
 
 describe('formatMoney', () => {
   it('shows whole amounts without cents and keeps cents when present', () => {
@@ -48,5 +55,17 @@ describe('formatFileSize', () => {
     expect(formatFileSize(1.5 * 1024 * 1024, 'en')).toBe('1.5 MB');
     expect(formatFileSize(10 * 1024 * 1024, 'en')).toBe('10 MB');
     expect(formatFileSize(1024 * 1024, 'ar')).not.toBe('1 MB');
+  });
+});
+
+describe('formatDate / formatDateTime', () => {
+  it('shows the business day in Dubai, not UTC', () => {
+    // 22:30 UTC on 13 Oct is already 14 Oct, 02:30 in Dubai.
+    expect(formatDate('2026-10-13T22:30:00.000Z', 'en')).toBe('14 Oct 2026');
+    expect(formatDateTime('2026-10-13T22:30:00.000Z', 'en')).toBe('14 Oct 2026, 02:30');
+  });
+
+  it('formats Arabic in Arabic', () => {
+    expect(formatDate('2026-10-14T08:00:00.000Z', 'ar')).not.toContain('Oct');
   });
 });

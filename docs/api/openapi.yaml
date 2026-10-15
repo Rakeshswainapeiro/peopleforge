@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: PeopleForge API
-  version: 0.5.0
+  version: 0.6.0
   description: >
     Phase 1 API (BRD SIRIUS-HR-BRD-001). Every /api/v1 route requires an access token from the
     Sirius identity provider (Microsoft Entra ID; Keycloak locally) sent as
@@ -14,6 +14,8 @@ servers:
 tags:
   - name: increment-requests
     description: R1 Increment Request Portal
+  - name: notifications
+    description: In-app notifications (R1-07, R1-13)
   - name: health
   - name: identity
 paths:
@@ -105,7 +107,7 @@ paths:
       summary: The caller's increment requests, newest first (R1-02)
       description: Requires `increment_request:read`. Drafts are listed only for callers who can create requests; Sirius sees a request once it is submitted.
       parameters:
-        - { name: status, in: query, schema: { type: string, enum: [draft] } }
+        - { name: status, in: query, schema: { type: string, enum: [draft, submitted] } }
         - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
         - { name: pageSize, in: query, schema: { type: integer, enum: [10, 25, 50], default: 10 } }
       responses:
@@ -342,6 +344,105 @@ paths:
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/increment-requests/{id}/submit:
+    post:
+      tags: [increment-requests]
+      summary: Submit a draft to Sirius HR (R1-07)
+      description: >
+        Needs `increment_request:submit`. `version` must be the version last read (409 if the draft
+        changed). Refused with 400 when an employee has no proposal or an incomplete criterion
+        (`lines.N`/`incomplete`), or when the cycle's submission deadline (a business day in
+        Asia/Dubai) has passed (`cycle`/`deadline_passed`). On success, in one transaction: the
+        status becomes `submitted`, a status event and an audit record are written, and the
+        submitter and Sirius HR reviewers are notified (in-app; email queued in the outbox).
+        Idempotent per user and `Idempotency-Key`: a repeat returns the submitted request; the same
+        key on another request is 409 (`Idempotency-Key`/`reused`). Submitting a request that is no
+        longer a draft is 409 (`status`/`not_draft`).
+      parameters:
+        - { $ref: '#/components/parameters/RequestId' }
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: { type: string, pattern: '^[A-Za-z0-9_-]{8,128}$' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [version]
+              properties: { version: { type: integer, minimum: 1 } }
+      responses:
+        '200':
+          description: The submitted request
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/IncrementRequest' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/notifications:
+    get:
+      tags: [notifications]
+      summary: The caller's notifications, newest first
+      description: >
+        Any signed-in user. Includes notifications addressed to the caller and, for Sirius roles,
+        those addressed to one of the caller's roles. Params carry display values only (reference,
+        counts, names) — never pay or justifications.
+      parameters:
+        - name: filter
+          in: query
+          schema: { type: string, enum: [all, unread, action_needed], default: all }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - {
+            name: pageSize,
+            in: query,
+            schema: { type: integer, minimum: 1, maximum: 50, default: 20 },
+          }
+      responses:
+        '200':
+          description: A page of notifications with the unread count
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NotificationPage' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+  /api/v1/notifications/summary:
+    get:
+      tags: [notifications]
+      summary: The unread count for the sidebar bell
+      responses:
+        '200':
+          description: The count
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [unread]
+                properties: { unread: { type: integer, minimum: 0 } }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+  /api/v1/notifications/read:
+    post:
+      tags: [notifications]
+      summary: Mark notifications as read — the given ones, or all of the caller's
+      description: Ids the caller can't see are ignored. Repeating the call is harmless.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                ids:
+                  { type: array, minItems: 1, maxItems: 100, items: { type: string, format: uuid } }
+      responses:
+        '204': { description: Marked }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
 security:
   - bearer: []
 components:
@@ -387,7 +488,7 @@ components:
         application/json:
           schema: { $ref: '#/components/schemas/ApiError' }
     Conflict:
-      description: Stale `version`, duplicate employee, no active criteria set, or the criterion's file limit reached (`file`/`limit`)
+      description: Stale `version`, duplicate employee, no active criteria set, the criterion's file limit reached (`file`/`limit`), a request that is no longer a draft (`status`/`not_draft`), or an `Idempotency-Key` reused for another request
       content:
         application/json:
           schema: { $ref: '#/components/schemas/ApiError' }
@@ -522,20 +623,25 @@ components:
           version,
           createdAt,
           updatedAt,
+          submittedAt,
           lines,
           totals,
         ]
       properties:
         id: { type: string, format: uuid }
         reference: { type: string, example: INC-2026-0001 }
-        status: { type: string, enum: [draft] }
+        status: { type: string, enum: [draft, submitted] }
         entity: { $ref: '#/components/schemas/EntitySummary' }
         cycle:
           type: object
-          required: [id, name]
+          required: [id, name, submissionDeadline]
           properties:
             id: { type: string, format: uuid }
             name: { $ref: '#/components/schemas/LocalisedText' }
+            submissionDeadline:
+              type: [string, 'null']
+              format: date
+              description: Last business day (Asia/Dubai) on which requests can be submitted
         criteria:
           type: array
           description: The criteria set pinned when the request was created (R1-05), in display order
@@ -543,6 +649,7 @@ components:
         version: { type: integer, minimum: 1 }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
+        submittedAt: { type: [string, 'null'], format: date-time }
         lines: { type: array, items: { $ref: '#/components/schemas/RequestLine' } }
         totals:
           type: object
@@ -577,12 +684,38 @@ components:
             properties:
               id: { type: string, format: uuid }
               reference: { type: string }
-              status: { type: string, enum: [draft] }
+              status: { type: string, enum: [draft, submitted] }
               entityId: { type: string, format: uuid }
               cycleId: { type: string, format: uuid }
               employeeCount: { type: integer }
               createdAt: { type: string, format: date-time }
               updatedAt: { type: string, format: date-time }
+    Notification:
+      type: object
+      required: [id, kind, requestId, params, actionNeeded, createdAt, read]
+      properties:
+        id: { type: string, format: uuid }
+        kind:
+          type: string
+          enum: [request_submitted, request_received]
+          description: What happened; clients word it in the reader's language
+        requestId: { type: [string, 'null'], format: uuid }
+        params:
+          type: object
+          additionalProperties: { type: [string, number] }
+          example: { reference: INC-2026-0005, employees: 1, entity: SUB-A, actor: Alpha HR }
+        actionNeeded: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        read: { type: boolean }
+    NotificationPage:
+      type: object
+      required: [items, page, pageSize, total, unread]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Notification' } }
+        page: { type: integer }
+        pageSize: { type: integer }
+        total: { type: integer }
+        unread: { type: integer }
     Liveness:
       type: object
       required: [status]

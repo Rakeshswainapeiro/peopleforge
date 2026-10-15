@@ -32,4 +32,4 @@ Signed URLs would make the bucket reachable from browsers. That needs a public (
 
 - The API needs memory for concurrent uploads (10 MB each, held in memory and never written to its disk), and proxies must accept 11 MB bodies (DEPLOYMENT.md §4).
 - The object store and the database can disagree after a crash between "stored" and "recorded"; the API removes the object when recording fails, and logs `evidence_orphaned` if even that fails (a cleanup job can list orphans later).
-- Evidence retention (Q10) and an audit record per download (R1-15) are still to come; downloads are logged as `evidence_downloaded` meanwhile.
+- Evidence retention (Q10) is still to come. Since S4a every download is recorded in the audit trail as `evidence.downloaded` (ADR-011).

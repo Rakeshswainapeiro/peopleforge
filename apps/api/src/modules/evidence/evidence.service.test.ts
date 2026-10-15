@@ -250,22 +250,23 @@ describe('EvidenceService.upload [R1-04]', () => {
 });
 
 describe('EvidenceService.download [R1-04, NFR-SEC-01]', () => {
-  it('returns the stored file and logs who downloaded it', async () => {
-    const { store, service, info } = setup();
+  it('returns the stored file and records the download in the audit trail [R1-15]', async () => {
+    const { repository, store, service } = setup();
     store.objects.set(`evidence/${SUB_A}/${EVIDENCE_ID}`, SAMPLE_PDF);
     await expect(service.download(alphaHr, REQUEST_ID, EVIDENCE_ID)).resolves.toEqual({
       body: SAMPLE_PDF,
       fileName: 'appraisal-2026.pdf',
       mediaType: 'application/pdf',
     });
-    expect(info).toHaveBeenCalledWith(
+    expect(repository.recordAction).toHaveBeenCalledWith(
+      { userId: 'alpha', kind: 'entity', entityIds: [SUB_A] },
       {
-        event: 'evidence_downloaded',
-        userId: 'alpha',
-        requestId: REQUEST_ID,
-        evidenceId: EVIDENCE_ID,
+        action: 'evidence.downloaded',
+        entityId: SUB_A,
+        subjectType: 'evidence_file',
+        subjectId: EVIDENCE_ID,
+        details: { requestId: REQUEST_ID },
       },
-      'Evidence downloaded',
     );
   });
 

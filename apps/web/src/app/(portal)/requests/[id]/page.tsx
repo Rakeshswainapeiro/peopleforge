@@ -1,5 +1,6 @@
 import { MAX_JUSTIFICATION_LENGTH } from '@peopleforge/contracts';
-import { Alert, Button, Card, CardHeader, PageHeader } from '@peopleforge/ui';
+import { Alert, Button, Card, CardHeader, PageHeader, ProgressSteps } from '@peopleforge/ui';
+import { randomUUID } from 'node:crypto';
 import { notFound, redirect } from 'next/navigation';
 import { z } from 'zod';
 import { AddEmployeeForm } from '@/components/requests/add-employee-form';
@@ -15,12 +16,14 @@ import {
   criteriaCards,
   criteriaLabels,
   evidenceMessages,
+  progressSteps,
   proposalRows,
   readyView,
   saveMessages,
   tableLabels,
   totalsView,
 } from '@/lib/request-view';
+import { formatDate } from '@/lib/format';
 import { entityName, roleLabel } from '@/lib/viewer-display';
 import { getRequest, searchEmployees } from '@/server/increment-requests';
 import { requireViewer } from '@/server/session';
@@ -28,15 +31,16 @@ import { addEmployeeAction } from '../actions';
 
 interface RequestPageProps {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ saved?: string; error?: string; employee?: string }>;
+  searchParams: Promise<{ saved?: string; submitted?: string; error?: string; employee?: string }>;
 }
 
 const FORM_ID = 'draft-form';
 
 /**
- * A draft increment request (Figma "New increment request"): 1. employees and proposed
- * increments (R1-02), 2. the criteria of one employee at a time (R1-03, R1-04, R1-06),
- * 3. who is ready to submit.
+ * An increment request. As a draft (Figma "New increment request"): 1. employees and proposed
+ * increments (R1-02), 2. the criteria of one employee at a time (R1-03, R1-04, R1-06), 3. who is
+ * ready to submit (R1-07). Once submitted it is read-only, with its progress; Sirius HR's
+ * review screens arrive with S5.
  */
 export default async function RequestPage({ params, searchParams }: RequestPageProps) {
   const me = await requireViewer();
@@ -54,7 +58,8 @@ export default async function RequestPage({ params, searchParams }: RequestPageP
   if (result.kind !== 'ok') throw new Error('Increment request API unavailable');
   const request = result.data;
 
-  const editable = me.permissions.includes('increment_request:create');
+  const draft = request.status === 'draft';
+  const editable = draft && me.permissions.includes('increment_request:create');
   const employees = editable ? await searchEmployees(request.entity.id, request.id) : undefined;
   const entity = entityName(request.entity, locale);
   const totals = totalsView(request, locale, t);
@@ -72,12 +77,20 @@ export default async function RequestPage({ params, searchParams }: RequestPageP
       saveLabel={t('request.saveDraft')}
     >
       <PageHeader
-        eyebrow={t('request.draftEyebrow', {
+        eyebrow={t(draft ? 'request.draftEyebrow' : 'request.submittedEyebrow', {
           role: t(roleLabel(me.roles)),
           reference: request.reference,
         })}
-        title={t('request.newTitle')}
-        description={t('request.newIntro', { count: request.criteria.length })}
+        title={
+          draft
+            ? t('request.newTitle')
+            : t('request.submittedTitle', { reference: request.reference })
+        }
+        description={
+          draft
+            ? t('request.newIntro', { count: request.criteria.length })
+            : t('request.submittedIntro')
+        }
         actions={
           editable && request.lines.length > 0 ? (
             <Button type="submit" form={FORM_ID} variant="secondary">
@@ -89,13 +102,37 @@ export default async function RequestPage({ params, searchParams }: RequestPageP
       {query.saved === '1' ? (
         <Alert tone="success" title={t('request.saved')} className="mt-6" />
       ) : null}
+      {query.submitted === '1' && !draft ? (
+        <Alert tone="success" title={t('request.submittedNotice')} className="mt-6" />
+      ) : null}
+      {request.submittedAt === null ? null : (
+        <>
+          <Alert tone="info" title={t('request.waitingTitle')} className="mt-6">
+            {t('request.waitingBody', { date: formatDate(request.submittedAt, locale) })}
+          </Alert>
+          <Card className="mt-6" label={t('request.progress')}>
+            <CardHeader title={t('request.progress')} />
+            <div className="px-6 pt-4 pb-6">
+              <ProgressSteps
+                label={t('request.progress')}
+                steps={progressSteps(request, locale, t)}
+                stateLabels={{
+                  done: t('request.progressStates.done'),
+                  current: t('request.progressStates.current'),
+                  todo: t('request.progressStates.todo'),
+                }}
+              />
+            </div>
+          </Card>
+        </>
+      )}
       {error === undefined ? null : (
         <Alert role="alert" tone="danger" title={t(error)} className="mt-6" />
       )}
       <Card className="mt-6" label={t('request.employeesSection')}>
         <CardHeader
           title={t('request.employeesSection')}
-          description={t('request.employeesHint', { entity })}
+          description={editable ? t('request.employeesHint', { entity }) : undefined}
           actions={
             employees === undefined ? undefined : employees.kind === 'ok' &&
               employees.data.length > 0 ? (
@@ -170,7 +207,8 @@ export default async function RequestPage({ params, searchParams }: RequestPageP
         <Card className="mt-6" label={t('request.readySection')}>
           <CardHeader title={t('request.readySection')} />
           <div className="px-6 pt-4 pb-6">
-            <ReadyPanel {...readyView(request, locale, t)} />
+            {/* A fresh idempotency key per page view: a double click can't submit twice. */}
+            <ReadyPanel {...readyView(request, locale, t, randomUUID())} />
           </div>
         </Card>
       ) : null}

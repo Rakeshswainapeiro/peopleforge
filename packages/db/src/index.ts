@@ -1,3 +1,4 @@
+export { recordAudit, type AuditEntry } from './audit.js';
 export { createDatabase, type DatabaseHandle, type DatabaseOptions } from './database.js';
 export { createEntityDirectory, type EntityDirectory, type EntitySummary } from './directory.js';
 export {
@@ -28,6 +29,15 @@ export {
   type RequestLineRecord,
   type RequestSummaryRecord,
 } from './increment-requests.js';
+export {
+  createNotificationRepository,
+  insertNotifications,
+  type NewNotification,
+  type NotificationQuery,
+  type NotificationRecord,
+  type NotificationRepository,
+  type Recipient,
+} from './notifications.js';
 export {
   listMigrations,
   MigrationError,

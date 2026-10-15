@@ -94,7 +94,7 @@ export interface RequestSequenceTable {
   last_number: number;
 }
 
-export type RequestStatus = 'draft';
+export type RequestStatus = 'draft' | 'submitted';
 
 export interface IncrementRequestTable {
   id: Generated<string>;
@@ -109,6 +109,8 @@ export interface IncrementRequestTable {
   updated_by: string;
   version: Generated<number>;
   deleted_at: Date | null;
+  submitted_at: Date | null;
+  submitted_by: string | null;
 }
 
 export type ProposedKind = 'percent' | 'amount';
@@ -175,6 +177,56 @@ export interface IdempotencyKeyTable {
   created_at: Timestamp;
 }
 
+export interface StatusEventTable {
+  id: Generated<string>;
+  request_id: string;
+  entity_id: string;
+  from_status: RequestStatus | null;
+  to_status: RequestStatus;
+  actor: string;
+  at: Generated<Date>;
+  reason: string | null;
+}
+
+export interface AuditLogTable {
+  id: Generated<string>;
+  at: Generated<Date>;
+  actor: string;
+  action: string;
+  entity_id: string | null;
+  subject_type: string;
+  subject_id: string;
+  details: ColumnType<Record<string, unknown>, string | undefined, never>;
+  correlation_id: string | null;
+}
+
+export interface NotificationTable {
+  id: Generated<string>;
+  recipient_user_id: string | null;
+  recipient_role: string | null;
+  entity_id: string | null;
+  request_id: string | null;
+  kind: string;
+  params: ColumnType<Record<string, string | number>, string, never>;
+  action_needed: Generated<boolean>;
+  created_at: Generated<Date>;
+}
+
+export interface NotificationReadTable {
+  notification_id: string;
+  user_id: string;
+  read_at: Generated<Date>;
+}
+
+export interface EmailOutboxTable {
+  id: Generated<string>;
+  notification_id: string;
+  created_at: Generated<Date>;
+  sent_at: Date | null;
+  attempts: Generated<number>;
+  last_error: string | null;
+}
+
 /** Tables the application reads and writes, by schema-qualified name. */
 export interface Database {
   'core.entity': EntityTable;
@@ -189,4 +241,9 @@ export interface Database {
   'increments.idempotency_key': IdempotencyKeyTable;
   'increments.criterion_result': CriterionResultTable;
   'increments.evidence_file': EvidenceFileTable;
+  'increments.status_event': StatusEventTable;
+  'audit.audit_log': AuditLogTable;
+  'notify.notification': NotificationTable;
+  'notify.notification_read': NotificationReadTable;
+  'notify.email_outbox': EmailOutboxTable;
 }

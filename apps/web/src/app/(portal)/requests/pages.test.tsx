@@ -225,6 +225,44 @@ describe('Increment request page [R1-02]', () => {
     expect(submit).toHaveAccessibleDescription(/^On submit the request is routed to Sirius HR/u);
   });
 
+  it('offers Submit to Sirius HR with a fresh key per page view [R1-07]', async () => {
+    const first = render(await requestPage());
+    const keyOf = (root: HTMLElement) =>
+      root.querySelector('input[name="submitKey"]')?.getAttribute('value');
+    const key = keyOf(first.container);
+    expect(key).toMatch(/^[0-9a-f-]{36}$/u);
+    first.unmount();
+    const second = render(await requestPage());
+    expect(keyOf(second.container)).not.toBe(key);
+    expect(screen.queryByText('Waiting for Sirius HR')).toBeNull();
+  });
+
+  it('shows a submitted request read-only, waiting for Sirius HR, with its progress', async () => {
+    vi.mocked(getRequest).mockResolvedValue({
+      kind: 'ok',
+      data: { ...DRAFT, status: 'submitted', submittedAt: '2026-10-15T06:00:00.000Z' },
+    });
+    render(await requestPage(REQUEST, { submitted: '1' }));
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Increment request INC-2026-0007' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Subsidiary HR · INC-2026-0007 · Submitted')).toBeInTheDocument();
+    expect(
+      screen.getByText('Request submitted to Sirius HR. Both sides have been notified.'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('Sent to Sirius HR on 15 Oct 2026. Review has not started yet.'),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('list', { name: 'Progress' })).toHaveTextContent('Review in progress');
+    expect(screen.queryByRole('textbox')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Save draft' })).toBeNull();
+    expect(screen.queryByRole('region', { name: '2. Eligibility criteria' })).toBeNull();
+    expect(screen.queryByRole('region', { name: '3. Ready to submit?' })).toBeNull();
+    expect(searchEmployees).not.toHaveBeenCalled();
+    // The adding rules only matter while employees can still be added.
+    expect(screen.queryByText(/can be added/u)).toBeNull();
+  });
+
   it('confirms a save and shows a known error', async () => {
     render(await requestPage(REQUEST, { saved: '1', error: 'request.errors.duplicate' }));
     expect(screen.getByText('Draft saved.')).toBeInTheDocument();

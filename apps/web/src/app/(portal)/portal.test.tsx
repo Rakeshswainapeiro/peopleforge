@@ -4,9 +4,9 @@ import { usePathname } from 'next/navigation';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getRequestLocale } from '@/i18n/request-locale';
 import { listRequests } from '@/server/increment-requests';
+import { notificationSummary } from '@/server/notifications';
 import { requireViewer } from '@/server/session';
 import PortalLayout from './layout';
-import NotificationsPage from './notifications/page';
 import HomePage from './page';
 import ReportsPage from './reports/page';
 
@@ -15,6 +15,7 @@ vi.mock('@/app/actions/set-locale', () => ({ setLocale: vi.fn() }));
 vi.mock('@/app/sign-in/actions', () => ({ signOut: vi.fn(), startSignIn: vi.fn() }));
 vi.mock('@/server/session', () => ({ requireViewer: vi.fn() }));
 vi.mock('@/server/increment-requests', () => ({ listRequests: vi.fn() }));
+vi.mock('@/server/notifications', () => ({ notificationSummary: vi.fn() }));
 vi.mock('next/navigation', () => ({
   usePathname: vi.fn(() => '/'),
   notFound: vi.fn(() => {
@@ -57,6 +58,7 @@ beforeEach(() => {
     kind: 'ok',
     data: { items: [], page: 1, pageSize: 10, total: 0 },
   });
+  vi.mocked(notificationSummary).mockResolvedValue({ kind: 'ok', data: { unread: 0 } });
 });
 
 describe('portal shell', () => {
@@ -78,13 +80,22 @@ describe('portal shell', () => {
   it('shows subsidiary HR its subsidiary and New Request, marking the current page', async () => {
     vi.mocked(requireViewer).mockResolvedValue(ALPHA_HR);
     vi.mocked(usePathname).mockReturnValue('/requests/new');
-    await renderPortal(NotificationsPage);
+    await renderPortal(ReportsPage);
     expect(screen.getByText('Subsidiary HR · Subsidiary A')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'New Request' })).toHaveAttribute(
       'aria-current',
       'page',
     );
     expect(screen.getByRole('link', { name: 'Home' })).not.toHaveAttribute('aria-current');
+  });
+
+  it('shows unread notifications on the bell, and nothing when the count is unknown', async () => {
+    vi.mocked(notificationSummary).mockResolvedValue({ kind: 'ok', data: { unread: 3 } });
+    await renderPortal(HomePage);
+    expect(screen.getByRole('link', { name: 'Notifications, 3 unread' })).toBeInTheDocument();
+    vi.mocked(notificationSummary).mockResolvedValue({ kind: 'unavailable' });
+    await renderPortal(HomePage);
+    expect(screen.getAllByRole('link', { name: 'Notifications' })).toHaveLength(1);
   });
 
   it('says when a subsidiary user has no subsidiary assigned yet', async () => {
@@ -181,7 +192,6 @@ describe('HomePage', () => {
 
 describe('placeholder pages', () => {
   it.each([
-    ['Notifications', NotificationsPage, REVIEWER],
     ['Reports', ReportsPage, REVIEWER],
     ['Reports', ReportsPage, ALPHA_HR],
   ])('renders %s for a permitted viewer', async (heading, Page, viewer) => {
@@ -199,11 +209,8 @@ describe('placeholder pages', () => {
     },
   );
 
-  it.each([HomePage, NotificationsPage])(
-    'renders nothing while the API is unavailable',
-    async (Page) => {
-      vi.mocked(requireViewer).mockResolvedValue(null);
-      await expect(Page()).resolves.toBeNull();
-    },
-  );
+  it.each([HomePage, ReportsPage])('renders nothing while the API is unavailable', async (Page) => {
+    vi.mocked(requireViewer).mockResolvedValue(null);
+    await expect(Page()).resolves.toBeNull();
+  });
 });

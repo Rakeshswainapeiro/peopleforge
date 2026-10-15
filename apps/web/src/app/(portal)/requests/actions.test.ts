@@ -6,8 +6,10 @@ import {
   removeEmployee,
   removeEvidence,
   saveDraftChanges,
+  submitRequest,
   uploadEvidence,
 } from '@/server/increment-requests';
+import { refreshPortalShell } from '@/server/portal-shell';
 import {
   addEmployeeAction,
   removeEmployeeAction,
@@ -22,9 +24,11 @@ vi.mock('@/server/increment-requests', () => ({
   createRequest: vi.fn(),
   removeEmployee: vi.fn(),
   saveDraftChanges: vi.fn(),
+  submitRequest: vi.fn(),
   uploadEvidence: vi.fn(),
   removeEvidence: vi.fn(),
 }));
+vi.mock('@/server/portal-shell', () => ({ refreshPortalShell: vi.fn() }));
 vi.mock('next/navigation', () => ({
   redirect: vi.fn((url: string) => {
     throw new Error(`NEXT_REDIRECT ${url}`);
@@ -54,10 +58,12 @@ beforeEach(() => {
     createRequest,
     removeEmployee,
     saveDraftChanges,
+    submitRequest,
     uploadEvidence,
     removeEvidence,
   ])
     vi.mocked(mock).mockResolvedValue(ok as never);
+  vi.mocked(refreshPortalShell).mockClear();
 });
 
 describe('startRequest', () => {
@@ -316,6 +322,78 @@ describe('saveDraft', () => {
   it('refuses a tampered criterion ID', async () => {
     await expect(saveDraft({ rows: [] }, withCriteria({ criterionId: '../x' }))).rejects.toThrow();
     expect(saveDraftChanges).not.toHaveBeenCalled();
+  });
+});
+
+describe('saveDraft with intent=submit [R1-07]', () => {
+  const KEY = 'b6a1d1c2-4d0e-4c47-9b8f-0b1d3a2f9e01';
+  const submitting = (key = KEY) => {
+    const data = form({
+      requestId: REQUEST,
+      version: '3',
+      lineId: [LINE_1],
+      [`kind:${LINE_1}`]: 'percent',
+      [`value:${LINE_1}`]: '5',
+      intent: 'submit',
+      submitKey: key,
+    });
+    return data;
+  };
+
+  beforeEach(() => {
+    vi.mocked(saveDraftChanges).mockResolvedValue({
+      kind: 'ok',
+      data: { id: REQUEST, version: 4 },
+    } as unknown as ApiResult<never>);
+  });
+
+  it('saves what is on screen, then submits the saved version', async () => {
+    await expect(saveDraft({ rows: [] }, submitting())).rejects.toThrow(
+      `NEXT_REDIRECT /requests/${REQUEST}?submitted=1`,
+    );
+    expect(saveDraftChanges).toHaveBeenCalledOnce();
+    expect(submitRequest).toHaveBeenCalledWith(REQUEST, 4, KEY);
+    // The submitter's own notification shows on the bell at once.
+    expect(refreshPortalShell).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    [
+      {
+        kind: 'error',
+        status: 400,
+        code: 'VALIDATION_FAILED',
+        details: [{ path: 'lines.0', code: 'incomplete' }],
+      },
+      'request.errors.notReady',
+    ],
+    [
+      {
+        kind: 'error',
+        status: 409,
+        code: 'CONFLICT',
+        details: [{ path: 'status', code: 'not_draft' }],
+      },
+      'request.errors.notDraft',
+    ],
+    [{ kind: 'unavailable' }, 'request.errors.generic'],
+  ])('reloads the request with the reason when submitting fails (%j)', async (result, error) => {
+    vi.mocked(submitRequest).mockResolvedValue(result as ApiResult<never>);
+    await expect(saveDraft({ rows: [] }, submitting())).rejects.toThrow(
+      `NEXT_REDIRECT /requests/${REQUEST}?error=${error}`,
+    );
+  });
+
+  it('ends a dead session, and refuses a tampered key without submitting', async () => {
+    vi.mocked(submitRequest).mockResolvedValue({ kind: 'unauthenticated' });
+    await expect(saveDraft({ rows: [] }, submitting())).rejects.toThrow(
+      'NEXT_REDIRECT /session-ended',
+    );
+    vi.mocked(submitRequest).mockClear();
+    await expect(saveDraft({ rows: [] }, submitting('../x'))).rejects.toThrow(
+      `NEXT_REDIRECT /requests/${REQUEST}?error=request.errors.generic`,
+    );
+    expect(submitRequest).not.toHaveBeenCalled();
   });
 });
 

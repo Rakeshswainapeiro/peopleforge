@@ -8,7 +8,8 @@ test.describe('portal shell', () => {
   test('shows Sirius HR every subsidiary, without New Request', async ({ page }) => {
     await signIn(page, 'reviewer');
     const nav = page.getByRole('navigation', { name: 'Main' });
-    await expect(nav.getByRole('link')).toHaveText(['Home', 'Notifications', 'Reports']);
+    // The bell may carry an unread count, depending on what other tests did.
+    await expect(nav.getByRole('link')).toHaveText(['Home', /^Notifications/u, 'Reports']);
     await expect(nav.getByRole('link', { name: 'Home' })).toHaveAttribute('aria-current', 'page');
     await expect(page.getByText('Sirius HR Reviewer · All subsidiaries')).toBeVisible();
 
@@ -23,7 +24,7 @@ test.describe('portal shell', () => {
     await expect(nav.getByRole('link')).toHaveText([
       'Home',
       'New Request',
-      'Notifications',
+      /^Notifications/u,
       'Reports',
     ]);
 

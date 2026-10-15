@@ -29,6 +29,7 @@ export {
   type CriteriaProgressProps,
   type CriterionState,
 } from './components/criteria-progress.js';
+export { Dialog, type DialogProps } from './components/dialog.js';
 export { EmptyState, type EmptyStateProps } from './components/empty-state.js';
 export { FileChip, type FileChipProps } from './components/file-chip.js';
 export {

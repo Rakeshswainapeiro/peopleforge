@@ -35,6 +35,14 @@ export default async function globalSetup(): Promise<void> {
   await client.connect();
   try {
     await client.query('TRUNCATE auth.session, auth.account, auth.verification, auth."user"');
+    // The placeholder cycle's deadline (30 Nov 2026) would make submitting fail after that day:
+    // keep it open in the test database only.
+    await client.query('BEGIN');
+    await client.query("SELECT set_config('app.scope', 'group', true)");
+    await client.query(
+      "UPDATE core.increment_cycle SET ends_on = '2099-12-31', submission_deadline = '2099-12-31' WHERE status = 'open'",
+    );
+    await client.query('COMMIT');
   } finally {
     await client.end();
   }

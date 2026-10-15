@@ -1,6 +1,6 @@
-# Schemas `core` and `increments` (slices S1–S3)
+# Schemas `core`, `increments`, `audit` and `notify` (slices S1–S4a)
 
-Migrations: `packages/db/migrations/core/0001_core_schema`, `0002_placeholder_configuration`, `0003_increment_requests`, `0004_criteria_evidence` (up/down), recorded in `migrations.core`. Decisions: ADR-002 (data access, RLS), ADR-008 (field encryption), ADR-010 (evidence files). Design: `docs/design/r1-increment-portal.md` §3a.
+Migrations: `packages/db/migrations/core/0001_core_schema`, `0002_placeholder_configuration`, `0003_increment_requests`, `0004_criteria_evidence`, `0005_submission_audit_notifications` (up/down), recorded in `migrations.core`. Decisions: ADR-002 (data access, RLS), ADR-008 (field encryption), ADR-010 (evidence files), ADR-011 (audit trail and notifications). Design: `docs/design/r1-increment-portal.md` §3a.
 
 Every table here also carries `created_at`, `created_by`, `updated_at`, `updated_by` (UTC timestamps, user IDs), and `version` (optimistic locking) where rows are edited. `created_by`/`updated_by` is `seed` for migration and seed rows.
 
@@ -22,18 +22,27 @@ erDiagram
   CRITERION ||--o{ CRITERION_RESULT : "applied in"
   REQUEST_LINE ||--o{ EVIDENCE_FILE : "evidenced by"
   CRITERION ||--o{ EVIDENCE_FILE : "supports"
+  INCREMENT_REQUEST ||--o{ STATUS_EVENT : "history"
+  INCREMENT_REQUEST ||--o{ NOTIFICATION : "about"
+  NOTIFICATION ||--o{ NOTIFICATION_READ : "read by"
+  NOTIFICATION ||--o| EMAIL_OUTBOX : "emailed as"
   ENTITY { uuid id PK; text code UK; jsonb name; char3 default_currency }
   USER_ENTITY { text user_id PK; uuid entity_id PK,FK }
   EMPLOYEE { uuid id PK; uuid entity_id FK; text employee_number; text full_name; text grade; bytea monthly_salary; char3 currency }
   INCREMENT_CYCLE { uuid id PK; jsonb name; date starts_on; date ends_on; date submission_deadline; text status }
   CRITERIA_SET { uuid id PK; int version UK; text status }
   CRITERION { uuid id PK; uuid criteria_set_id FK; smallint position; text code; jsonb name; jsonb description; text evidence_policy }
-  INCREMENT_REQUEST { uuid id PK; text reference UK; uuid entity_id FK; uuid cycle_id FK; uuid criteria_set_id FK; text status; int version }
+  INCREMENT_REQUEST { uuid id PK; text reference UK; uuid entity_id FK; uuid cycle_id FK; uuid criteria_set_id FK; text status; int version; timestamptz submitted_at; text submitted_by }
   REQUEST_LINE { uuid id PK; uuid request_id FK; uuid entity_id FK; uuid employee_id FK; text grade; bytea current_salary; char3 currency; text proposed_kind; bytea proposed_value }
   IDEMPOTENCY_KEY { text user_id PK; text key PK; uuid request_id FK }
   REQUEST_SEQUENCE { uuid cycle_id PK; int last_number }
   CRITERION_RESULT { uuid id PK; uuid line_id FK; uuid entity_id FK; uuid criterion_id FK; text result; bytea justification }
   EVIDENCE_FILE { uuid id PK; uuid line_id FK; uuid entity_id FK; uuid criterion_id FK; text object_key UK; text file_name; text media_type; int size_bytes; char64 sha256; text scan_engine }
+  STATUS_EVENT { uuid id PK; uuid request_id FK; uuid entity_id FK; text from_status; text to_status; text actor; timestamptz at }
+  AUDIT_LOG { bigint id PK; timestamptz at; text actor; text action; uuid entity_id; text subject_type; text subject_id; jsonb details }
+  NOTIFICATION { uuid id PK; text recipient_user_id; text recipient_role; uuid entity_id FK; uuid request_id FK; text kind; jsonb params; bool action_needed }
+  NOTIFICATION_READ { uuid notification_id PK,FK; text user_id PK; timestamptz read_at }
+  EMAIL_OUTBOX { uuid id PK; uuid notification_id FK; timestamptz sent_at; int attempts }
 ```
 
 ## Data dictionary
@@ -108,11 +117,13 @@ Primary key `(user_id, entity_id)`. Rows are inserted and deleted, never updated
 | `entity_id`       | `uuid`        | No   | → `core.entity`; drives RLS                                                | Internal    |
 | `cycle_id`        | `uuid`        | No   | → `core.increment_cycle` (must be `open` at creation)                      | Internal    |
 | `criteria_set_id` | `uuid`        | No   | The criteria set active at creation; later changes don't affect it (R1-05) | Internal    |
-| `status`          | `text`        | No   | `draft` (submission and decisions arrive in S4–S5)                         | Internal    |
+| `status`          | `text`        | No   | `draft` or `submitted` (S4a); review and decision statuses arrive in S5    | Internal    |
+| `submitted_at`    | `timestamptz` | Yes  | When it was submitted; set exactly when `status` isn't `draft` (CHECK)     | Internal    |
+| `submitted_by`    | `text`        | Yes  | User ID of the submitter; set with `submitted_at`                          | Internal    |
 | `version`         | `integer`     | No   | Bumped by every change; a save with a stale version is refused (409)       | Internal    |
 | `deleted_at`      | `timestamptz` | Yes  | Soft delete                                                                | Internal    |
 
-Unique `(id, entity_id)` exists so lines can reference the pair.
+Unique `(id, entity_id)` exists so lines can reference the pair. A submitted request is read-only: every change (lines, proposals, criteria, evidence) locks the request and refuses a non-draft (`not_draft`, 409). Submitting is idempotent per user and key (the `idempotency_key` table is reused).
 
 ### `increments.request_line` — an employee in a request
 
@@ -162,30 +173,82 @@ Unique `(line_id, criterion_id)`: one row per employee and criterion, created on
 
 The file itself is in the private bucket (**Restricted**: personal documents), encrypted at rest by the store. At most 5 live files per employee and criterion, counted under the request's row lock. Adding or removing a file doesn't change the request's `version`, so a form being edited isn't invalidated.
 
+### `increments.status_event` — status history (R1-07; basis of TAT and back-and-forth, R1-11, R1-12)
+
+| Column                    | Type          | Null | Meaning                                                             | Sensitivity  |
+| ------------------------- | ------------- | ---- | ------------------------------------------------------------------- | ------------ |
+| `id`                      | `uuid`        | No   | Primary key                                                         | Internal     |
+| `request_id`, `entity_id` | `uuid`        | No   | → `increment_request (id, entity_id)`                               | Internal     |
+| `from_status`             | `text`        | Yes  | Status before; null for the first event                             | Internal     |
+| `to_status`               | `text`        | No   | Status after                                                        | Internal     |
+| `actor`                   | `text`        | No   | User ID                                                             | Internal     |
+| `at`                      | `timestamptz` | No   | `clock_timestamp()`, UTC                                            | Internal     |
+| `reason`                  | `text`        | Yes  | ≤ 2,000 characters; used for returns and rejections (S5), else null | Confidential |
+
+**Append-only**: the app role has `SELECT, INSERT` only, and the trigger `status_event_append_only` (`audit.refuse_change()`) refuses `UPDATE`, `DELETE` and `TRUNCATE` for every role, the owner included.
+
+### `audit.audit_log` — audit trail (R1-15, R2-13, NFR-AUD-01, ADR-011)
+
+| Column           | Type          | Null | Meaning                                                                                                    | Sensitivity |
+| ---------------- | ------------- | ---- | ---------------------------------------------------------------------------------------------------------- | ----------- |
+| `id`             | `bigint`      | No   | Identity, increasing                                                                                       | Internal    |
+| `at`             | `timestamptz` | No   | `clock_timestamp()`, UTC                                                                                   | Internal    |
+| `actor`          | `text`        | No   | User ID; must equal the session user (RLS)                                                                 | Internal    |
+| `action`         | `text`        | No   | Dotted verb `^[a-z_]+\.[a-z_]+$`, e.g. `increment_request.submitted`, `evidence.downloaded`                | Internal    |
+| `entity_id`      | `uuid`        | Yes  | Subsidiary concerned; must be one the actor can access                                                     | Internal    |
+| `subject_type`   | `text`        | No   | `increment_request`, `request_line`, `evidence_file`, …                                                    | Internal    |
+| `subject_id`     | `text`        | No   | ID of the subject                                                                                          | Internal    |
+| `details`        | `jsonb`       | No   | What changed (e.g. version, employee count, criterion ID). **Never** salaries, justifications or file data | Internal    |
+| `correlation_id` | `text`        | Yes  | Request ID, to join with logs                                                                              | Internal    |
+
+Actions recorded in S4a: `increment_request.created`, `.draft_saved`, `.submitted`, `.discarded`; `request_line.added`, `.removed`; `evidence.uploaded`, `.removed`, `.downloaded`. Each is written in the same transaction as the change (downloads: before the file is streamed). Append-only like `status_event`.
+
+### `notify.notification`, `notify.notification_read`, `notify.email_outbox` — notifications (R1-07, R1-13)
+
+| Column (notification) | Type          | Null | Meaning                                                                                                                   | Sensitivity  |
+| --------------------- | ------------- | ---- | ------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| `id`                  | `uuid`        | No   | Primary key, chosen by the API (an `INSERT … RETURNING` would be checked against the read policy)                         | Internal     |
+| `recipient_user_id`   | `text`        | Yes  | One user — or                                                                                                             | Internal     |
+| `recipient_role`      | `text`        | Yes  | everyone holding a role, e.g. `sirius_hr_reviewer` (Sirius users aren't stored; roles come from the IdP). Exactly one set | Internal     |
+| `entity_id`           | `uuid`        | Yes  | → `core.entity`                                                                                                           | Internal     |
+| `request_id`          | `uuid`        | Yes  | → `increment_request`; where "View" leads                                                                                 | Internal     |
+| `kind`                | `text`        | No   | What happened, e.g. `request_submitted`; the text is worded per locale by the client                                      | Internal     |
+| `params`              | `jsonb`       | No   | Display values (reference, employee count, entity code, actor name). Never pay or justifications                          | Confidential |
+| `action_needed`       | `boolean`     | No   | Shown as "Action needed"; filterable                                                                                      | Internal     |
+| `created_at`          | `timestamptz` | No   | UTC                                                                                                                       | Internal     |
+
+`notification_read (notification_id, user_id, read_at)`: per-user read state (a role-addressed notification is read separately by each reviewer). `email_outbox (notification_id, created_at, sent_at, attempts, last_error)`: one row per notification, written in the same transaction; the sending worker arrives in S4b with the email provider (A6), and the app role may only insert.
+
 ### `increments.idempotency_key` and `increments.request_sequence`
 
-- `idempotency_key (user_id, key) → request_id`: the first creation with a key claims it, in the same transaction. A repeat or concurrent call returns the same draft. The foreign key is `DEFERRABLE INITIALLY DEFERRED`, because the key is claimed before the request row exists.
+- `idempotency_key (user_id, key) → request_id`: the first creation with a key claims it, in the same transaction. A repeat or concurrent call returns the same draft. Submit reuses the table: a key claimed for one request and replayed on another is refused (409). The foreign key is `DEFERRABLE INITIALLY DEFERRED`, because the key is claimed before the request row exists.
 - `request_sequence (cycle_id) → last_number`: allocates reference numbers. It is a counter only; no entity data.
 
 ## Row-Level Security
 
 Session settings, set per transaction by `withScope` (`set_config(…, true)`): `app.user_id`, `app.scope` (`group` | `entity`), `app.entity_ids` (comma-separated UUIDs). Missing settings mean no access.
 
-| Table                                                                                                                | Policy                                                                                                                      |
-| -------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `core.entity`                                                                                                        | Read: `core.can_access_entity(id)`. Insert/update: group scope only                                                         |
-| `core.user_entity`                                                                                                   | Read: group scope, or the caller's own rows. Insert/delete: group scope only                                                |
-| `core.employee`                                                                                                      | All commands: `core.can_access_entity(entity_id)` (USING and WITH CHECK, so rows can't move)                                |
-| `increments.increment_request`, `increments.request_line`, `increments.criterion_result`, `increments.evidence_file` | All commands: `core.can_access_entity(entity_id)`                                                                           |
-| `increments.idempotency_key`                                                                                         | Own rows only: `user_id = core.current_user_id()`                                                                           |
-| `core.increment_cycle`, `increments.criteria_set`, `increments.criterion`, `increments.request_sequence`             | No RLS: configuration (or a counter) readable by every signed-in user; configuration writes need `criteria:configure` (API) |
+| Table                                                                                                                | Policy                                                                                                                                                                  |
+| -------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `core.entity`                                                                                                        | Read: `core.can_access_entity(id)`. Insert/update: group scope only                                                                                                     |
+| `core.user_entity`                                                                                                   | Read: group scope, or the caller's own rows. Insert/delete: group scope only                                                                                            |
+| `core.employee`                                                                                                      | All commands: `core.can_access_entity(entity_id)` (USING and WITH CHECK, so rows can't move)                                                                            |
+| `increments.increment_request`, `increments.request_line`, `increments.criterion_result`, `increments.evidence_file` | All commands: `core.can_access_entity(entity_id)`                                                                                                                       |
+| `increments.idempotency_key`                                                                                         | Own rows only: `user_id = core.current_user_id()`                                                                                                                       |
+| `increments.status_event`                                                                                            | `core.can_access_entity(entity_id)`                                                                                                                                     |
+| `audit.audit_log`                                                                                                    | Insert: `actor = core.current_user_id()` and the entity accessible. Read: group scope only (`audit:read` checked in the API)                                            |
+| `notify.notification`                                                                                                | Read: own (`recipient_user_id`), or role-addressed in group scope (the API matches the caller's roles); entity accessible. Insert: anyone acting, within their entities |
+| `notify.notification_read`                                                                                           | Own rows only                                                                                                                                                           |
+| `notify.email_outbox`                                                                                                | Insert: anyone acting. Read: group scope (for the sender); the app role has no `SELECT` grant                                                                           |
+| `core.increment_cycle`, `increments.criteria_set`, `increments.criterion`, `increments.request_sequence`             | No RLS: configuration (or a counter) readable by every signed-in user; configuration writes need `criteria:configure` (API)                                             |
 
 RLS is `FORCE`d, so the owner is bound too (the seed sets group scope explicitly). Proven in `packages/db/src/rls.test.ts`.
 
 **Grants to the app role:**
 
 - `SELECT, INSERT, UPDATE` on entity, cycle, employee, the criteria tables, `increment_request`, `request_line`, `request_sequence`, `criterion_result` and `evidence_file`.
-- `SELECT, INSERT` on `idempotency_key`.
+- `SELECT, INSERT` on `idempotency_key`, `status_event`, `audit_log`, `notification` and `notification_read`; `INSERT` only on `email_outbox`.
+- `UPDATE`/`DELETE`/`TRUNCATE` on `audit_log` and `status_event` are refused by trigger for every role.
 - `SELECT, INSERT, DELETE` on `user_entity`. No `DELETE` on business tables (soft delete), no DDL, no `BYPASSRLS`.
 
 ## Indexes
@@ -210,6 +273,11 @@ RLS is `FORCE`d, so the owner is bound too (the seed sets group scope explicitly
 | `evidence_file.object_key` unique                                                          | One record per stored object                                |
 | `evidence_file_line_idx (line_id, criterion_id, created_at)` (live)                        | Files of a request in order; the 5-file count               |
 | `evidence_file_entity_idx (entity_id)`                                                     | RLS filter                                                  |
+| `increment_request_submitted_idx (status, submitted_at desc)` (live)                       | Sirius queue of submitted requests                          |
+| `status_event_request_idx (request_id, at)`, `status_event_entity_idx (entity_id, at)`     | A request's history; per-subsidiary TAT (R1-11)             |
+| `audit_log_subject_idx`, `audit_log_actor_idx`, `audit_log_entity_idx` (each with `at`)    | Trail of a record, of a user, of a subsidiary               |
+| `notification_user_idx`, `notification_role_idx` (partial, `created_at desc`)              | The notifications page and bell                             |
+| `email_outbox_pending_idx (created_at) where sent_at is null`                              | The sender's queue                                          |
 
 ## Retention (proposal, confirm with Sirius under NFR-PRIV-01)
 
@@ -222,3 +290,7 @@ RLS is `FORCE`d, so the owner is bound too (the seed sets group scope explicitly
 | Idempotency keys                | 30 days (purge job, with the session purge)                                                         |
 | Criterion results               | With their request                                                                                  |
 | Evidence files (rows + objects) | With their request; removed files (soft-deleted) purged after the agreed period (Q10)               |
+| Status events                   | With their request                                                                                  |
+| Audit log                       | Proposal: 7 years, then archived; partition by month once volumes are known (ADR-004)               |
+| Notifications and read state    | Proposal: 12 months                                                                                 |
+| Email outbox                    | Sent rows: 30 days                                                                                  |

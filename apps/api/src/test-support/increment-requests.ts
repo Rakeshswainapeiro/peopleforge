@@ -54,7 +54,11 @@ export function record(overrides: Partial<IncrementRequestRecord> = {}): Increme
     reference: 'INC-2026-0001',
     status: 'draft',
     entity: { id: SUB_A, code: 'SUB-A', name: { en: 'Subsidiary A' } },
-    cycle: { id: CYCLE_ID, name: { en: 'Increment cycle 2026' } },
+    cycle: {
+      id: CYCLE_ID,
+      name: { en: 'Increment cycle 2026' },
+      submissionDeadline: '2026-11-30',
+    },
     criteriaSetId: '00000000-0000-4000-8000-0000000c5e71',
     criteria: CRITERION_IDS.map((id, index) => ({
       id,
@@ -70,6 +74,7 @@ export function record(overrides: Partial<IncrementRequestRecord> = {}): Increme
     version: 3,
     createdAt: new Date('2026-10-14T07:00:00Z'),
     updatedAt: new Date('2026-10-14T07:05:00Z'),
+    submittedAt: null,
     lines: [
       {
         id: LINE_1,
@@ -169,9 +174,12 @@ export function workingRepository(): IncrementRequestRepository & {
         }),
     ),
     removeEvidence: vi.fn(() => Promise.resolve()),
+    submit: vi.fn(() => Promise.resolve({ replayed: false })),
+    recordAction: vi.fn(() => Promise.resolve()),
     getEvidence: vi.fn(() =>
       Promise.resolve({
         id: EVIDENCE_ID,
+        entityId: SUB_A,
         requestStatus: 'draft' as const,
         objectKey: `evidence/${SUB_A}/${EVIDENCE_ID}`,
         fileName: evidenceRecord.fileName,

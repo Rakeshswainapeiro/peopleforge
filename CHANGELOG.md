@@ -4,6 +4,21 @@ All notable changes are recorded here. Format: [Keep a Changelog](https://keepac
 
 ## [Unreleased]
 
+### Added — slice S4a: submit to Sirius HR, audit trail, notifications (R1-07, R1-13, R1-15)
+
+- **Submit to Sirius HR.** When every employee has a proposal and all criteria are complete, **Submit to Sirius HR** opens a confirmation dialog ("… You can’t edit the request afterwards."). Submitting saves the draft first, so nothing typed is lost. It is refused after the cycle's submission deadline (end of that day, Asia/Dubai), if the draft changed meanwhile, or if anything is incomplete. A repeated click or retry doesn't submit twice (idempotency key).
+- **Submitted requests are read-only.** The page shows "Increment request INC-…", "Waiting for Sirius HR" with the submission date, and a progress list (Employees added → Submitted → Review in progress → Decision). The database refuses any change to a submitted request, not only the UI.
+- **Notifications.** The submitter gets "Request submitted", and Sirius HR reviewers get "New request from SUB-A with n employees" marked **Action needed**. The sidebar bell shows the unread count. The notifications page has All / Unread / Action needed filters, View (marks it read and opens the request), Mark all as Read and pagination. Emails are queued (outbox) and sent once the worker and the email provider arrive (S4b, A6).
+- **Audit trail** (`audit.audit_log`): request created, draft saved, submitted, discarded; employee added/removed; evidence uploaded, removed and downloaded. Append-only: the database refuses updates and deletes for every role (ADR-011). Status history in `increments.status_event`, the basis of TAT (R1-11).
+- Migration `0005_submission_audit_notifications`. API: `POST /api/v1/increment-requests/{id}/submit`, `GET /api/v1/notifications`, `GET /api/v1/notifications/summary`, `POST /api/v1/notifications/read`; requests now carry `submittedAt` and the cycle's `submissionDeadline` (OpenAPI 0.6.0).
+- Design system: `Dialog` (native `<dialog>`, focus trapped, Esc and backdrop close), unread badge on `NavItem`.
+
+### Changed
+
+- Dates show as "15 Oct 2026" (en-GB order, business time zone), as in the Figma.
+- Evidence downloads are recorded in the audit trail instead of a log line.
+- The "Only … employees can be added" hint shows only while the request can be edited.
+
 ### Fixed
 
 - **Sections 2 and 3 didn't match the Figma.** Section 2 is now titled "2. Eligibility criteria for {name}". Each criterion card has a result mark (✓/✗/○), Pass/Fail at the top right, the placeholder "Why does this employee pass or fail this criterion?", a dashed **Attach File** button followed by "PDF, JPG, PNG, XLSX · max 10 MB *", and an amber outline until the criterion is complete. The extra badges and hints are gone. Section 3 lists "All 5 criteria complete" / "5 criteria incomplete" with a mark per employee, the grey note "n of m employees still have incomplete criteria…", a full-width **Submit to Sirius HR** and the Figma caption. Design system: `StatusMark` (shared with `CriteriaProgress`) and the `dashed` button variant.

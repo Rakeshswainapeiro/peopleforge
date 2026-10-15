@@ -10,6 +10,8 @@ export interface NavItem {
   anyOf?: readonly Permission[];
   /** Other path prefixes that belong to this item (e.g. a draft being edited → New Request). */
   alsoActiveFor?: readonly string[] | undefined;
+  /** Shows the unread notification count (the bell). */
+  showsUnread?: boolean;
 }
 
 /**
@@ -26,7 +28,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     // Figma: the draft editor keeps "New Request" selected.
     alsoActiveFor: ['/requests'],
   },
-  { href: '/notifications', label: 'nav.notifications', icon: 'bell' },
+  { href: '/notifications', label: 'nav.notifications', icon: 'bell', showsUnread: true },
   {
     href: '/reports',
     label: 'nav.reports',

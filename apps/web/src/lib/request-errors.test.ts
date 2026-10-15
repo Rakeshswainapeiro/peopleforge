@@ -15,6 +15,9 @@ describe('errorKeyFor', () => {
       'request.errors.justificationTooLong',
     ],
     ['NOT_FOUND', '', 'request.errors.notFound'],
+    ['CONFLICT', 'status', 'request.errors.notDraft'],
+    ['VALIDATION_FAILED', 'cycle', 'request.errors.deadlinePassed'],
+    ['VALIDATION_FAILED', 'lines.0', 'request.errors.notReady'],
     ['FORBIDDEN', '', 'request.errors.generic'],
   ] as const)('%s on %s → %s', (code, path, expected) => {
     expect(errorKeyFor(code, path === '' ? [] : [{ path, code: 'x' }])).toBe(expected);

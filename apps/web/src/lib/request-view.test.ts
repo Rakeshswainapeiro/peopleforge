@@ -7,6 +7,7 @@ import {
   criteriaLabels,
   employeesAdded,
   evidenceMessages,
+  progressSteps,
   proposalRows,
   readyView,
   saveMessages,
@@ -174,7 +175,7 @@ describe('readyView', () => {
     line.criteria.map((c) => ({ ...c, missing: [] as CriterionMissing[] }));
 
   it('lists each employee as in the Figma, and why submitting is blocked', () => {
-    expect(readyView(request(), 'en', t)).toEqual({
+    expect(readyView(request(), 'en', t, 'key-1')).toEqual({
       items: [
         { lineId: LINE_1, fullName: 'Omar Haddad', ready: false, status: '3 criteria incomplete' },
         {
@@ -185,7 +186,16 @@ describe('readyView', () => {
         },
       ],
       note: '2 of 2 employees still have incomplete criteria. Submit unlocks when every employee is 5/5.',
-      submitLabel: 'Submit to Sirius HR',
+      canSubmit: false,
+      submitKey: 'key-1',
+      submitLabels: {
+        submit: 'Submit to Sirius HR',
+        submitting: 'Submitting…',
+        cancel: 'Cancel',
+        title: 'Submit INC-2026-0001 to Sirius HR?',
+        body: '2 employees go to Sirius HR for review. You can’t edit the request afterwards.',
+        unsaved: 'Anything you changed on this page is saved first.',
+      },
       caption:
         'On submit the request is routed to Sirius HR, its status becomes Submitted, and both sides get an email and in-app notification.',
     });
@@ -197,7 +207,7 @@ describe('readyView', () => {
     const criteria = allComplete(omar);
     criteria[4] = { ...must(criteria[4]), missing: ['result'] };
     const one = request({ lines: [{ ...omar, criteria }] });
-    expect(readyView(one, 'en', t).items[0]?.status).toBe('1 criterion incomplete');
+    expect(readyView(one, 'en', t, 'key-1').items[0]?.status).toBe('1 criterion incomplete');
   });
 
   it('points at missing proposals once every criterion is complete', () => {
@@ -213,6 +223,7 @@ describe('readyView', () => {
       }),
       'en',
       t,
+      'key-1',
     );
     expect(view.items.map((item) => [item.ready, item.status])).toEqual([
       [true, 'All 5 criteria complete'],
@@ -223,10 +234,25 @@ describe('readyView', () => {
     );
   });
 
-  it('says when everyone is ready', () => {
+  it('says when everyone is ready, and lets them submit', () => {
     const omar = must(request().lines[0]);
+    const one = readyView(
+      request({
+        lines: [{ ...omar, criteria: allComplete(omar) }],
+        totals: { ...request().totals, ready: 1 },
+      }),
+      'en',
+      t,
+      'key-1',
+    );
+    expect(one.canSubmit).toBe(true);
+    expect(one.submitLabels.body).toBe(
+      '1 employee goes to Sirius HR for review. You can’t edit the request afterwards.',
+    );
+    expect(readyView(request({ lines: [] }), 'en', t, 'k').canSubmit).toBe(false);
     expect(
-      readyView(request({ lines: [{ ...omar, criteria: allComplete(omar) }] }), 'en', t).note,
+      readyView(request({ lines: [{ ...omar, criteria: allComplete(omar) }] }), 'en', t, 'key-1')
+        .note,
     ).toBe('Every employee is ready to submit.');
   });
 });
@@ -262,5 +288,24 @@ describe('labels and messages', () => {
   it('pluralises "employees added"', () => {
     expect(employeesAdded(1, 'en', t)).toBe('1 employee added');
     expect(employeesAdded(4, 'en', t)).toBe('4 employees added');
+  });
+});
+
+describe('progressSteps', () => {
+  it('waits at "Submitted" for a draft, and at Review once submitted', () => {
+    expect(progressSteps(request(), 'en', t).map((step) => [step.state, step.detail])).toEqual([
+      ['done', '14 Oct 2026'],
+      ['current', 'Pending'],
+      ['todo', 'Pending'],
+      ['todo', 'Pending'],
+    ]);
+    const submitted = request({ status: 'submitted', submittedAt: '2026-10-15T06:00:00.000Z' });
+    expect(progressSteps(submitted, 'en', t).map((step) => [step.label, step.state])).toEqual([
+      ['Added to request', 'done'],
+      ['Submitted to Sirius HR', 'done'],
+      ['Review in progress', 'current'],
+      ['Decision', 'todo'],
+    ]);
+    expect(progressSteps(submitted, 'en', t)[1]?.detail).toBe('15 Oct 2026');
   });
 });

@@ -116,7 +116,42 @@
   },
   "notifications": {
     "heading": "Notifications",
-    "intro": "Clarification requests, decisions and deadline reminders for your increment requests."
+    "intro": "Every status change on your requests.",
+    "markAllRead": "Mark all as Read",
+    "filterLabel": "Filter notifications",
+    "filters": {
+      "all": "All",
+      "unread": "Unread",
+      "action_needed": "Action needed"
+    },
+    "tags": {
+      "status": "Status",
+      "actionNeeded": "Action needed"
+    },
+    "view": "View",
+    "unreadMark": "Unread",
+    "unreadCount": "{count} unread",
+    "emptyTitle": "No notifications",
+    "emptyBody": "Status changes on your requests appear here.",
+    "listLabel": "Notifications",
+    "kinds": {
+      "request_submitted": {
+        "one": "Submitted to Sirius HR with {count} employee.",
+        "other": "Submitted to Sirius HR with {count} employees."
+      },
+      "request_received": {
+        "one": "New request from {entity} with {count} employee, submitted by {actor}.",
+        "other": "New request from {entity} with {count} employees, submitted by {actor}."
+      }
+    },
+    "pagination": {
+      "navigation": "Notification pages",
+      "pageOf": "Page {page} of {pages}",
+      "first": "First page",
+      "previous": "Previous page",
+      "next": "Next page",
+      "last": "Last page"
+    }
   },
   "reports": {
     "heading": "Reports",
@@ -179,7 +214,10 @@
       "chooseEmployee": "Choose an employee to add.",
       "notFound": "This request no longer exists or isn't visible to you.",
       "generic": "The change couldn't be saved. Try again.",
-      "justificationTooLong": "A justification can be at most 2,000 characters."
+      "justificationTooLong": "A justification can be at most 2,000 characters.",
+      "notReady": "Every employee needs a proposed increment and all criteria complete before you can submit.",
+      "deadlinePassed": "The submission deadline for this cycle has passed.",
+      "notDraft": "This request has already been submitted and can’t be changed."
     },
     "draftEyebrow": "{role} · {reference} · Draft",
     "colCriteria": "Criteria",
@@ -230,7 +268,34 @@
     "notReadyCriteria": "{count} of {total} employees still have incomplete criteria. Submit unlocks when every employee is {criteria}/{criteria}.",
     "notReadyProposals": "{count} of {total} employees have no proposed increment yet. Submit unlocks when every employee has one.",
     "allReady": "Every employee is ready to submit.",
-    "submitCaption": "On submit the request is routed to Sirius HR, its status becomes Submitted, and both sides get an email and in-app notification."
+    "submitCaption": "On submit the request is routed to Sirius HR, its status becomes Submitted, and both sides get an email and in-app notification.",
+    "submittedEyebrow": "{role} · {reference} · Submitted",
+    "submittedTitle": "Increment request {reference}",
+    "submittedIntro": "Sent to Sirius HR. It can no longer be edited.",
+    "waitingTitle": "Waiting for Sirius HR",
+    "waitingBody": "Sent to Sirius HR on {date}. Review has not started yet.",
+    "progress": "Progress",
+    "progressSteps": {
+      "added": "Added to request",
+      "submitted": "Submitted to Sirius HR",
+      "review": "Review in progress",
+      "decision": "Decision"
+    },
+    "progressPending": "Pending",
+    "progressStates": {
+      "done": "completed",
+      "current": "in progress",
+      "todo": "not started"
+    },
+    "submitConfirmTitle": "Submit {reference} to Sirius HR?",
+    "submitConfirmBody": {
+      "one": "{count} employee goes to Sirius HR for review. You can’t edit the request afterwards.",
+      "other": "{count} employees go to Sirius HR for review. You can’t edit the request afterwards."
+    },
+    "submitConfirmUnsaved": "Anything you changed on this page is saved first.",
+    "cancel": "Cancel",
+    "submitting": "Submitting…",
+    "submittedNotice": "Request submitted to Sirius HR. Both sides have been notified."
   },
   "evidence": {
     "errors": {

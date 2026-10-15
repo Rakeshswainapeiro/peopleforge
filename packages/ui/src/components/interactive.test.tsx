@@ -195,6 +195,27 @@ describe('NavItem', () => {
     expect(home).toHaveClass('bg-white');
     expect(screen.getByRole('link', { name: 'Reports' })).toHaveClass('hover:bg-white/10');
   });
+
+  it('shows a count, capped at 99+, and hides it at zero', () => {
+    render(
+      <>
+        <NavItem
+          href="/n"
+          label="Notifications"
+          icon="bell"
+          active={false}
+          badge={2}
+          badgeLabel="2 unread"
+        />
+        <NavItem href="/m" label="Many" icon="bell" active badge={120} />
+        <NavItem href="/z" label="Zero" icon="bell" active={false} badge={0} />
+      </>,
+    );
+    expect(screen.getByRole('link', { name: 'Notifications, 2 unread' })).toBeInTheDocument();
+    expect(screen.getByText('99+')).toHaveAttribute('aria-hidden', 'true');
+    expect(screen.getByRole('link', { name: 'Many, 120' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Zero' })).toBeInTheDocument();
+  });
 });
 
 describe('SegmentedChoice', () => {
