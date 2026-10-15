@@ -1,7 +1,6 @@
 import {
   MAX_EVIDENCE_PER_CRITERION,
   type CriterionAssessment,
-  type CriterionMissing,
   type IncrementRequest,
   type RequestLine,
 } from '@peopleforge/contracts';
@@ -86,17 +85,6 @@ function list(items: readonly string[], locale: Locale): string {
   return new Intl.ListFormat(locale, { style: 'short', type: 'unit' }).format(items);
 }
 
-function missingKey(item: CriterionMissing): MessageKey {
-  switch (item) {
-    case 'result':
-      return 'request.missing.result';
-    case 'justification':
-      return 'request.missing.justification';
-    case 'evidence':
-      return 'request.missing.evidence';
-  }
-}
-
 /** Figma "2. Eligibility criteria": one card per criterion for the employee being assessed. */
 export function criteriaCards(
   request: IncrementRequest,
@@ -106,26 +94,18 @@ export function criteriaCards(
 ): CriterionCardView[] {
   return request.criteria.map((criterion, index) => {
     const assessment = line.criteria.at(index);
-    const missing = assessment?.missing ?? ['result', 'justification', 'evidence'];
     const files = assessment?.evidence ?? [];
     return {
       id: criterion.id,
       code: criterion.code,
       name: localised(criterion.name, locale),
       description: localised(criterion.description, locale),
-      justificationRequired: criterion.justificationRequired,
+      rule: {
+        justificationRequired: criterion.justificationRequired,
+        evidencePolicy: criterion.evidencePolicy,
+      },
       result: assessment?.result ?? null,
       justification: assessment?.justification ?? '',
-      complete: missing.length === 0,
-      missingText:
-        missing.length === 0
-          ? undefined
-          : t('request.toComplete', {
-              items: list(
-                missing.map((item) => t(missingKey(item))),
-                locale,
-              ),
-            }),
       resultLegend: t('request.resultFor', { code: criterion.code }),
       evidence:
         criterion.evidencePolicy === 'none'
@@ -168,6 +148,14 @@ export function criteriaLabels(t: Translate): CriteriaEditorLabels {
     fail: t('request.fail'),
     justification: t('request.justification'),
     justificationPlaceholder: t('request.justificationPlaceholder'),
+    missing: {
+      toComplete: t('request.toComplete'),
+      items: {
+        result: t('request.missing.result'),
+        justification: t('request.missing.justification'),
+        evidence: t('request.missing.evidence'),
+      },
+    },
   };
 }
 

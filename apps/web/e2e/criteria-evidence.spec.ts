@@ -97,6 +97,13 @@ test('subsidiary HR assesses an employee against the criteria with evidence', as
   await attach(page, 'C4', 'salary-band.pdf', PDF, 'application/pdf');
   await expect(page.getByRole('link', { name: 'Download salary-band.pdf' })).toBeVisible();
   await assess(page, 'C2', 'Fail', 'Joined in March 2026: under the minimum service.');
+  // The card follows what's on screen before saving: the mark shows Fail, and once the file and
+  // the justification are there it is complete (it used to say "choose Pass or Fail").
+  await expect(criterion(page, 'C2').locator('[data-state]').first()).toHaveAttribute(
+    'data-state',
+    'fail',
+  );
+  await expect(criterion(page, 'C2')).toHaveAttribute('data-complete', 'true');
   await assess(page, 'C3', 'Pass', 'No disciplinary action on file.');
   await assess(page, 'C4', 'Pass', 'Below the grade midpoint.');
   // C5 takes files but doesn't need them.

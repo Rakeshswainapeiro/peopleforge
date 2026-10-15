@@ -1,5 +1,7 @@
 import {
+  hasText,
   MAX_EVIDENCE_FILE_MB,
+  missingFor as sharedMissingFor,
   type CriterionMark,
   type CriterionMissing,
 } from '@peopleforge/contracts';
@@ -11,31 +13,23 @@ import type {
 } from '@peopleforge/db';
 
 /**
- * What still stops a criterion counting as complete for one employee (R1-03, R1-06). Agreed
- * for S3: Fail needs the same justification and evidence as Pass, because Sirius HR reviews the
- * reasoning either way. Each criterion's configuration says whether a justification and files
- * are needed (R1-05), so nothing here names a specific criterion.
+ * What still stops a criterion counting as complete (R1-03, R1-06): the shared rule from
+ * @peopleforge/contracts, fed with a saved assessment (request page) or the facts (dashboard).
  */
 export function missingFor(
   criterion: Pick<CriterionRecord, 'justificationRequired' | 'evidencePolicy'>,
   saved: CriterionAssessmentRecord | CriterionFacts,
 ): CriterionMissing[] {
-  // The request page has the full assessment; the dashboard only the facts. One rule for both.
-  const facts =
+  return sharedMissingFor(
+    criterion,
     'evidence' in saved
       ? {
           result: saved.result,
-          hasJustification: saved.justification.trim() !== '',
+          hasJustification: hasText(saved.justification),
           evidenceCount: saved.evidence.length,
         }
-      : saved;
-  const missing: CriterionMissing[] = [];
-  if (facts.result === null) missing.push('result');
-  if (criterion.justificationRequired && !facts.hasJustification) missing.push('justification');
-  if (criterion.evidencePolicy === 'required' && facts.evidenceCount === 0) {
-    missing.push('evidence');
-  }
-  return missing;
+      : saved,
+  );
 }
 
 /** ✓ pass / ✗ fail once the criterion is complete; ○ until then (R1-06, never colour alone). */

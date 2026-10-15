@@ -23,6 +23,8 @@ export interface SegmentedChoiceProps {
   size?: 'sm' | 'md';
   /** The id of the form the radios post with, when the group sits outside it. */
   form?: string | undefined;
+  /** Called with the chosen value, e.g. to update a live status before the form is saved. */
+  onValueChange?: ((value: string) => void) | undefined;
 }
 
 const CHECKED: Record<ChoiceTone, string> = {
@@ -32,9 +34,10 @@ const CHECKED: Record<ChoiceTone, string> = {
 };
 
 /**
- * A small radio group drawn as joined segments (Figma: "Proposed as  % | AED", "Pass | Fail").
- * Native radios, so it works without JavaScript, posts with the form and is operated with
- * arrow keys. Hover only tints segments that aren't chosen: white text stays on a dark fill.
+ * A small radio group drawn as joined segments (Figma: "Proposed as  % | AED", "Pass | Fail"):
+ * the chosen segment fills its half edge to edge, a hairline separates the others. Native
+ * radios, so it works without JavaScript, posts with the form and is operated with arrow keys.
+ * Hover only tints segments that aren't chosen: white text stays on a dark fill.
  */
 export function SegmentedChoice({
   name,
@@ -43,14 +46,19 @@ export function SegmentedChoice({
   defaultValue,
   size = 'sm',
   form,
+  onValueChange,
 }: SegmentedChoiceProps) {
   const id = useId();
   return (
     <fieldset className="inline-flex">
       <legend className="sr-only">{legend}</legend>
-      <div className="inline-flex rounded-control border border-line-strong bg-surface p-0.5">
-        {options.map((option) => (
-          <label key={option.value} htmlFor={`${id}-${option.value}`} className="relative">
+      <div className="inline-flex overflow-hidden rounded-control border border-line-strong bg-surface shadow-card">
+        {options.map((option, index) => (
+          <label
+            key={option.value}
+            htmlFor={`${id}-${option.value}`}
+            className={cn('relative', index > 0 && 'border-s border-line-strong')}
+          >
             <input
               id={`${id}-${option.value}`}
               type="radio"
@@ -58,15 +66,17 @@ export function SegmentedChoice({
               value={option.value}
               form={form}
               defaultChecked={option.value === defaultValue}
+              onChange={() => onValueChange?.(option.value)}
               className="peer sr-only"
             />
             <span
               className={cn(
-                'flex items-center justify-center gap-1.5 rounded-[calc(var(--radius-control)-2px)] font-medium text-ink',
-                size === 'sm' ? 'h-7 min-w-9 px-2 text-xs' : 'h-9 min-w-12 px-3 text-sm',
+                'flex cursor-pointer items-center justify-center gap-1.5 font-medium text-ink',
+                size === 'sm' ? 'h-8 min-w-10 px-2.5 text-xs' : 'h-8 min-w-14 px-3.5 text-sm',
                 'peer-[:not(:checked)]:hover:bg-surface-muted',
                 CHECKED[option.tone ?? 'neutral'],
-                'peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-brand-500',
+                // Inside the frame: the group clips its children, so the ring is drawn inset.
+                'peer-focus-visible:outline-2 peer-focus-visible:-outline-offset-2 peer-focus-visible:outline-brand-500',
                 transition,
               )}
             >

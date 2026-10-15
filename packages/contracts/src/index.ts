@@ -102,3 +102,9 @@ export {
   type NotificationSummary,
 } from './notifications.js';
 export { BUSINESS_TIME_ZONE, businessDay } from './time.js';
+export {
+  hasText,
+  missingFor,
+  type CriterionProgress,
+  type CriterionRule,
+} from './criteria-rules.js';

@@ -8,7 +8,7 @@ import { Spinner } from './spinner.js';
 
 export type ButtonVariant =
   'primary' | 'secondary' | 'outline' | 'dashed' | 'ghost' | 'danger' | 'success';
-export type ButtonSize = 'sm' | 'md' | 'lg';
+export type ButtonSize = 'compact' | 'sm' | 'md' | 'lg';
 
 const VARIANTS = new Map<ButtonVariant, string>([
   // Figma: "+ New increment request", "Submit to Sirius HR", "Download PDF".
@@ -31,6 +31,8 @@ const VARIANTS = new Map<ButtonVariant, string>([
 ]);
 
 const SIZES = new Map<ButtonSize, string>([
+  // Figma: "Attach File" beside the file rules: short, but body-size text.
+  ['compact', 'h-7 gap-1.5 px-3 text-sm'],
   ['sm', 'h-8 gap-1.5 px-3 text-xs'],
   ['md', 'h-10 gap-2 px-4 text-sm'],
   ['lg', 'h-12 gap-2 px-5 text-base'],

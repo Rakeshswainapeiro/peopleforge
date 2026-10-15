@@ -4,6 +4,11 @@ All notable changes are recorded here. Format: [Keep a Changelog](https://keepac
 
 ## [Unreleased]
 
+### Fixed — criteria cards (R1-03, R1-06)
+
+- **A criterion card now follows what's on screen.** Choosing Pass or Fail, typing a justification or attaching a file updates the card's mark, colour and "To complete" line straight away; before, they waited for **Save draft**, so a card with Pass chosen still said "choose Pass or Fail". The card uses the API's own completeness rule (now shared in `@peopleforge/contracts`), so it never disagrees with what saving records.
+- **Buttons match the Figma:** the Pass | Fail and % | AED switches are joined segments filled edge to edge (no inset), and **Attach File** is compact with body-size text (new `compact` button size).
+
 ### Added — slice S4b-2: email worker (R1-07, R1-13)
 
 - **Emails are sent.** A new worker (`apps/worker`) sends the email for every notification: the submitter gets "INC-… submitted to Sirius HR", and the Sirius HR reviewers' mailbox gets "New increment request INC-… from SUB-A" with who submitted it. Each email has a plain-text and an HTML part and a **View in PeopleForge** link to the request. No pay, percentages or justifications.

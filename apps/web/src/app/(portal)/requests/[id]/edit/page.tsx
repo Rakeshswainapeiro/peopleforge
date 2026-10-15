@@ -172,6 +172,7 @@ export default async function EditRequestPage({ params, searchParams }: EditRequ
                 labels={criteriaLabels(t)}
                 maxJustification={MAX_JUSTIFICATION_LENGTH}
                 messages={evidenceMessages(t)}
+                locale={locale}
               />
             </div>
           </Card>

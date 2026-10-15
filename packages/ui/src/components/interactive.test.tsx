@@ -297,6 +297,37 @@ describe('SegmentedChoice', () => {
       <SegmentedChoice name="k" legend="L" size="md" options={[{ value: 'a', label: 'A' }]} />,
     );
     expect(screen.getByRole('radio', { name: 'A' })).not.toBeChecked();
-    expect(screen.getByText('A')).toHaveClass('h-9');
+    expect(screen.getByText('A')).toHaveClass('h-8', 'text-sm');
+  });
+
+  it('joins the segments edge to edge, reports the choice, and keeps the native radios', async () => {
+    const chosen: string[] = [];
+    render(
+      <SegmentedChoice
+        name="r"
+        legend="Result"
+        size="md"
+        onValueChange={(value) => chosen.push(value)}
+        options={[
+          { value: 'pass', label: 'Pass', tone: 'success', icon: 'check' },
+          { value: 'fail', label: 'Fail', tone: 'danger', icon: 'x' },
+        ]}
+      />,
+    );
+    // Figma: no inset; a hairline between segments, the frame clips the chosen fill.
+    const fail = screen.getByText('Fail').closest('label');
+    expect(fail).toHaveClass('border-s');
+    expect(screen.getByText('Pass').closest('label')).not.toHaveClass('border-s');
+    expect(fail?.parentElement).toHaveClass('overflow-hidden');
+    await userEvent.click(screen.getByText('Fail'));
+    await userEvent.click(screen.getByText('Pass'));
+    expect(chosen).toEqual(['fail', 'pass']);
+    expect(screen.getByRole('radio', { name: 'Pass' })).toBeChecked();
+  });
+
+  it('works without a change listener', async () => {
+    render(<SegmentedChoice name="q" legend="Q" options={[{ value: 'a', label: 'A' }]} />);
+    await userEvent.click(screen.getByText('A'));
+    expect(screen.getByRole('radio', { name: 'A' })).toBeChecked();
   });
 });

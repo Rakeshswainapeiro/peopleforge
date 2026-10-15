@@ -28,6 +28,8 @@ describe('buttonClasses', () => {
 
   it('applies size and full width', () => {
     expect(buttonClasses({ size: 'sm' })).toContain('h-8');
+    // Figma "Attach File": short, with body-size text.
+    expect(buttonClasses({ size: 'compact' })).toContain('h-7 gap-1.5 px-3 text-sm');
     expect(buttonClasses({ size: 'lg', fullWidth: true })).toMatch(/h-12.*w-full/);
   });
 

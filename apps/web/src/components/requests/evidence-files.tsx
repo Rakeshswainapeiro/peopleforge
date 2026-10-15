@@ -167,12 +167,12 @@ export function EvidenceFiles({
               htmlFor={inputId}
               aria-hidden="true"
               className={cn(
-                buttonClasses({ variant: 'dashed', size: 'lg' }),
-                'text-lg peer-disabled:pointer-events-none peer-disabled:opacity-60',
+                buttonClasses({ variant: 'dashed', size: 'compact' }),
+                'peer-disabled:pointer-events-none peer-disabled:opacity-60',
                 'peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-brand-500',
               )}
             >
-              <Icon name="paperclip" className="size-5" />
+              <Icon name="paperclip" className="size-4" />
               {labels.attach}
             </label>
           </>

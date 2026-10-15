@@ -54,6 +54,7 @@ function editor() {
         labels={criteriaLabels(t)}
         maxJustification={2000}
         messages={evidenceMessages(t)}
+        locale="en"
       />
     </DraftForm>,
   );
@@ -106,6 +107,33 @@ describe('CriteriaEditor [R1-03, R1-06]', () => {
     ).toBeChecked();
   });
 
+  it('updates the mark, colour and "To complete" as the user chooses and types, before saving', async () => {
+    editor();
+    const c4 = screen.getByRole('article', { name: 'C4 · [Placeholder] Criterion 4' });
+    const hint = 'To complete: choose Pass or Fail, add a justification, attach evidence.';
+    expect(c4).toHaveAccessibleDescription(hint);
+    // Choosing Pass shows at once (it used to wait for a save and still said "choose Pass or Fail").
+    await userEvent.click(within(c4).getByText('Pass'));
+    expect(c4.querySelector('[data-state]')).toHaveAttribute('data-state', 'pass');
+    expect(c4).toHaveAccessibleDescription('To complete: add a justification, attach evidence.');
+    const textbox = within(c4).getByRole('textbox');
+    await userEvent.type(textbox, 'Met all targets.');
+    expect(c4).toHaveAccessibleDescription('To complete: attach evidence.');
+    // Blank space isn't a justification.
+    await userEvent.clear(textbox);
+    await userEvent.type(textbox, '   ');
+    expect(c4).toHaveAccessibleDescription('To complete: add a justification, attach evidence.');
+    await userEvent.click(within(c4).getByText('Fail'));
+    expect(c4.querySelector('[data-state]')).toHaveAttribute('data-state', 'fail');
+    // C5 needs no files: Pass and a justification complete it, and the card turns calm.
+    const c5 = screen.getByRole('article', { name: 'C5 · [Placeholder] Criterion 5' });
+    await userEvent.click(within(c5).getByText('Pass'));
+    await userEvent.type(within(c5).getByRole('textbox'), 'Attendance is fine.');
+    expect(c5).toHaveAttribute('data-complete', 'true');
+    expect(c5).toHaveClass('border-success-200');
+    expect(c5).not.toHaveAccessibleDescription();
+  });
+
   it('posts the employee’s criteria with the draft form', async () => {
     const { container } = editor();
     const c3 = screen.getByRole('article', { name: 'C3 · [Placeholder] Criterion 3' });
@@ -138,6 +166,23 @@ describe('CriteriaEditor [R1-03, R1-06]', () => {
     expect(within(c1).getByRole('radio', { name: 'Fail' })).toBeChecked();
   });
 
+  it('brings back "nothing chosen" after a refused save, with the card status to match', async () => {
+    vi.mocked(saveDraft).mockResolvedValue({
+      error: 'request.errors.stale',
+      rows: [],
+      criteria: { lineId: LINE_1, results: [{ criterionId: C1, result: '', justification: '' }] },
+    });
+    const { container } = editor();
+    container.querySelector<HTMLFormElement>('form#draft-form')?.requestSubmit();
+    const c1 = screen.getByRole('article', { name: 'C1 · [Placeholder] Criterion 1' });
+    await waitFor(() => {
+      expect(within(c1).getByRole('radio', { name: 'Pass' })).not.toBeChecked();
+    });
+    expect(c1).toHaveAccessibleDescription(
+      'To complete: choose Pass or Fail, add a justification.',
+    );
+  });
+
   it('ignores typed values that belong to another employee', async () => {
     vi.mocked(saveDraft).mockResolvedValue({
       rows: [],
@@ -165,6 +210,7 @@ describe('CriteriaEditor [R1-03, R1-06]', () => {
           labels={criteriaLabels(t)}
           maxJustification={2000}
           messages={[]}
+          locale="en"
         />
       </DraftForm>,
     );

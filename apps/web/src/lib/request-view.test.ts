@@ -86,8 +86,6 @@ describe('criteriaCards [R1-03, R1-04, R1-06]', () => {
       description: 'What criterion 1 asks for.',
       result: 'pass',
       justification: 'Rated 4 of 5 in the 2026 appraisal.',
-      complete: true,
-      missingText: undefined,
       resultLegend: 'Result for C1',
     });
     expect(c1?.evidence).toMatchObject({
@@ -114,7 +112,8 @@ describe('criteriaCards [R1-03, R1-04, R1-06]', () => {
       },
     });
     expect(c2?.evidence?.files[0]?.meta).toBe('PNG · 3 MB');
-    expect(c3?.missingText).toBe('To complete: add a justification, attach evidence.');
+    // The card works out what's missing as the user types, from the criterion's rule.
+    expect(c3?.rule).toEqual({ justificationRequired: true, evidencePolicy: 'required' });
     expect(c5?.evidence?.required).toBe(false);
   });
 
@@ -144,12 +143,7 @@ describe('criteriaCards [R1-03, R1-04, R1-06]', () => {
     const draft = request();
     const line = { ...must(draft.lines[1]), criteria: [notStarted('x')] };
     const [, second] = criteriaCards(draft, line, 'en', t);
-    expect(second).toMatchObject({
-      result: null,
-      justification: '',
-      complete: false,
-      missingText: 'To complete: choose Pass or Fail, add a justification, attach evidence.',
-    });
+    expect(second).toMatchObject({ result: null, justification: '' });
     expect(second?.evidence?.files).toEqual([]);
   });
 
@@ -167,6 +161,14 @@ describe('criteriaCards [R1-03, R1-04, R1-06]', () => {
       fail: 'Fail',
       justification: 'Justification',
       justificationPlaceholder: 'Why does this employee pass or fail this criterion?',
+      missing: {
+        toComplete: 'To complete: {items}.',
+        items: {
+          result: 'choose Pass or Fail',
+          justification: 'add a justification',
+          evidence: 'attach evidence',
+        },
+      },
     });
     expect(new Map(evidenceMessages(t)).get('evidence.errors.infected')).toMatch(/malware/u);
   });
