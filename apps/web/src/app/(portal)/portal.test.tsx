@@ -7,6 +7,7 @@ import { listRequests } from '@/server/increment-requests';
 import { notificationSummary } from '@/server/notifications';
 import { requireViewer } from '@/server/session';
 import PortalLayout from './layout';
+import PortalLoading from './loading';
 import HomePage from './page';
 import ReportsPage from './reports/page';
 
@@ -212,5 +213,15 @@ describe('placeholder pages', () => {
   it.each([HomePage, ReportsPage])('renders nothing while the API is unavailable', async (Page) => {
     vi.mocked(requireViewer).mockResolvedValue(null);
     await expect(Page()).resolves.toBeNull();
+  });
+});
+
+describe('PortalLoading', () => {
+  it('shows the page shape inside the shell and announces loading politely', async () => {
+    const { container } = render(await PortalLoading());
+    expect(screen.getByRole('status')).toHaveTextContent('Loading…');
+    // Only the content area: no second sidebar or navigation.
+    expect(screen.queryByRole('navigation')).toBeNull();
+    expect(container.querySelectorAll('[aria-hidden="true"]').length).toBeGreaterThan(3);
   });
 });

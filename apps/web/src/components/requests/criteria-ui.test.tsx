@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -340,14 +340,19 @@ describe('ReadyPanel', () => {
   it('confirms before submitting, then posts the draft form with intent=submit [R1-07]', async () => {
     const { container } = readyPanel(true);
     await userEvent.click(screen.getByRole('button', { name: 'Submit to Sirius HR' }));
-    const dialog = screen.getByRole('dialog', { name: 'Submit INC-2026-0001 to Sirius HR?' });
+    // An alert dialog: submitting can't be undone.
+    const dialog = screen.getByRole('alertdialog', {
+      name: 'Submit INC-2026-0001 to Sirius HR?',
+    });
     expect(dialog).toHaveTextContent('2 employees go to Sirius HR for review.');
     expect(dialog).toHaveTextContent('Anything you changed on this page is saved first.');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
-    expect(screen.queryByRole('dialog')).toBeNull();
+    await waitFor(() => {
+      expect(screen.queryByRole('alertdialog')).toBeNull();
+    });
 
     await userEvent.click(screen.getByRole('button', { name: 'Submit to Sirius HR' }));
-    const confirm = within(screen.getByRole('dialog')).getByRole('button', {
+    const confirm = within(screen.getByRole('alertdialog')).getByRole('button', {
       name: 'Submit to Sirius HR',
     });
     expect(confirm).toHaveAttribute('form', 'draft-form');
@@ -362,6 +367,21 @@ describe('ReadyPanel', () => {
     const posted = vi.mocked(saveDraft).mock.calls[0]?.[1];
     expect(posted?.get('intent')).toBe('submit');
     expect(posted?.get('submitKey')).toBe('submit-key-123');
+  });
+
+  it('stays open and busy while submitting: no Esc, no Cancel, no second click', async () => {
+    vi.mocked(saveDraft).mockReturnValue(new Promise(() => undefined));
+    readyPanel(true);
+    await userEvent.click(screen.getByRole('button', { name: 'Submit to Sirius HR' }));
+    const dialog = screen.getByRole('alertdialog');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Submit to Sirius HR' }));
+    await waitFor(() => {
+      expect(within(dialog).getByRole('button', { name: 'Submitting…' })).toBeDisabled();
+    });
+    expect(within(dialog).getByRole('button', { name: 'Cancel' })).toBeDisabled();
+    fireEvent(dialog, new Event('cancel', { cancelable: true }));
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(dialog).toHaveAttribute('data-state', 'open');
   });
 });
 

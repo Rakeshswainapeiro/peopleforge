@@ -41,12 +41,8 @@ export function NavItem({
       <Icon name={icon} />
       {label}
       {badge === undefined || badge === 0 ? null : (
-        <span
-          className={cn(
-            'ms-auto inline-flex min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-semibold leading-5 tabular-nums',
-            active ? 'bg-brand-600 text-white' : 'bg-accent text-sidebar',
-          )}
-        >
+        // One colour whether or not the item is current, so the count reads the same everywhere.
+        <span className="ms-auto inline-flex min-w-5 animate-enter items-center justify-center rounded-full bg-brand-600 px-1.5 text-[11px] font-semibold leading-5 text-white tabular-nums">
           <span aria-hidden="true">{badge > 99 ? '99+' : badge}</span>
           <span className="sr-only">{`, ${badgeLabel ?? String(badge)}`}</span>
         </span>

@@ -54,21 +54,18 @@ export function SubmitControl({ canSubmit, submitKey, describedBy, labels }: Sub
       <Dialog
         open={open}
         onClose={close}
+        role="alertdialog"
+        // While the draft is saved and submitted, Esc and the backdrop do nothing.
+        dismissible={!pending}
         title={labels.title}
         actions={
           <>
             <Button variant="secondary" onClick={close} disabled={pending}>
               {labels.cancel}
             </Button>
-            <Button
-              type="submit"
-              form={formId}
-              name="intent"
-              value="submit"
-              loading={pending}
-              loadingLabel={labels.submitting}
-            >
-              {labels.submit}
+            <Button type="submit" form={formId} name="intent" value="submit" loading={pending}>
+              {/* The label itself says what's happening; the spinner is decoration. */}
+              {pending ? labels.submitting : labels.submit}
             </Button>
           </>
         }

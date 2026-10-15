@@ -68,7 +68,7 @@ export function Alert({
       role={role === 'none' ? undefined : role}
       data-tone={tone}
       className={cn(
-        'flex flex-wrap items-center gap-4 rounded-card border px-4 py-3.5',
+        'flex animate-enter flex-wrap items-center gap-4 rounded-card border px-4 py-3.5',
         style.box,
         className,
       )}

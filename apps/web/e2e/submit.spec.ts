@@ -60,8 +60,25 @@ test('subsidiary HR completes a draft and submits it to Sirius HR', async ({ pag
 
   // A confirmation first; Cancel changes nothing.
   await submit.click();
-  const dialog = page.getByRole('dialog', { name: `Submit ${reference} to Sirius HR?` });
+  const dialog = page.getByRole('alertdialog', { name: `Submit ${reference} to Sirius HR?` });
   await expect(dialog).toContainText('1 employee goes to Sirius HR for review.');
+  // Centred in the viewport (not the browser's default corner), once the opening fade ends.
+  await expect(dialog).toHaveAttribute('data-state', 'open');
+  const panel = dialog.getByTestId('dialog-panel');
+  await expect(panel).toHaveCSS('opacity', '1');
+  const box = await panel.boundingBox();
+  // The visible area: the window less the reserved scrollbar gutter.
+  const area = await page.evaluate(() => ({
+    width: document.documentElement.clientWidth,
+    height: document.documentElement.clientHeight,
+  }));
+  expect(box).not.toBeNull();
+  if (box !== null) {
+    expect(Math.abs(box.x + box.width / 2 - area.width / 2)).toBeLessThan(2);
+    expect(Math.abs(box.y + box.height / 2 - area.height / 2)).toBeLessThan(2);
+  }
+  // The page behind doesn't scroll while it is open.
+  await expect(page.locator('html')).toHaveCSS('overflow', 'hidden');
   await dialog.getByRole('button', { name: 'Cancel' }).click();
   await expect(dialog).toBeHidden();
 
@@ -112,6 +129,7 @@ test('Sirius HR reviewers are notified and can open the submitted request', asyn
   // It is unread until read; Mark all as Read clears it (and anything older).
   const filters = page.getByRole('navigation', { name: 'Filter notifications' });
   await filters.getByRole('link', { name: /^Unread/u }).click();
+  await page.waitForURL(/filter=unread$/u);
   await expect(page.getByRole('listitem').filter({ hasText: reference })).toBeVisible();
   await page.getByRole('button', { name: 'Mark all as Read' }).click();
   await expect(page.getByText('No notifications')).toBeVisible();
@@ -123,11 +141,9 @@ test('Sirius HR reviewers are notified and can open the submitted request', asyn
   ).toBeVisible();
 
   await filters.getByRole('link', { name: /^Action needed/u }).click();
-  await page
-    .getByRole('listitem')
-    .filter({ hasText: reference })
-    .getByRole('button', { name: 'View' })
-    .click();
+  await page.waitForURL(/filter=action_needed$/u);
+  // The whole row opens it, not only View.
+  await page.getByRole('listitem').filter({ hasText: reference }).click();
   await page.waitForURL(requestUrl);
   await expect(
     page.getByRole('heading', { level: 1, name: `Increment request ${reference}` }),

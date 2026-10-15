@@ -58,6 +58,16 @@
   --shadow-raised: 0 4px 14px rgb(17 19 24 / 0.08);
 
   --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+
+  /* Feedback that appears after an action (alerts, notices): a short fade and rise. */
+  --animate-enter: enter 220ms var(--ease-standard) both;
+
+  @keyframes enter {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+  }
 }
 
 @layer base {

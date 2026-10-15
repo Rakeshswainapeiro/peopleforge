@@ -30,6 +30,13 @@ describe('buttonClasses', () => {
     expect(buttonClasses({ size: 'sm' })).toContain('h-8');
     expect(buttonClasses({ size: 'lg', fullWidth: true })).toMatch(/h-12.*w-full/);
   });
+
+  it('presses in a little, except when stretched over a row (the click would be lost)', () => {
+    expect(buttonClasses()).toContain('active:scale-[0.98]');
+    const stretched = buttonClasses({ stretched: true });
+    expect(stretched).toContain('after:absolute after:inset-0');
+    expect(stretched).not.toContain('active:scale');
+  });
 });
 
 describe('Button', () => {
@@ -65,6 +72,11 @@ describe('Button', () => {
     expect(screen.getByRole('status', { name: 'Submitting…' })).toBeInTheDocument();
     await userEvent.click(button);
     expect(onClick).not.toHaveBeenCalled();
+  });
+
+  it('stretches its hit area when asked', () => {
+    render(<Button stretched>View</Button>);
+    expect(screen.getByRole('button', { name: 'View' }).className).toContain('after:inset-0');
   });
 
   it('respects disabled and extra classes', () => {

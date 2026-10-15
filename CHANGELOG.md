@@ -4,6 +4,15 @@ All notable changes are recorded here. Format: [Keep a Changelog](https://keepac
 
 ## [Unreleased]
 
+### Fixed — UX polish after S4a review
+
+- **The confirmation dialog opened in the top-left corner** in some browsers. It relied on the browser's default `<dialog>` centring, which Tailwind's reset removes in some engines. The dialog now lays itself out explicitly: a full-window layer that centres the panel and draws its own blurred backdrop. An end-to-end test checks it is centred in the viewport.
+- **Dialog behaviour:** opens and closes with a short fade and scale. Focus moves to the panel, so no focus ring flashes on Cancel. The page behind doesn't scroll and doesn't shift sideways (the scrollbar width is compensated on Windows). While submitting, Esc and the backdrop do nothing, and the button reads "Submitting…". The submit confirmation is announced as an alert dialog.
+- **Notifications:** the whole row opens the notification, not just View. Rows highlight on hover, and unread rows carry a dot as well as bold text. The unread badge on the bell is the same colour whether or not the page is current.
+- **Navigation feedback:** moving between portal pages shows the page's outline in the content area while the sidebar stays put. It appears only if loading takes more than a moment, so fast pages don't flash.
+- Alerts ("Draft saved", "Request submitted…") fade in instead of popping.
+- Design system: `Button` gains `stretched` (the whole row or card clicks it; no press-scale, which would lose the click). New `lockPageScroll` helper. New `animate-enter` motion token, which is turned off for users who prefer reduced motion.
+
 ### Added — slice S4a: submit to Sirius HR, audit trail, notifications (R1-07, R1-13, R1-15)
 
 - **Submit to Sirius HR.** When every employee has a proposal and all criteria are complete, **Submit to Sirius HR** opens a confirmation dialog ("… You can’t edit the request afterwards."). Submitting saves the draft first, so nothing typed is lost. It is refused after the cycle's submission deadline (end of that day, Asia/Dubai), if the draft changed meanwhile, or if anything is incomplete. A repeated click or retry doesn't submit twice (idempotency key).

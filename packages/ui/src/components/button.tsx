@@ -42,12 +42,17 @@ export function buttonClasses(
     variant?: ButtonVariant | undefined;
     size?: ButtonSize | undefined;
     fullWidth?: boolean | undefined;
+    stretched?: boolean | undefined;
   } = {},
 ): string {
-  const { variant = 'primary', size = 'md', fullWidth = false } = options;
+  const { variant = 'primary', size = 'md', fullWidth = false, stretched = false } = options;
   return cn(
     'inline-flex shrink-0 select-none items-center justify-center whitespace-nowrap rounded-control font-semibold',
-    'cursor-pointer active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50',
+    'cursor-pointer disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50',
+    // A stretched button's hit area covers its nearest positioned ancestor (a row or card). It
+    // must not scale when pressed: a transform makes the button the containing block of that
+    // area, which would shrink mid-click so the release lands outside and the click is lost.
+    stretched ? "after:absolute after:inset-0 after:content-['']" : 'active:scale-[0.98]',
     transition,
     focusRing,
     variantClass(VARIANTS, variant),
@@ -82,12 +87,18 @@ export interface ButtonProps
   loading?: boolean;
   /** Read by screen readers while loading, e.g. "Submitting…". */
   loadingLabel?: string;
+  /**
+   * Makes the whole of the nearest positioned ancestor (e.g. a list row with `relative`) click
+   * this button, so nobody has to aim for it. Use for the one primary action of a row or card.
+   */
+  stretched?: boolean;
 }
 
 export function Button({
   variant,
   size,
   fullWidth,
+  stretched,
   loading = false,
   loadingLabel,
   icon,
@@ -104,7 +115,7 @@ export function Button({
       type={type}
       disabled={disabled === true || loading}
       aria-busy={loading || undefined}
-      className={cn(buttonClasses({ variant, size, fullWidth }), className)}
+      className={cn(buttonClasses({ variant, size, fullWidth, stretched }), className)}
     >
       {loading ? (
         <>
