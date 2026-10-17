@@ -1,9 +1,11 @@
 import type {
+  ConversationPage,
   CriterionAssessment,
   Cycle,
   DashboardSummary,
   IncrementRequest,
   IncrementRequestPage,
+  Message,
   RequestLine,
   RequestLinePage,
   ReviewQueuePage,
@@ -341,6 +343,60 @@ export function decisionOf(
     approvedSalary: '23220.00',
     decidedAt: '2026-10-16T08:30:00.000Z',
     decidedByName: 'Sara Al Mansoori',
+    ...overrides,
+  };
+}
+
+/** Sara asked about Omar on 16 Oct; Alpha HR answered (synthetic). */
+export function threadMessages(): Message[] {
+  return [
+    {
+      id: '66666666-6666-4666-8666-666666666661',
+      side: 'sirius',
+      authorName: 'Sara Al Mansoori',
+      body: 'Is the 2026 appraisal signed?',
+      createdAt: '2026-10-16T06:00:00.000Z',
+    },
+    {
+      id: '66666666-6666-4666-8666-666666666662',
+      side: 'subsidiary',
+      authorName: 'Alpha HR',
+      body: 'Yes — signed copy attached to C1.',
+      createdAt: '2026-10-16T07:30:00.000Z',
+    },
+  ];
+}
+
+type ThreadItem = ConversationPage['items'][number];
+
+export function threadItem(overrides: Partial<ThreadItem> = {}): ThreadItem {
+  return {
+    lineId: LINE_1,
+    request: { id: REQUEST_ID, reference: 'INC-2026-0152', entityCode: 'SUB-A' },
+    employeeNumber: 'EMP-3318',
+    fullName: 'Omar Haddad',
+    messages: 2,
+    awaitingMe: true,
+    last: {
+      side: 'sirius',
+      authorName: 'Sara Al Mansoori',
+      createdAt: '2026-10-16T06:00:00.000Z',
+      preview: 'Is the 2026 appraisal signed?',
+    },
+    ...overrides,
+  };
+}
+
+export function conversationPage(
+  items: ThreadItem[] = [threadItem()],
+  overrides: Partial<ConversationPage> = {},
+): ConversationPage {
+  return {
+    items,
+    page: 1,
+    pageSize: 10,
+    total: items.length,
+    counts: { all: 4, awaiting: items.length },
     ...overrides,
   };
 }

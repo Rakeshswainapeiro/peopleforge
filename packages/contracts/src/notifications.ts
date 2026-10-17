@@ -20,6 +20,10 @@ export const NotificationKindSchema = z.enum([
   'request_decided',
   /** To Sirius HR reviewers: returned employees came back, fixed. */
   'request_resubmitted',
+  /** To the submitter, action needed: Sirius HR asked a question about an employee (R1-08). */
+  'question_asked',
+  /** To Sirius HR reviewers, action needed: the subsidiary answered. */
+  'question_answered',
 ]);
 export type NotificationKind = z.infer<typeof NotificationKindSchema>;
 

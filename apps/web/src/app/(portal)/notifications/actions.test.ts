@@ -58,6 +58,13 @@ describe('openNotificationAction', () => {
     );
   });
 
+  it('opens the employee’s conversation for a question [R1-08]', async () => {
+    const LINE = '22222222-2222-4222-8222-222222222221';
+    await expect(openNotificationAction(NOTE, REQUEST, LINE)).rejects.toThrow(
+      `NEXT_REDIRECT /requests/${REQUEST}/employees/${LINE}#conversation`,
+    );
+  });
+
   it('refuses tampered IDs and ends a dead session', async () => {
     await expect(openNotificationAction('../x', REQUEST)).rejects.toThrow();
     expect(markNotificationsRead).not.toHaveBeenCalled();

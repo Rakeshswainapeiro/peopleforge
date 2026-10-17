@@ -30,6 +30,10 @@ const PATHS = new Map<IconName, string>([
   ['chevrons-start', 'M17 6l-6 6 6 6M11 6l-6 6 6 6'],
   ['chevrons-end', 'M7 6l6 6-6 6M13 6l6 6-6 6'],
   ['arrow-start', 'M19 12H5M11 6l-6 6 6 6'],
+  ['message', 'M4 5h16v11H9l-5 4zM8 9h8M8 12h5'],
+  ['clipboard', 'M9 4h6v3H9zM7 5H5v16h14V5h-2M8 12l2.5 2.5L16 9'],
+  ['clock', 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7v5l3 2'],
+  ['sliders', 'M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0M14 4v4M8 10v4M16 16v4'],
 ]);
 
 export type IconName =
@@ -54,7 +58,11 @@ export type IconName =
   | 'chevron-end'
   | 'chevrons-start'
   | 'chevrons-end'
-  | 'arrow-start';
+  | 'arrow-start'
+  | 'message'
+  | 'clipboard'
+  | 'clock'
+  | 'sliders';
 
 const DIRECTIONAL: ReadonlySet<IconName> = new Set([
   'chevron-start',

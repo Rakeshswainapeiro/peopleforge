@@ -286,6 +286,21 @@ export interface LineDecisionTable {
   decided_at: Generated<Date>;
 }
 
+export type MessageSide = 'sirius' | 'subsidiary';
+
+export interface LineMessageTable {
+  id: string;
+  line_id: string;
+  entity_id: string;
+  request_id: string;
+  side: MessageSide;
+  author_id: string;
+  author_name: string;
+  /** Ciphertext of the message (ADR-008). */
+  body: Buffer;
+  created_at: Generated<Date>;
+}
+
 /** Tables the application reads and writes, by schema-qualified name. */
 export interface Database {
   'core.entity': EntityTable;
@@ -308,5 +323,6 @@ export interface Database {
   'notify.role_mailbox': RoleMailboxTable;
   'increments.criterion_verification': CriterionVerificationTable;
   'increments.line_decision': LineDecisionTable;
+  'increments.line_message': LineMessageTable;
   'auth.recipient_email': RecipientEmailView;
 }

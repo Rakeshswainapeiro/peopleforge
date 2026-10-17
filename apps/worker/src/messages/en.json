@@ -47,6 +47,14 @@
         "one": "{actor} resubmitted increment request {reference} from {entity} with {count} returned employee. It is waiting for your review.",
         "other": "{actor} resubmitted increment request {reference} from {entity} with {count} returned employees. It is waiting for your review."
       }
+    },
+    "question_asked": {
+      "subject": "Question from Sirius HR about {employee} ({reference})",
+      "body": "Sirius HR asked a question about {employee} in increment request {reference}. Open the employee in PeopleForge to answer."
+    },
+    "question_answered": {
+      "subject": "{entity} answered about {employee} ({reference})",
+      "body": "{actor} from {entity} answered your question about {employee} in increment request {reference}."
     }
   },
   "statuses": {

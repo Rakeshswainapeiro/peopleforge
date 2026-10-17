@@ -1,6 +1,6 @@
-# Schemas `core`, `increments`, `audit` and `notify` (slices S1–S5a)
+# Schemas `core`, `increments`, `audit` and `notify` (slices S1–S5b)
 
-Migrations: `packages/db/migrations/core/0001_core_schema`, `0002_placeholder_configuration`, `0003_increment_requests`, `0004_criteria_evidence`, `0005_submission_audit_notifications`, `0006_dashboard`, `0007_submitter_name`, `0008_email_worker`, `0009_review_decisions` (up/down), recorded in `migrations.core`. Decisions: ADR-002 (data access, RLS), ADR-008 (field encryption), ADR-010 (evidence files), ADR-011 (audit trail and notifications), ADR-013 (review, decisions and returns). Design: `docs/design/r1-increment-portal.md` §3a.
+Migrations: `packages/db/migrations/core/0001_core_schema`, `0002_placeholder_configuration`, `0003_increment_requests`, `0004_criteria_evidence`, `0005_submission_audit_notifications`, `0006_dashboard`, `0007_submitter_name`, `0008_email_worker`, `0009_review_decisions`, `0010_conversations` (up/down), recorded in `migrations.core`. Decisions: ADR-002 (data access, RLS), ADR-008 (field encryption), ADR-010 (evidence files), ADR-011 (audit trail and notifications), ADR-013 (review, decisions and returns). Design: `docs/design/r1-increment-portal.md` §3a.
 
 Every table here also carries `created_at`, `created_by`, `updated_at`, `updated_by` (UTC timestamps, user IDs), and `version` (optimistic locking) where rows are edited. `created_by`/`updated_by` is `seed` for migration and seed rows.
 
@@ -29,6 +29,7 @@ erDiagram
   REQUEST_LINE ||--o{ CRITERION_VERIFICATION : "checked by Sirius HR"
   CRITERION ||--o{ CRITERION_VERIFICATION : "verified in"
   REQUEST_LINE ||--o{ LINE_DECISION : "decided by"
+  REQUEST_LINE ||--o{ LINE_MESSAGE : "discussed in"
   ENTITY { uuid id PK; text code UK; jsonb name; char3 default_currency }
   USER_ENTITY { text user_id PK; uuid entity_id PK,FK }
   EMPLOYEE { uuid id PK; uuid entity_id FK; text employee_number; text full_name; text grade; bytea monthly_salary; char3 currency }
@@ -38,6 +39,7 @@ erDiagram
   INCREMENT_REQUEST { uuid id PK; text reference UK; uuid entity_id FK; uuid cycle_id FK; uuid criteria_set_id FK; text status; int version; timestamptz submitted_at; text submitted_by; timestamptz status_changed_at; timestamptz decided_at }
   REQUEST_LINE { uuid id PK; uuid request_id FK; uuid entity_id FK; uuid employee_id FK; text grade; bytea current_salary; char3 currency; text proposed_kind; bytea proposed_value; text review_status; timestamptz review_changed_at }
   CRITERION_VERIFICATION { uuid line_id PK,FK; uuid criterion_id PK,FK; uuid entity_id FK; text verified_by; text verified_by_name; timestamptz verified_at }
+  LINE_MESSAGE { uuid id PK; uuid line_id FK; uuid request_id FK; uuid entity_id FK; text side; text author_id; text author_name; bytea body; timestamptz created_at }
   LINE_DECISION { uuid id PK; uuid line_id FK; uuid request_id FK; uuid entity_id FK; text decision; text reason_code; bytea comment; text approved_kind; bytea approved_value; text decided_by; text decided_by_name; timestamptz decided_at }
   IDEMPOTENCY_KEY { text user_id PK; text key PK; uuid request_id FK }
   REQUEST_SEQUENCE { uuid cycle_id PK; int last_number }
@@ -230,6 +232,19 @@ The file itself is in the private bucket (**Restricted**: personal documents), e
 
 The latest row per employee is the current decision; earlier ones stay (a returned employee is later approved or rejected): this is the back-and-forth record for R1-12. **Append-only**: `SELECT, INSERT` for the app role and the `line_decision_append_only` trigger. Comments are encrypted because they can discuss appraisals and pay.
 
+### `increments.line_message` — questions and answers per employee (R1-08, 0010)
+
+| Column                               | Type          | Null | Meaning                                                                                    | Sensitivity    |
+| ------------------------------------ | ------------- | ---- | ------------------------------------------------------------------------------------------ | -------------- |
+| `id`                                 | `uuid`        | No   | Primary key, chosen by the API (part of the body's associated data)                        | Internal       |
+| `line_id`, `request_id`, `entity_id` | `uuid`        | No   | → `request_line` and `increment_request`, both with the entity                             | Internal       |
+| `side`                               | `text`        | No   | `sirius` (a reviewer asked) or `subsidiary` (the subsidiary's HR answered)                 | Internal       |
+| `author_id`, `author_name`           | `text`        | No   | Writer's user ID and display name at the time (1–200 characters)                           | Confidential   |
+| `body`                               | `bytea`       | No   | The message (≤ 2,000 characters, NFC), AES-256-GCM, AD `increments.line_message:body:<id>` | **Restricted** |
+| `created_at`                         | `timestamptz` | No   | `clock_timestamp()`, UTC                                                                   | Internal       |
+
+A thread is one employee's messages; whoever didn't write the latest one has to answer (the Conversations page's "Waiting for you"). Posting is allowed while the request is in review (`submitted`, `under_review`, `returned`), never on a draft or a decided request; it is audited (`message.posted`, without the text) and notifies the other side with action needed. **Append-only** (`line_message_append_only` trigger; `SELECT, INSERT` for the app role): a conversation is a record of what was asked.
+
 ### `audit.audit_log` — audit trail (R1-15, R2-13, NFR-AUD-01, ADR-011)
 
 | Column           | Type          | Null | Meaning                                                                                                    | Sensitivity |
@@ -302,7 +317,7 @@ Session settings, set per transaction by `withScope` (`set_config(…, true)`): 
 | `core.user_entity`                                                                                                   | Read: group scope, or the caller's own rows. Insert/delete: group scope only                                                                                            |
 | `core.employee`                                                                                                      | All commands: `core.can_access_entity(entity_id)` (USING and WITH CHECK, so rows can't move)                                                                            |
 | `increments.increment_request`, `increments.request_line`, `increments.criterion_result`, `increments.evidence_file` | All commands: `core.can_access_entity(entity_id)`                                                                                                                       |
-| `increments.criterion_verification`, `increments.line_decision`                                                      | All commands: `core.can_access_entity(entity_id)` (0009). Who may verify and decide (reviewers) is checked in the API                                                   |
+| `increments.criterion_verification`, `increments.line_decision`, `increments.line_message`                           | All commands: `core.can_access_entity(entity_id)` (0009). Who may verify and decide (reviewers) is checked in the API                                                   |
 | `increments.idempotency_key`                                                                                         | Own rows only: `user_id = core.current_user_id()`                                                                                                                       |
 | `increments.status_event`                                                                                            | `core.can_access_entity(entity_id)`                                                                                                                                     |
 | `audit.audit_log`                                                                                                    | Insert: `actor = core.current_user_id()` and the entity accessible. Read: group scope only (`audit:read` checked in the API)                                            |
@@ -317,9 +332,9 @@ RLS is `FORCE`d, so the owner is bound too (the seed sets group scope explicitly
 **Grants to the app role:**
 
 - `SELECT, INSERT, UPDATE` on entity, cycle, employee, the criteria tables, `increment_request`, `request_line`, `request_sequence`, `criterion_result` and `evidence_file`.
-- `SELECT, INSERT` on `idempotency_key`, `status_event`, `line_decision`, `audit_log`, `notification` and `notification_read`; `INSERT` only on `email_outbox`.
+- `SELECT, INSERT` on `idempotency_key`, `status_event`, `line_decision`, `line_message`, `audit_log`, `notification` and `notification_read`; `INSERT` only on `email_outbox`.
 - `SELECT, INSERT, DELETE` on `criterion_verification` (unticking, and resubmission's fresh check).
-- `UPDATE`/`DELETE`/`TRUNCATE` on `audit_log`, `status_event` and `line_decision` are refused by trigger for every role.
+- `UPDATE`/`DELETE`/`TRUNCATE` on `audit_log`, `status_event`, `line_decision` and `line_message` are refused by trigger for every role.
 - `SELECT` on `role_mailbox` (for the admin screen, S7).
 
 **Grants to the worker role** (`peopleforge_worker`, ADR-012, 0008): `USAGE` on schema `notify`; `SELECT` on `notification` and `role_mailbox`; `SELECT` and `UPDATE (status, attempts, last_error, next_attempt_at, sent_at, message_id)` on `email_outbox`; and, from web migration 0002, `SELECT` on the view `auth.recipient_email`. Nothing else: no requests, employees, salaries, justifications, audit trail or sign-in tables (`email-outbox.test.ts` proves each refusal).
@@ -328,38 +343,40 @@ RLS is `FORCE`d, so the owner is bound too (the seed sets group scope explicitly
 
 ## Indexes
 
-| Index                                                                                                    | Serves                                                      |
-| -------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
-| `entity.code` unique                                                                                     | Lookup by code, uniqueness                                  |
-| `user_entity` PK `(user_id, entity_id)`                                                                  | Resolving a caller's subsidiaries on every request          |
-| `user_entity_entity_idx (entity_id)`                                                                     | "Who acts for this subsidiary" (admin screen, reminders)    |
-| `employee_entity_number_uidx` (live rows)                                                                | Uniqueness and lookup of an employee number per subsidiary  |
-| `employee_entity_name_idx (entity_id, lower(full_name))`                                                 | Employee search when adding to a request                    |
-| `criteria_set_one_active_uidx`                                                                           | Enforces a single active criteria set                       |
-| `criterion (criteria_set_id, position/code)` unique                                                      | Loading a set in order                                      |
-| `employee_id_entity_uidx (id, entity_id)`                                                                | Target of the line's composite foreign key                  |
-| `increment_request_entity_cycle_idx (entity_id, cycle_id, status, updated_at desc)` (live)               | Lists and dashboards per subsidiary and cycle               |
-| `increment_request.reference` unique                                                                     | Lookup by reference, uniqueness                             |
-| `request_line_employee_uidx (request_id, employee_id)` (live)                                            | An employee once per request (backstop to the locked check) |
-| `request_line_entity_idx (entity_id)`                                                                    | RLS filter and per-subsidiary queries                       |
-| `request_line_id_entity_key (id, entity_id)` unique                                                      | Target of the result and evidence composite foreign keys    |
-| `criterion_result (line_id, criterion_id)` unique                                                        | One result per employee and criterion; loading a request    |
-| `criterion_result_entity_idx (entity_id)`                                                                | RLS filter                                                  |
-| `evidence_file.object_key` unique                                                                        | One record per stored object                                |
-| `evidence_file_line_idx (line_id, criterion_id, created_at)` (live)                                      | Files of a request in order; the 5-file count               |
-| `evidence_file_entity_idx (entity_id)`                                                                   | RLS filter                                                  |
-| `increment_request_submitted_idx (status, submitted_at desc)` (live)                                     | Sirius queue of submitted requests                          |
-| `status_event_request_idx (request_id, at)`, `status_event_entity_idx (entity_id, at)`                   | A request's history; per-subsidiary TAT (R1-11)             |
-| `audit_log_subject_idx`, `audit_log_actor_idx`, `audit_log_entity_idx` (each with `at`)                  | Trail of a record, of a user, of a subsidiary               |
-| `notification_user_idx`, `notification_role_idx` (partial, `created_at desc`)                            | The notifications page and bell                             |
-| `email_outbox_pending_idx (created_at) where sent_at is null`                                            | The sender's queue                                          |
-| `increment_request_cycle_idx (cycle_id, status, created_at desc)` (live)                                 | Sirius HR's dashboard: every subsidiary in a cycle          |
-| `request_line_name_trgm_idx`, `request_line_number_trgm_idx` (GIN, `lower(…)` with `gin_trgm_ops`, live) | Dashboard search anywhere in an employee's name or number   |
-| `increment_request_reference_trgm_idx` (GIN, `lower(reference)`, live)                                   | Dashboard search by request reference                       |
-| `request_line_review_idx (review_status, request_id)` (live)                                             | The review queue: employees by review status (0009)         |
-| `criterion_verification_entity_idx (entity_id)`                                                          | RLS filter                                                  |
-| `line_decision_line_idx (line_id, decided_at desc)`                                                      | An employee's latest decision                               |
-| `line_decision_request_idx (request_id, decided_at)`, `line_decision_entity_idx (entity_id, decided_at)` | A request's decisions in order; back-and-forth (R1-12)      |
+| Index                                                                                                       | Serves                                                          |
+| ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| `entity.code` unique                                                                                        | Lookup by code, uniqueness                                      |
+| `user_entity` PK `(user_id, entity_id)`                                                                     | Resolving a caller's subsidiaries on every request              |
+| `user_entity_entity_idx (entity_id)`                                                                        | "Who acts for this subsidiary" (admin screen, reminders)        |
+| `employee_entity_number_uidx` (live rows)                                                                   | Uniqueness and lookup of an employee number per subsidiary      |
+| `employee_entity_name_idx (entity_id, lower(full_name))`                                                    | Employee search when adding to a request                        |
+| `criteria_set_one_active_uidx`                                                                              | Enforces a single active criteria set                           |
+| `criterion (criteria_set_id, position/code)` unique                                                         | Loading a set in order                                          |
+| `employee_id_entity_uidx (id, entity_id)`                                                                   | Target of the line's composite foreign key                      |
+| `increment_request_entity_cycle_idx (entity_id, cycle_id, status, updated_at desc)` (live)                  | Lists and dashboards per subsidiary and cycle                   |
+| `increment_request.reference` unique                                                                        | Lookup by reference, uniqueness                                 |
+| `request_line_employee_uidx (request_id, employee_id)` (live)                                               | An employee once per request (backstop to the locked check)     |
+| `request_line_entity_idx (entity_id)`                                                                       | RLS filter and per-subsidiary queries                           |
+| `request_line_id_entity_key (id, entity_id)` unique                                                         | Target of the result and evidence composite foreign keys        |
+| `criterion_result (line_id, criterion_id)` unique                                                           | One result per employee and criterion; loading a request        |
+| `criterion_result_entity_idx (entity_id)`                                                                   | RLS filter                                                      |
+| `evidence_file.object_key` unique                                                                           | One record per stored object                                    |
+| `evidence_file_line_idx (line_id, criterion_id, created_at)` (live)                                         | Files of a request in order; the 5-file count                   |
+| `evidence_file_entity_idx (entity_id)`                                                                      | RLS filter                                                      |
+| `increment_request_submitted_idx (status, submitted_at desc)` (live)                                        | Sirius queue of submitted requests                              |
+| `status_event_request_idx (request_id, at)`, `status_event_entity_idx (entity_id, at)`                      | A request's history; per-subsidiary TAT (R1-11)                 |
+| `audit_log_subject_idx`, `audit_log_actor_idx`, `audit_log_entity_idx` (each with `at`)                     | Trail of a record, of a user, of a subsidiary                   |
+| `notification_user_idx`, `notification_role_idx` (partial, `created_at desc`)                               | The notifications page and bell                                 |
+| `email_outbox_pending_idx (created_at) where sent_at is null`                                               | The sender's queue                                              |
+| `increment_request_cycle_idx (cycle_id, status, created_at desc)` (live)                                    | Sirius HR's dashboard: every subsidiary in a cycle              |
+| `request_line_name_trgm_idx`, `request_line_number_trgm_idx` (GIN, `lower(…)` with `gin_trgm_ops`, live)    | Dashboard search anywhere in an employee's name or number       |
+| `increment_request_reference_trgm_idx` (GIN, `lower(reference)`, live)                                      | Dashboard search by request reference                           |
+| `request_line_review_idx (review_status, request_id)` (live)                                                | The review queue: employees by review status (0009)             |
+| `criterion_verification_entity_idx (entity_id)`                                                             | RLS filter                                                      |
+| `line_decision_line_idx (line_id, decided_at desc)`                                                         | An employee's latest decision                                   |
+| `line_decision_request_idx (request_id, decided_at)`, `line_decision_entity_idx (entity_id, decided_at)`    | A request's decisions in order; back-and-forth (R1-12)          |
+| `line_message_line_idx (line_id, created_at)`                                                               | An employee's thread in order (0010)                            |
+| `line_message_entity_idx (entity_id, created_at desc)`, `line_message_request_idx (request_id, created_at)` | Conversations page per subsidiary; a request's messages (R1-12) |
 
 ## Dashboard queries (S4b, `packages/db/src/dashboard.ts`)
 

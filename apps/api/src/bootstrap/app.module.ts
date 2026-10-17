@@ -12,6 +12,7 @@ import type {
   DashboardRepository,
   NotificationRepository,
   ReviewRepository,
+  ConversationRepository,
 } from '@peopleforge/db';
 import type { MalwareScanner, ObjectStore } from '@peopleforge/integrations';
 import { AuthenticateMiddleware, SiriusAuthModule } from '@sirius/auth-nest';
@@ -40,7 +41,13 @@ import {
   ReviewQueueController,
 } from '../modules/increment-requests/increment-requests.controller.js';
 import { ReviewService } from '../modules/increment-requests/review.service.js';
+import { ConversationService } from '../modules/conversations/conversation.service.js';
 import {
+  ConversationsController,
+  MessagesController,
+} from '../modules/conversations/conversations.controller.js';
+import {
+  CONVERSATION_SERVICE,
   ENTITY_DIRECTORY,
   ENV,
   EVIDENCE_SERVICE,
@@ -72,6 +79,8 @@ export interface AppDependencies {
   dashboard: DashboardRepository;
   /** Sirius HR's review: verification, decisions, resubmission and the queue (R1-07 … R1-09). */
   review: ReviewRepository;
+  /** Questions and answers per employee (R1-08). */
+  conversations: ConversationRepository;
   /** The caller's in-app notifications (R1-07, R1-13). */
   notifications: NotificationRepository;
   readinessChecks: readonly ReadinessCheck[];
@@ -104,6 +113,8 @@ export class AppModule implements NestModule {
         IncrementRequestLinesController,
         ReviewController,
         ReviewQueueController,
+        MessagesController,
+        ConversationsController,
         EvidenceController,
         NotificationsController,
       ],
@@ -114,6 +125,10 @@ export class AppModule implements NestModule {
         { provide: INCREMENT_REQUEST_SERVICE, useValue: requests },
         { provide: DASHBOARD_SERVICE, useValue: new DashboardService(deps.dashboard) },
         { provide: REVIEW_SERVICE, useValue: new ReviewService(requests, deps.review) },
+        {
+          provide: CONVERSATION_SERVICE,
+          useValue: new ConversationService(requests, deps.conversations),
+        },
         {
           provide: NOTIFICATION_SERVICE,
           useValue: new NotificationService(deps.notifications),

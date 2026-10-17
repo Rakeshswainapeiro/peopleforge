@@ -33,6 +33,13 @@ export const RequestStatusSchema = z.enum([
 ]);
 export type RequestStatus = z.infer<typeof RequestStatusSchema>;
 
+/** Statuses in which Sirius HR reviews, and both sides can talk (R1-07, R1-08). */
+export const IN_REVIEW_STATUSES: readonly RequestStatus[] = [
+  'submitted',
+  'under_review',
+  'returned',
+];
+
 /** Statuses after which nothing changes. */
 export const FINAL_STATUSES: readonly RequestStatus[] = ['approved', 'partly_approved', 'rejected'];
 

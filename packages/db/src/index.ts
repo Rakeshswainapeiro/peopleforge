@@ -98,3 +98,16 @@ export {
   SeedRefusedError,
   seedDevelopmentData,
 } from './seed.js';
+export {
+  createConversationRepository,
+  preview,
+  PREVIEW_LENGTH,
+  type ConversationRepository,
+  type MessageContext,
+  type MessageRecord,
+  type PostMessageInput,
+  type ThreadFilter,
+  type ThreadQuery,
+  type ThreadRecord,
+} from './conversations.js';
+export type { MessageSide } from './schema.js';

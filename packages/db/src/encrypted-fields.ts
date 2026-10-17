@@ -13,3 +13,4 @@ export const APPROVED_VALUE = {
   table: 'increments.line_decision',
   column: 'approved_value',
 } as const;
+export const MESSAGE_BODY = { table: 'increments.line_message', column: 'body' } as const;

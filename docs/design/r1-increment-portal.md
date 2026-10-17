@@ -1,6 +1,6 @@
 # R1 — Increment Request Portal: design proposal (for go-ahead)
 
-- **Status (2026-10-17):** Part of SOW-D2. Slices S1–S5a built (S5a: Sirius HR review, decisions per employee, returns and resubmission, Review queue and Request Tracker; ADR-013). S5b–S7 in progress. Keep in sync with the code; the project copy is `claude/r1-increment-portal-design.md`.
+- **Status (2026-10-17):** Part of SOW-D2. Slices S1–S5b built (S5a: Sirius HR review, decisions per employee, returns and resubmission, Review queue and Request Tracker, ADR-013; S5b: questions and answers per employee, Conversations). S6–S7 in progress. Keep in sync with the code; the project copy is `claude/r1-increment-portal-design.md`.
 
 - **Source:** BRD `SIRIUS-HR-BRD-001`, tab **"2. Req1 Increment Portal"** (sections A–D) and tab **"8. Assumptions & Open Items"**; Figma "Dashboard – By request / By employee / New increment request / Notifications / Reports / Employee status" (received 2026-10-13).
 
@@ -160,24 +160,24 @@ draft ──submit──▶ submitted ──Sirius opens──▶ under_review �
 
 ## 5. API (REST, `/api/v1`, OpenAPI updated per slice)
 
-| Method & path                                                                                                                                        | Policy (permission)                               | BRD             |
-| ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- | --------------- |
-| `GET /increment-requests?status&cycle&entity&q&page`                                                                                                 | `increment_request:create` or `:review` (scoped)  | R1-10, D1       |
-| `POST /increment-requests` (Idempotency-Key)                                                                                                         | `increment_request:create`                        | R1-02           |
-| `GET /increment-requests/{id}` · `PATCH …/{id}` (draft/returned only)                                                                                | create/review · create                            | R1-02, R1-06    |
-| `POST …/{id}/employees` · `PATCH/DELETE …/employees/{lineId}`                                                                                        | `increment_request:create`                        | R1-02           |
-| `PUT …/{id}/draft` (proposals + one employee's results and justifications; built S3)                                                                 | `increment_request:create`                        | R1-02, R1-03    |
-| `POST …/{id}/evidence` (multipart: lineId, criterionId, file) · `GET`/`DELETE …/evidence/{evidenceId}` (streamed through the API; built S3, ADR-010) | `increment_request:create` · `:read` (scoped)     | R1-04           |
-| `POST …/{id}/submit` (Idempotency-Key)                                                                                                               | `increment_request:submit`                        | R1-07           |
-| `POST …/{id}/resubmit` (Idempotency-Key; returned employees back to Sirius HR; built S5a) · Q&A threads (S5b)                                        | `:submit` · `:review`/`:submit`                   | R1-08           |
-| `PUT`/`DELETE …/{id}/lines/{lineId}/verifications/{criterionId}` (built S5a)                                                                         | `increment_request:review`                        | R1-10           |
-| `POST …/{id}/lines/{lineId}/decision` (Idempotency-Key; approve / reject / return + reason + comment; built S5a)                                     | `increment_request:decide`                        | R1-09           |
-| `GET /review-queue?filter&entityId&search&page` (built S5a)                                                                                          | `increment_request:review`                        | R1-07           |
-| `GET …/{id}/history`                                                                                                                                 | scoped read + `audit:read` for full actor details | R1-15           |
-| `GET /criteria` · `PUT /admin/criteria-sets/{id}`                                                                                                    | read: any · `criteria:configure`                  | R1-05           |
-| `GET /notifications` · `POST /notifications/read`                                                                                                    | `@Authenticated` (own)                            | R1-07, R1-13    |
-| `GET /reports/increment-requests?format=xlsx\|pdf&filters` (streamed, audited)                                                                       | `report:read_operational`                         | R1-14, RP-01    |
-| `GET /analytics/increments/{stage,tat,back-and-forth}`                                                                                               | `report:read_operational` (Sirius)                | R1-10–12, D2–D4 |
+| Method & path                                                                                                                                                        | Policy (permission)                               | BRD             |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- | --------------- |
+| `GET /increment-requests?status&cycle&entity&q&page`                                                                                                                 | `increment_request:create` or `:review` (scoped)  | R1-10, D1       |
+| `POST /increment-requests` (Idempotency-Key)                                                                                                                         | `increment_request:create`                        | R1-02           |
+| `GET /increment-requests/{id}` · `PATCH …/{id}` (draft/returned only)                                                                                                | create/review · create                            | R1-02, R1-06    |
+| `POST …/{id}/employees` · `PATCH/DELETE …/employees/{lineId}`                                                                                                        | `increment_request:create`                        | R1-02           |
+| `PUT …/{id}/draft` (proposals + one employee's results and justifications; built S3)                                                                                 | `increment_request:create`                        | R1-02, R1-03    |
+| `POST …/{id}/evidence` (multipart: lineId, criterionId, file) · `GET`/`DELETE …/evidence/{evidenceId}` (streamed through the API; built S3, ADR-010)                 | `increment_request:create` · `:read` (scoped)     | R1-04           |
+| `POST …/{id}/submit` (Idempotency-Key)                                                                                                                               | `increment_request:submit`                        | R1-07           |
+| `POST …/{id}/resubmit` (Idempotency-Key; returned employees back to Sirius HR; built S5a) · `GET`/`POST …/lines/{lineId}/messages`, `GET /conversations` (built S5b) | `:submit` · `:review`/`:submit`                   | R1-08           |
+| `PUT`/`DELETE …/{id}/lines/{lineId}/verifications/{criterionId}` (built S5a)                                                                                         | `increment_request:review`                        | R1-10           |
+| `POST …/{id}/lines/{lineId}/decision` (Idempotency-Key; approve / reject / return + reason + comment; built S5a)                                                     | `increment_request:decide`                        | R1-09           |
+| `GET /review-queue?filter&entityId&search&page` (built S5a)                                                                                                          | `increment_request:review`                        | R1-07           |
+| `GET …/{id}/history`                                                                                                                                                 | scoped read + `audit:read` for full actor details | R1-15           |
+| `GET /criteria` · `PUT /admin/criteria-sets/{id}`                                                                                                                    | read: any · `criteria:configure`                  | R1-05           |
+| `GET /notifications` · `POST /notifications/read`                                                                                                                    | `@Authenticated` (own)                            | R1-07, R1-13    |
+| `GET /reports/increment-requests?format=xlsx\|pdf&filters` (streamed, audited)                                                                                       | `report:read_operational`                         | R1-14, RP-01    |
+| `GET /analytics/increments/{stage,tat,back-and-forth}`                                                                                                               | `report:read_operational` (Sirius)                | R1-10–12, D2–D4 |
 
 Every endpoint gets 401/403/cross-entity tests (NFR-SEC-01).
 
@@ -225,7 +225,7 @@ Every endpoint gets 401/403/cross-entity tests (NFR-SEC-01).
 | S4c   | Design refresh: draft editor route, submit confirmation with figures, Request detail page, Needs your action table, role-named navigation (done 2026-10-15)                                                                    | R1-06, R1-07, R1-10         |
 | S4b-2 | Email worker: sends the outbox (SMTP; `file` transport for dev/test), retries, dead-letter, worker DB role, role mailboxes (done 2026-10-15, ADR-012)                                                                          | R1-07, R1-13 (email)        |
 | S5a   | Sirius HR review: Review queue, Request Tracker, Mark verified per criterion, decisions per employee (approve / at another % / reject / return), returns fixed and resubmitted, statuses everywhere (done 2026-10-17, ADR-013) | R1-07–R1-10                 |
-| S5b   | Q&A threads per employee both ways, Conversations page, Respond                                                                                                                                                                | R1-08                       |
+| S5b   | Q&A threads per employee both ways (append-only, encrypted), Conversations page with Waiting for you, Respond from notifications (done 2026-10-17)                                                                             | R1-08                       |
 | S6    | Audit history view (trail recorded since S4a); reports/export (RP-01)                                                                                                                                                          | R1-14, R1-15                |
 | S7    | D2–D4 analytics, RP-02, reminders on triggers, criteria settings screen                                                                                                                                                        | R1-05 (UI), R1-11–R1-13     |
 

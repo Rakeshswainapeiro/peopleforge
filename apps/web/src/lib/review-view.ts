@@ -1,5 +1,6 @@
 import {
   ChangeReasonSchema,
+  IN_REVIEW_STATUSES,
   PAGE_SIZES,
   RejectReasonSchema,
   ReturnReasonSchema,
@@ -182,12 +183,7 @@ export function queueRows(
 
 /** Whether Sirius HR can still verify and decide this employee. */
 export function inReview(request: IncrementRequest, line: RequestLine): boolean {
-  return (
-    line.reviewStatus === 'pending' &&
-    (request.status === 'submitted' ||
-      request.status === 'under_review' ||
-      request.status === 'returned')
-  );
+  return line.reviewStatus === 'pending' && IN_REVIEW_STATUSES.includes(request.status);
 }
 
 /** Criteria not yet verified for this employee. */

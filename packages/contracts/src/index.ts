@@ -22,6 +22,7 @@ export {
   DecideLineSchema,
   DecisionReasonSchema,
   FINAL_STATUSES,
+  IN_REVIEW_STATUSES,
   LineDecisionValueSchema,
   LineReviewStatusSchema,
   MAX_COMMENT_LENGTH,
@@ -135,3 +136,19 @@ export {
   type CriterionProgress,
   type CriterionRule,
 } from './criteria-rules.js';
+export {
+  ConversationFilterSchema,
+  ConversationPageSchema,
+  ConversationQuerySchema,
+  MessageSchema,
+  MessageSideSchema,
+  PostMessageSchema,
+  ThreadSchema,
+  type ConversationFilter,
+  type ConversationPage,
+  type ConversationQuery,
+  type Message,
+  type MessageSide,
+  type PostMessage,
+  type Thread,
+} from './conversations.js';

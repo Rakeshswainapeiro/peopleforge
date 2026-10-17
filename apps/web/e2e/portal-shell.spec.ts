@@ -12,6 +12,7 @@ test.describe('portal shell', () => {
     await expect(nav.getByRole('link')).toHaveText([
       'Request Tracker',
       'Review Queue',
+      'Conversations',
       /^Notifications/u,
       'Reports',
     ]);
@@ -32,6 +33,7 @@ test.describe('portal shell', () => {
     await expect(nav.getByRole('link')).toHaveText([
       'My Request',
       'New Request',
+      'Conversations',
       /^Notifications/u,
       'Reports',
     ]);

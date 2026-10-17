@@ -43,6 +43,7 @@ describe('notificationRows [R1-07]', () => {
       {
         id: base.id,
         requestId: base.requestId,
+        lineId: null,
         tag: { tone: 'info', label: 'Status' },
         reference: 'INC-2026-0008',
         message: 'Submitted to Sirius HR with 1 employee.',
@@ -117,5 +118,43 @@ describe('review notifications [R1-08 … R1-10]', () => {
       'Sirius HR verified criterion 0 for every employee. Criterion 0 of 0 is under review.',
     ]);
     expect(rows[1]?.action).toBe('Respond');
+  });
+});
+
+describe('question notifications [R1-08]', () => {
+  it('word the question and answer, and point at the employee', () => {
+    const LINE = '22222222-2222-4222-8222-222222222221';
+    const [asked, answered, broken] = notificationRows(
+      page([
+        {
+          ...base,
+          kind: 'question_asked',
+          params: { reference: 'INC-2026-0152', employee: 'Aisha Rahman', lineId: LINE },
+          actionNeeded: true,
+        },
+        {
+          ...base,
+          kind: 'question_answered',
+          params: {
+            reference: 'INC-2026-0152',
+            employee: 'Aisha Rahman',
+            lineId: LINE,
+            entity: 'SUB-A',
+            actor: 'Alpha HR',
+          },
+          actionNeeded: true,
+        },
+        { ...base, kind: 'question_asked', params: { lineId: '../x' } },
+      ]),
+      'en',
+      t,
+    );
+    expect(asked).toMatchObject({
+      message: 'Sirius HR asked a question about Aisha Rahman.',
+      lineId: LINE,
+      action: 'Respond',
+    });
+    expect(answered?.message).toBe('SUB-A answered about Aisha Rahman (Alpha HR).');
+    expect(broken?.lineId).toBeNull();
   });
 });

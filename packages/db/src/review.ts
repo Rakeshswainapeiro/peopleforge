@@ -172,7 +172,12 @@ export function statusFromLines(lines: readonly LineReviewStatus[]): RequestStat
 }
 
 /** Claims an idempotency key for this request; true when it was already claimed (a replay). */
-async function claimKey(trx: Trx, userId: string, key: string, requestId: string) {
+export async function claimKey(
+  trx: Trx,
+  userId: string,
+  key: string,
+  requestId: string,
+): Promise<boolean> {
   const claimed = await trx
     .insertInto('increments.idempotency_key')
     .values({ user_id: userId, key, request_id: requestId })
@@ -190,7 +195,19 @@ async function claimKey(trx: Trx, userId: string, key: string, requestId: string
   return true;
 }
 
-async function lockRequest(trx: Trx, requestId: string) {
+/** What a review action needs of the request it locks. */
+export interface LockedRequest {
+  id: string;
+  entity_id: string;
+  status: RequestStatus;
+  reference: string;
+  version: number;
+  criteria_set_id: string;
+  submitted_by: string | null;
+}
+
+/** Locks a live request for a change (FOR UPDATE), or refuses an unknown one. */
+export async function lockRequest(trx: Trx, requestId: string): Promise<LockedRequest> {
   const request = await trx
     .selectFrom('increments.increment_request')
     .select([

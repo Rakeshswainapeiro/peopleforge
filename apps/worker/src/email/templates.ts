@@ -45,6 +45,15 @@ const PARAMS = {
     status: z.enum(['approved', 'partly_approved', 'rejected']),
   }),
   request_resubmitted: z.object({ reference, employees, entity: line(50), actor: line(200) }),
+  // The question itself stays in PeopleForge: emails say that something was asked, not what.
+  question_asked: z.object({ reference, employee: line(200), lineId: z.uuid() }),
+  question_answered: z.object({
+    reference,
+    employee: line(200),
+    lineId: z.uuid(),
+    entity: line(50),
+    actor: line(200),
+  }),
 } as const;
 
 type Kind = keyof typeof PARAMS;
@@ -65,9 +74,15 @@ export function escapeHtml(value: string): string {
  * Where the email's button goes: the request's page, or the notifications list. Built with
  * URL from the configured portal address and a UUID, so nothing else can steer it.
  */
-export function linkFor(portalUrl: string, requestId: string | null): string {
+export function linkFor(portalUrl: string, requestId: string | null, lineId?: unknown): string {
   const id = z.uuid().safeParse(requestId);
-  return new URL(id.success ? `/requests/${id.data}` : '/notifications', portalUrl).toString();
+  const line = z.uuid().safeParse(lineId);
+  const path = !id.success
+    ? '/notifications'
+    : line.success
+      ? `/requests/${id.data}/employees/${line.data}`
+      : `/requests/${id.data}`;
+  return new URL(path, portalUrl).toString();
 }
 
 export interface RenderOptions {
@@ -88,7 +103,7 @@ export function renderEmail(job: OutboxJob, options: RenderOptions): Rendered {
   const number = new Intl.NumberFormat(options.locale);
   // Display values only: numbers in the reader's locale, a final status in their words.
   const values: Record<string, string> = Object.fromEntries(
-    Object.entries(parsed.data).map(([key, value]) => [
+    Object.entries(parsed.data).map(([key, value]: [string, string | number]) => [
       key,
       typeof value === 'number' ? number.format(value) : value,
     ]),
@@ -103,7 +118,11 @@ export function renderEmail(job: OutboxJob, options: RenderOptions): Rendered {
       : `kinds.${job.kind}.body`,
     values,
   );
-  const url = linkFor(options.portalUrl, job.requestId);
+  const url = linkFor(
+    options.portalUrl,
+    job.requestId,
+    'lineId' in parsed.data ? parsed.data.lineId : undefined,
+  );
   const dir = options.locale === 'ar' ? 'rtl' : 'ltr';
   const text = [
     t('email.greeting'),

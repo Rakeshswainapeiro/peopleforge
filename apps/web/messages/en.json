@@ -12,7 +12,8 @@
     "reports": "Reports",
     "myRequests": "My Request",
     "requests": "Request Tracker",
-    "reviewQueue": "Review Queue"
+    "reviewQueue": "Review Queue",
+    "conversations": "Conversations"
   },
   "home": {
     "heading": "Welcome",
@@ -165,6 +166,14 @@
       "request_resubmitted": {
         "one": "{entity} resubmitted {count} returned employee ({actor}).",
         "other": "{entity} resubmitted {count} returned employees ({actor})."
+      },
+      "question_asked": {
+        "one": "Sirius HR asked a question about {employee}.",
+        "other": "Sirius HR asked a question about {employee}."
+      },
+      "question_answered": {
+        "one": "{entity} answered about {employee} ({actor}).",
+        "other": "{entity} answered about {employee} ({actor})."
       }
     },
     "pagination": {
@@ -244,7 +253,8 @@
       "notReturned": "Nothing is waiting to be resubmitted.",
       "decisionInvalid": "Choose a reason and write a comment.",
       "percentRange": "Enter a percentage above 0 and at most 100, with at most 2 decimals.",
-      "notReadyResubmit": "Every returned employee needs a proposed increment and all criteria complete before you can resubmit."
+      "notReadyResubmit": "Every returned employee needs a proposed increment and all criteria complete before you can resubmit.",
+      "messageInvalid": "Write a message of up to 2,000 characters."
     },
     "colCriteria": "Criteria",
     "criteriaComplete": "{done}/{total} complete",
@@ -703,5 +713,54 @@
     "allReady": "Every returned employee is ready to go back.",
     "done": "Resubmitted to Sirius HR.",
     "locked": "With Sirius HR"
+  },
+  "conversations": {
+    "heading": "Conversations",
+    "intro": "Questions and answers about employees, between Sirius HR and the subsidiaries.",
+    "introEntity": "Sirius HR's questions about your employees, and your answers.",
+    "chips": "Show",
+    "filters": {
+      "awaiting": "Waiting for you",
+      "all": "All"
+    },
+    "caption": "Conversations",
+    "colEmployee": "Employee",
+    "colRequest": "Request",
+    "colLast": "Latest message",
+    "colWhen": "When",
+    "colMessages": "Messages",
+    "colAction": "Action",
+    "open": "Open",
+    "openOf": "Open the conversation about {name}",
+    "respond": "Respond",
+    "respondTo": "Respond about {name}",
+    "sideSirius": "Sirius HR",
+    "sideSubsidiary": "{entity}",
+    "by": "{side} · {name}",
+    "emptyTitle": "No conversations",
+    "emptyBody": "Questions about employees appear here.",
+    "emptyAwaitingTitle": "Nothing waiting for you",
+    "emptyAwaitingBody": "Every question has been answered.",
+    "pagination": {
+      "navigation": "Conversation pages",
+      "pageOf": "Page {page} of {pages}",
+      "first": "First page",
+      "previous": "Previous page",
+      "next": "Next page",
+      "last": "Last page"
+    },
+    "threadTitle": "Questions and answers",
+    "threadIntro": "Between Sirius HR and {entity} about {name}. Everyone on the request sees it.",
+    "threadEmpty": "No questions yet.",
+    "threadLabel": "Messages about {name}",
+    "message": "Message",
+    "askPlaceholder": "Ask the subsidiary about this employee",
+    "answerPlaceholder": "Answer Sirius HR",
+    "send": "Send",
+    "sending": "Sending…",
+    "sent": "Sent.",
+    "closed": "The review is over: the conversation is read-only.",
+    "awaitingYou": "Waiting for your answer",
+    "awaitingThem": "Waiting for {side}"
   }
 }

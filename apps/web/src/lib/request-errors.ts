@@ -21,6 +21,7 @@ export const REQUEST_ERROR_KEYS = [
   'request.errors.decisionInvalid',
   'request.errors.percentRange',
   'request.errors.notReadyResubmit',
+  'request.errors.messageInvalid',
   'request.errors.generic',
 ] as const satisfies readonly MessageKey[];
 

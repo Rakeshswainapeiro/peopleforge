@@ -4,6 +4,7 @@ import {
   type NotificationFilter,
   type NotificationPage,
 } from '@peopleforge/contracts';
+import { z } from 'zod';
 import { statusBadge } from './request-status';
 import type { BadgeTone } from '@peopleforge/ui';
 import type { Locale } from '@sirius/shared-types';
@@ -11,10 +12,14 @@ import type { MessageKey, Translate } from '@/i18n/translator';
 import { formatDateTime } from './format';
 import { pluralForm } from '@peopleforge/i18n';
 
+const LineId = z.uuid();
+
 /** One row of the notifications list (Figma "Notifications"), worded for the reader. */
 export interface NotificationRowView {
   id: string;
   requestId: string | null;
+  /** The employee it is about, for questions (their conversation); null otherwise. */
+  lineId: string | null;
   tag: { tone: BadgeTone; label: string };
   reference: string;
   message: string;
@@ -58,6 +63,7 @@ export function notificationRows(
   return page.items.map((notification) => ({
     id: notification.id,
     requestId: notification.requestId,
+    lineId: LineId.safeParse(notification.params.lineId).data ?? null,
     tag: notification.actionNeeded
       ? { tone: 'warning', label: t('notifications.tags.actionNeeded') }
       : { tone: 'info', label: t('notifications.tags.status') },

@@ -52,7 +52,7 @@ export const Id = z.uuid();
 const IdempotencyKey = z.string().regex(/^[A-Za-z0-9_-]{8,128}$/u);
 
 /** The required Idempotency-Key header; a 400 names the header when it's missing or malformed. */
-function idempotencyKeyOf(header: unknown): string {
+export function idempotencyKeyOf(header: unknown): string {
   return z.object({ 'Idempotency-Key': IdempotencyKey }).parse({ 'Idempotency-Key': header })[
     'Idempotency-Key'
   ];

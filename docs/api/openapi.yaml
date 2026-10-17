@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: PeopleForge API
-  version: 0.9.0
+  version: 0.10.0
   description: >
     Phase 1 API (BRD SIRIUS-HR-BRD-001). Every /api/v1 route requires an access token from the
     Sirius identity provider (Microsoft Entra ID; Keycloak locally) sent as
@@ -593,6 +593,80 @@ paths:
         '400': { $ref: '#/components/responses/ValidationFailed' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
+  /api/v1/increment-requests/{id}/lines/{lineId}/messages:
+    parameters:
+      - { $ref: '#/components/parameters/RequestId' }
+      - { name: lineId, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      tags: [conversations]
+      summary: An employee's questions and answers, oldest first (R1-08)
+      description: Needs `increment_request:read` and the request visible to the caller (Row-Level Security).
+      responses:
+        '200':
+          description: The thread
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/Message' } }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [conversations]
+      summary: Ask (Sirius HR) or answer (the subsidiary) about an employee (R1-08)
+      description: >
+        Sirius HR reviewers (`increment_request:review`, group scope) ask; the subsidiary's HR
+        (`increment_request:submit`) answers; anyone else is 403. Only while the request is in
+        review (409 `status`/`not_in_review`). The other side is notified with action needed.
+        Stored encrypted, append-only; audited without the text. Idempotent per user and key.
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: { type: string, pattern: '^[A-Za-z0-9_-]{8,128}$' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [body]
+              properties: { body: { type: string, minLength: 1, maxLength: 2000 } }
+      responses:
+        '200':
+          description: The thread, with the new message
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/Message' } }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/conversations:
+    get:
+      tags: [conversations]
+      summary: Threads the caller can see, latest first (R1-08)
+      description: >
+        Needs `increment_request:read`. `awaiting` (default) lists threads whose latest message is
+        from the other side; `counts` gives both totals for the chips.
+      parameters:
+        - {
+            name: filter,
+            in: query,
+            schema: { type: string, enum: [awaiting, all], default: awaiting },
+          }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: pageSize, in: query, schema: { type: integer, enum: [10, 25, 50], default: 10 } }
+      responses:
+        '200':
+          description: A page of threads
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConversationPage' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
   /api/v1/notifications:
     get:
       tags: [notifications]
@@ -848,6 +922,53 @@ components:
               properties:
                 at: { type: string, format: date-time }
                 byName: { type: string }
+    Message:
+      type: object
+      required: [id, side, authorName, body, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        side: { type: string, enum: [sirius, subsidiary] }
+        authorName: { type: string }
+        body: { type: string }
+        createdAt: { type: string, format: date-time }
+    ConversationPage:
+      type: object
+      required: [items, page, pageSize, total, counts]
+      properties:
+        page: { type: integer }
+        pageSize: { type: integer }
+        total: { type: integer }
+        counts:
+          type: object
+          required: [all, awaiting]
+          properties: { all: { type: integer }, awaiting: { type: integer } }
+        items:
+          type: array
+          items:
+            type: object
+            required: [lineId, request, employeeNumber, fullName, messages, awaitingMe, last]
+            properties:
+              lineId: { type: string, format: uuid }
+              request:
+                type: object
+                required: [id, reference, entityCode]
+                properties:
+                  id: { type: string, format: uuid }
+                  reference: { type: string }
+                  entityCode: { type: string }
+              employeeNumber: { type: string }
+              fullName: { type: string }
+              messages: { type: integer, minimum: 1 }
+              awaitingMe:
+                { type: boolean, description: 'The latest message is from the other side' }
+              last:
+                type: object
+                required: [side, authorName, createdAt, preview]
+                properties:
+                  side: { type: string, enum: [sirius, subsidiary] }
+                  authorName: { type: string }
+                  createdAt: { type: string, format: date-time }
+                  preview: { type: string, maxLength: 160 }
     LineDecision:
       type: object
       required:
@@ -1258,6 +1379,8 @@ components:
               employee_returned,
               request_decided,
               request_resubmitted,
+              question_asked,
+              question_answered,
             ]
           description: What happened; clients word it in the reader's language
         requestId: { type: [string, 'null'], format: uuid }

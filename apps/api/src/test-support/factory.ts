@@ -8,6 +8,7 @@ import type {
   IncrementRequestRepository,
   NotificationRepository,
   ReviewRepository,
+  ConversationRepository,
 } from '@peopleforge/db';
 import type { MalwareScanner, ObjectStore } from '@peopleforge/integrations';
 import type { Principal } from '../auth/principal.js';
@@ -129,6 +130,12 @@ export const unusedReview: ReviewRepository = {
   queue: unexpected,
 };
 
+export const unusedConversations: ConversationRepository = {
+  thread: unexpected,
+  post: unexpected,
+  threads: unexpected,
+};
+
 export const unusedNotifications: NotificationRepository = {
   list: unexpected,
   markRead: unexpected,
@@ -167,6 +174,7 @@ export async function buildApp(
       malwareScanner: unusedScanner,
       dashboard: unusedDashboard,
       review: unusedReview,
+      conversations: unusedConversations,
       notifications: unusedNotifications,
       readinessChecks: [],
       isShuttingDown: () => false,

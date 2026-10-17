@@ -4,6 +4,13 @@ All notable changes are recorded here. Format: [Keep a Changelog](https://keepac
 
 ## [Unreleased]
 
+### Added — slice S5b: questions and answers per employee (R1-08)
+
+- **Questions and answers** on every submitted employee's page: Sirius HR reviewers ask, the subsidiary's HR answers, in a thread that shows who wrote what and when, and who has to answer next ("Waiting for your answer" / "Waiting for Sirius HR"). Read-only once the request is decided; executives read only.
+- **Conversations** (`/conversations`, sidebar): every employee with questions, latest first, with the latest message, **Waiting for you** and **All** chips, and **Respond** where an answer is due.
+- **Notifications and emails:** "Sirius HR asked a question about Aisha Rahman" (action needed, Respond opens the conversation) and "SUB-A answered about Aisha Rahman" to the reviewers. Emails say that something was asked, never what.
+- Messages are stored encrypted and append-only (migration `0010_conversations`), audited without their text. API: `GET`/`POST /increment-requests/{id}/lines/{lineId}/messages` (Idempotency-Key), `GET /conversations`. OpenAPI 0.10.0.
+
 ### Added — slice S5a: Sirius HR's review, decisions, returns and resubmission (R1-07 … R1-10)
 
 - **Review queue** (`/review`, Sirius HR reviewers): every employee waiting for Sirius HR across subsidiaries, oldest first, with chips **To review · Returned · Past reminder · All open · All** and their counts, a subsidiary filter and search. Each row shows the request and its stage, the proposed %, what the subsidiary submitted per criterion, how many criteria are verified and how long the employee has waited (amber "Past 2-day reminder" after 2 calendar days). No salaries in the list.

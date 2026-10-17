@@ -4,6 +4,7 @@ import {
   DashboardFilterSchema,
   DecideLineSchema,
   FINAL_STATUSES,
+  IN_REVIEW_STATUSES,
   MAX_COMMENT_LENGTH,
   RequestStageSchema,
   RequestStatusSchema,
@@ -27,6 +28,7 @@ describe('statuses [R1-09]', () => {
       'rejected',
     ]);
     expect(FINAL_STATUSES).toEqual(['approved', 'partly_approved', 'rejected']);
+    expect(IN_REVIEW_STATUSES).toEqual(['submitted', 'under_review', 'returned']);
     expect(NotificationKindSchema.options).toContain('employee_returned');
   });
 });

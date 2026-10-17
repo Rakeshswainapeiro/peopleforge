@@ -48,9 +48,10 @@ async function completeCriteria(page: Page) {
 /** Opens one employee of the request from the review queue. */
 async function openInQueue(page: Page, name: string) {
   await page.goto(`/review?filter=all&q=${reference}`);
-  await page
-    .getByRole('table', { name: 'Employees in the review queue' })
-    .getByRole('link', { name: new RegExp(`^(Review|View) ${name}$`, 'u') })
+  const queue = page.getByRole('table', { name: 'Employees in the review queue' });
+  await queue
+    .getByRole('link', { name: `Review ${name}`, exact: true })
+    .or(queue.getByRole('link', { name: `View ${name}`, exact: true }))
     .click();
   await expect(page.getByRole('heading', { level: 1, name })).toBeVisible();
 }
@@ -150,11 +151,58 @@ test('Sirius HR verifies and approves one employee, and returns the other', asyn
   await page.goto(detailUrl);
   await expect(page.getByText('1 employee is back with Subsidiary A')).toBeVisible();
   const row = (name: string) =>
-    page.getByRole('table', { name: `Employees in ${reference}` }).getByRole('row', {
-      name: new RegExp(name, 'u'),
-    });
+    page
+      .getByRole('table', { name: `Employees in ${reference}` })
+      .getByRole('row')
+      .filter({ hasText: name });
   await expect(row('Aisha Rahman')).toContainText('Approved');
   await expect(row('Yusuf Karim')).toContainText('Returned');
+  expect(errors).toEqual([]);
+});
+
+test('Sirius HR asks a question about an employee [R1-08]', async ({ page }) => {
+  const errors = watchForErrors(page);
+  await signIn(page, 'reviewer');
+  await openInQueue(page, 'Aisha Rahman');
+  const card = page.getByRole('region', { name: 'Questions and answers' });
+  await expect(card.getByText('No questions yet.')).toBeVisible();
+  await card.getByRole('textbox', { name: 'Message' }).fill('Please confirm Aisha’s 2026 rating.');
+  await card.getByRole('button', { name: 'Send' }).click();
+  await expect(card.getByRole('list', { name: 'Messages about Aisha Rahman' })).toContainText(
+    'Please confirm Aisha’s 2026 rating.',
+  );
+  await expect(card.getByText('Waiting for SUB-A')).toBeVisible();
+  await expect(card.getByRole('textbox', { name: 'Message' })).toHaveValue('');
+  expect(errors).toEqual([]);
+});
+
+test('the subsidiary answers from Conversations [R1-08]', async ({ page }) => {
+  const errors = watchForErrors(page);
+  await signIn(page, 'alphaHr');
+  await page
+    .getByRole('navigation', { name: 'Main' })
+    .getByRole('link', { name: 'Conversations' })
+    .click();
+  await page.waitForURL('/conversations');
+  const row = page
+    .getByRole('row')
+    .filter({ hasText: reference })
+    .filter({ hasText: 'Aisha Rahman' });
+  await expect(row).toContainText('Please confirm Aisha’s 2026 rating.');
+  await row.getByRole('link', { name: 'Respond about Aisha Rahman' }).click();
+  await page.waitForURL(/#conversation$/u);
+  const card = page.getByRole('region', { name: 'Questions and answers' });
+  await expect(card.getByText('Waiting for your answer')).toBeVisible();
+  await card
+    .getByRole('textbox', { name: 'Message' })
+    .fill('Rated 4 of 5; the signed form is on C1.');
+  await card.getByRole('button', { name: 'Send' }).click();
+  await expect(card.getByText('Waiting for Sirius HR')).toBeVisible();
+  // The question is answered: nothing waits for the subsidiary about Aisha any more.
+  await page.goto('/conversations');
+  await expect(
+    page.getByRole('row').filter({ hasText: reference }).filter({ hasText: 'Aisha Rahman' }),
+  ).toHaveCount(0);
   expect(errors).toEqual([]);
 });
 

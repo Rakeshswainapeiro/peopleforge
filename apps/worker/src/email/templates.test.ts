@@ -119,6 +119,43 @@ describe('review emails [R1-08, R1-09, R1-10]', () => {
   });
 });
 
+describe('question emails [R1-08]', () => {
+  const LINE = '22222222-2222-4222-8222-222222222221';
+
+  it('says a question was asked or answered, never what, linking to the employee', () => {
+    const asked = rendered(
+      submittedJob({
+        kind: 'question_asked',
+        params: { reference: 'INC-2026-0152', employee: 'Aisha Rahman', lineId: LINE },
+      }),
+    );
+    expect(asked.subject).toBe('Question from Sirius HR about Aisha Rahman (INC-2026-0152)');
+    expect(asked.text).toContain(`https://hr.example.ae/requests/${REQUEST_ID}/employees/${LINE}`);
+    const answered = rendered(
+      receivedJob({
+        kind: 'question_answered',
+        params: {
+          reference: 'INC-2026-0152',
+          employee: 'Aisha Rahman',
+          lineId: LINE,
+          entity: 'SUB-A',
+          actor: 'Priya Nair',
+        },
+      }),
+    );
+    expect(answered.subject).toBe('SUB-A answered about Aisha Rahman (INC-2026-0152)');
+    expect(
+      renderEmail(
+        submittedJob({
+          kind: 'question_asked',
+          params: { reference: 'X', employee: 'Y', lineId: '../x' },
+        }),
+        OPTIONS,
+      ),
+    ).toEqual({ ok: false, reason: 'invalid_params' });
+  });
+});
+
 describe('linkFor', () => {
   it('links to the request, or to notifications without one', () => {
     expect(linkFor('https://hr.example.ae/', REQUEST_ID)).toBe(

@@ -1,4 +1,4 @@
-import { MAX_COMMENT_LENGTH } from '@peopleforge/contracts';
+import { IN_REVIEW_STATUSES, MAX_COMMENT_LENGTH, type MessageSide } from '@peopleforge/contracts';
 import {
   Alert,
   Badge,
@@ -20,11 +20,14 @@ import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { z } from 'zod';
 import { verifyAction } from '@/app/(portal)/review/actions';
+import { MessageForm } from '@/components/conversations/message-form';
+import { MessageThread } from '@/components/conversations/message-thread';
 import { RequestProgress } from '@/components/requests/request-progress';
 import { DecisionPanel } from '@/components/review/decision-panel';
 import { VerifyToggle } from '@/components/review/verify-toggle';
 import { getRequestLocale } from '@/i18n/request-locale';
 import { createTranslator } from '@/i18n/translator';
+import { awaitingLabel, messageViews } from '@/lib/conversation-view';
 import { criterionRows, employeeCards } from '@/lib/employee-status-view';
 import { formatDate } from '@/lib/format';
 import { hasAnyPermission } from '@/lib/navigation';
@@ -41,6 +44,7 @@ import {
 } from '@/lib/review-view';
 import { editRequestHref, employeeStatusHref, requestHref } from '@/lib/routes';
 import { entityName } from '@/lib/viewer-display';
+import { getThread } from '@/server/conversations';
 import { getRequest } from '@/server/increment-requests';
 import { requireViewer } from '@/server/session';
 
@@ -71,7 +75,7 @@ export default async function EmployeeStatusPage({
   const t = createTranslator(locale);
   const query = await searchParams;
 
-  const result = await getRequest(id);
+  const [result, thread] = await Promise.all([getRequest(id), getThread(id, lineId)]);
   if (result.kind === 'unauthenticated') redirect('/session-ended');
   if (result.kind === 'error' && result.status === 404) notFound();
   if (result.kind !== 'ok') throw new Error('Increment request API unavailable');
@@ -94,6 +98,13 @@ export default async function EmployeeStatusPage({
   const decided = Decided.safeParse(query.decided);
   const next = nextPending(request, line.id);
   const error = parseErrorKey(query.error);
+  // Questions and answers (R1-08): visible once submitted; posted while in review, by each side.
+  const mySide: MessageSide = group ? 'sirius' : 'subsidiary';
+  const canPost =
+    (group ? reviewer : me.permissions.includes('increment_request:submit')) &&
+    IN_REVIEW_STATUSES.includes(request.status);
+  const messages = thread.kind === 'ok' ? thread.data : [];
+  const waiting = awaitingLabel(messages, mySide, request.entity.code, t);
   const back = reviewer
     ? { href: '/review', label: t('decision.backToQueue') }
     : { href: '/', label: t('employeeStatus.back') };
@@ -328,6 +339,45 @@ export default async function EmployeeStatusPage({
               </Table>
             </div>
           </Card>
+
+          {request.submittedAt === null ? null : (
+            <Card label={t('conversations.threadTitle')}>
+              <div id="conversation" className="scroll-mt-6">
+                <CardHeader
+                  title={t('conversations.threadTitle')}
+                  description={t('conversations.threadIntro', { entity, name: line.fullName })}
+                  actions={waiting === null ? undefined : <Badge tone="warning">{waiting}</Badge>}
+                />
+              </div>
+              <div className="flex flex-col gap-5 px-6 pt-4 pb-6">
+                <MessageThread
+                  messages={messageViews(messages, mySide, request.entity.code, locale, t)}
+                  label={t('conversations.threadLabel', { name: line.fullName })}
+                  empty={t('conversations.threadEmpty')}
+                />
+                {canPost ? (
+                  <MessageForm
+                    requestId={request.id}
+                    lineId={line.id}
+                    messageKey={randomUUID()}
+                    maxLength={MAX_COMMENT_LENGTH}
+                    labels={{
+                      message: t('conversations.message'),
+                      placeholder: group
+                        ? t('conversations.askPlaceholder')
+                        : t('conversations.answerPlaceholder'),
+                      send: t('conversations.send'),
+                      sending: t('conversations.sending'),
+                      sent: t('conversations.sent'),
+                    }}
+                    messages={saveMessages(t)}
+                  />
+                ) : IN_REVIEW_STATUSES.includes(request.status) ? null : (
+                  <p className="text-xs text-ink-muted">{t('conversations.closed')}</p>
+                )}
+              </div>
+            </Card>
+          )}
         </div>
 
         {reviewer && decider && open ? (

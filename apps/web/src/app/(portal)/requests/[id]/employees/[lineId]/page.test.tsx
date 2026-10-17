@@ -1,7 +1,8 @@
 import type { IncrementRequest, Me } from '@peopleforge/contracts';
-import { render, screen, within } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getRequestLocale } from '@/i18n/request-locale';
+import { getThread } from '@/server/conversations';
 import { getRequest } from '@/server/increment-requests';
 import { requireViewer } from '@/server/session';
 import {
@@ -13,6 +14,7 @@ import {
   LINE_2,
   REQUEST_ID,
   submittedRequest,
+  threadMessages,
   VERIFIED,
 } from '@/test-support/requests';
 import EmployeeStatusPage from './page';
@@ -20,6 +22,8 @@ import EmployeeStatusPage from './page';
 vi.mock('@/i18n/request-locale', () => ({ getRequestLocale: vi.fn() }));
 vi.mock('@/server/session', () => ({ requireViewer: vi.fn() }));
 vi.mock('@/server/increment-requests', () => ({ getRequest: vi.fn() }));
+vi.mock('@/server/conversations', () => ({ getThread: vi.fn() }));
+vi.mock('@/app/(portal)/conversations/actions', () => ({ postMessageAction: vi.fn() }));
 vi.mock('@/app/(portal)/review/actions', () => ({
   verifyAction: vi.fn(),
   decideAction: vi.fn(() => Promise.resolve({})),
@@ -60,6 +64,7 @@ const statusPage = (lineId = LINE_1, id = REQUEST_ID, query: Record<string, stri
   });
 
 beforeEach(() => {
+  vi.mocked(getThread).mockResolvedValue({ kind: 'ok', data: [] });
   vi.mocked(getRequestLocale).mockResolvedValue('en');
   vi.mocked(requireViewer).mockResolvedValue(PREPARER);
   vi.mocked(getRequest).mockResolvedValue({ kind: 'ok', data: SUBMITTED });
@@ -306,5 +311,60 @@ describe('Review employee [R1-07 … R1-10]', () => {
     expect(screen.getByRole('alert')).toHaveTextContent(
       'This employee was already decided or returned.',
     );
+  });
+});
+
+describe('Questions and answers on the employee page [R1-08]', () => {
+  it('shows the thread and lets a reviewer ask, with who has to answer', async () => {
+    vi.mocked(requireViewer).mockResolvedValue(SIRIUS_HR);
+    vi.mocked(getRequest).mockResolvedValue({ kind: 'ok', data: inReview() });
+    vi.mocked(getThread).mockResolvedValue({ kind: 'ok', data: threadMessages() });
+    render(await statusPage());
+    const card = screen.getByRole('region', { name: 'Questions and answers' });
+    expect(within(card).getByText('Waiting for your answer')).toBeInTheDocument();
+    expect(
+      within(card).getByRole('list', { name: 'Messages about Omar Haddad' }),
+    ).toHaveTextContent('Yes — signed copy attached to C1.');
+    expect(
+      within(card).getByPlaceholderText('Ask the subsidiary about this employee'),
+    ).toBeInTheDocument();
+    expect(document.getElementById('conversation')).not.toBeNull();
+  });
+
+  it('lets the subsidiary answer, and makes a decided request read-only', async () => {
+    vi.mocked(requireViewer).mockResolvedValue({
+      ...PREPARER,
+      permissions: [...PREPARER.permissions, 'increment_request:submit'],
+    });
+    vi.mocked(getRequest).mockResolvedValue({ kind: 'ok', data: inReview() });
+    vi.mocked(getThread).mockResolvedValue({ kind: 'ok', data: threadMessages().slice(0, 1) });
+    render(await statusPage());
+    expect(screen.getByPlaceholderText('Answer Sirius HR')).toBeInTheDocument();
+    expect(screen.getByText('Waiting for your answer')).toBeInTheDocument();
+    cleanup();
+    vi.mocked(getRequest).mockResolvedValue({
+      kind: 'ok',
+      data: inReview({ status: 'approved', decidedAt: '2026-10-16T09:00:00.000Z' }),
+    });
+    vi.mocked(getThread).mockResolvedValue({ kind: 'unavailable' });
+    render(await statusPage());
+    expect(screen.getByText('No questions yet.')).toBeInTheDocument();
+    expect(
+      screen.getByText('The review is over: the conversation is read-only.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('textbox', { name: 'Message' })).toBeNull();
+  });
+
+  it('has no conversation before submission, and no form for those without a side', async () => {
+    vi.mocked(getRequest).mockResolvedValue({ kind: 'ok', data: draftRequest() });
+    render(await statusPage());
+    expect(screen.queryByRole('region', { name: 'Questions and answers' })).toBeNull();
+    cleanup();
+    vi.mocked(requireViewer).mockResolvedValue(REVIEWER);
+    vi.mocked(getRequest).mockResolvedValue({ kind: 'ok', data: inReview() });
+    render(await statusPage());
+    expect(screen.getByRole('region', { name: 'Questions and answers' })).toBeInTheDocument();
+    expect(screen.queryByRole('textbox', { name: 'Message' })).toBeNull();
+    expect(screen.queryByText(/read-only/u)).toBeNull();
   });
 });
