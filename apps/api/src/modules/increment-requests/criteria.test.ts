@@ -36,6 +36,7 @@ describe('missingFor [R1-03, R1-06]', () => {
         result,
         justification: 'Reason',
         evidence: [file],
+        verification: null,
       }),
     ).toEqual([]);
   });
@@ -47,6 +48,7 @@ describe('missingFor [R1-03, R1-06]', () => {
         result: 'pass',
         justification: '   ',
         evidence: [file],
+        verification: null,
       }),
     ).toEqual(['justification']);
   });
@@ -62,6 +64,7 @@ describe('missingFor [R1-03, R1-06]', () => {
       result: 'pass' as const,
       justification: '',
       evidence: [],
+      verification: null,
     };
     expect(missingFor(relaxed, assessment)).toEqual([]);
     expect(missingFor({ ...relaxed, evidencePolicy: 'none' }, assessment)).toEqual([]);
@@ -120,6 +123,7 @@ describe('assessmentOf', () => {
       result: 'fail' as const,
       justification: 'x',
       evidence: [],
+      verification: null,
     };
     expect(assessmentOf(criterion, [saved])).toBe(saved);
   });

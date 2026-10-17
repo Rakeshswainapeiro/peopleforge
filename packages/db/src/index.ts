@@ -43,6 +43,8 @@ export {
   type EmployeeOption,
   type IncrementRequestRecord,
   type IncrementRequestRepository,
+  type LineDecisionRecord,
+  type VerificationRecord,
   type Proposal,
   type RequestDataErrorReason,
   type RequestLineRecord,
@@ -68,10 +70,26 @@ export type {
   CriterionResultValue,
   Database,
   EmailStatus,
+  LineDecisionValue,
+  LineReviewStatus,
   LocalisedText,
   ProposedKind,
   RequestStatus,
 } from './schema.js';
+export {
+  createReviewRepository,
+  IN_REVIEW,
+  statusFromLines,
+  type DecisionContext,
+  type DecisionInput,
+  type QueueCounts,
+  type QueueFilter,
+  type QueueLineRecord,
+  type QueueQuery,
+  type ResubmitContext,
+  type ReviewRepository,
+  type StageContext,
+} from './review.js';
 export { ScopeError, withScope, type Scope } from './scope.js';
 export {
   SEED_ASSIGNMENTS,

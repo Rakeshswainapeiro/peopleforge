@@ -7,6 +7,7 @@ import type {
   EntityDirectory,
   IncrementRequestRepository,
   NotificationRepository,
+  ReviewRepository,
 } from '@peopleforge/db';
 import type { MalwareScanner, ObjectStore } from '@peopleforge/integrations';
 import type { Principal } from '../auth/principal.js';
@@ -121,6 +122,13 @@ export const unusedDashboard: DashboardRepository = {
   lines: unexpected,
 };
 
+export const unusedReview: ReviewRepository = {
+  verify: unexpected,
+  decide: unexpected,
+  resubmit: unexpected,
+  queue: unexpected,
+};
+
 export const unusedNotifications: NotificationRepository = {
   list: unexpected,
   markRead: unexpected,
@@ -158,6 +166,7 @@ export async function buildApp(
       objectStore: unusedObjectStore,
       malwareScanner: unusedScanner,
       dashboard: unusedDashboard,
+      review: unusedReview,
       notifications: unusedNotifications,
       readinessChecks: [],
       isShuttingDown: () => false,

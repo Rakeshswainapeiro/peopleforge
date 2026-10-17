@@ -14,13 +14,22 @@ export const REQUEST_ERROR_KEYS = [
   'request.errors.notReady',
   'request.errors.deadlinePassed',
   'request.errors.notDraft',
+  'request.errors.notPending',
+  'request.errors.notVerified',
+  'request.errors.notInReview',
+  'request.errors.notReturned',
+  'request.errors.decisionInvalid',
+  'request.errors.percentRange',
+  'request.errors.notReadyResubmit',
   'request.errors.generic',
 ] as const satisfies readonly MessageKey[];
 
 export type RequestErrorKey = (typeof REQUEST_ERROR_KEYS)[number];
 
-function has(details: readonly ErrorDetail[], path: string): boolean {
-  return details.some((detail) => detail.path === path);
+function has(details: readonly ErrorDetail[], path: string, code?: string): boolean {
+  return details.some(
+    (detail) => detail.path === path && (code === undefined || detail.code === code),
+  );
 }
 
 /** The message for an API refusal of a request change. */
@@ -30,7 +39,21 @@ export function errorKeyFor(code: ErrorCode, details: readonly ErrorDetail[]): R
   if (code === 'VALIDATION_FAILED' && has(details, 'employeeId'))
     return 'request.errors.employeeNotFound';
   if (code === 'VALIDATION_FAILED' && has(details, 'cycleId')) return 'request.errors.cycleNotOpen';
+  if (code === 'CONFLICT' && has(details, 'status', 'not_in_review')) {
+    return 'request.errors.notInReview';
+  }
+  if (code === 'CONFLICT' && has(details, 'status', 'not_returned')) {
+    return 'request.errors.notReturned';
+  }
   if (code === 'CONFLICT' && has(details, 'status')) return 'request.errors.notDraft';
+  if (code === 'CONFLICT' && has(details, 'lineId')) return 'request.errors.notPending';
+  if (code === 'CONFLICT' && has(details, 'criteria')) return 'request.errors.notVerified';
+  if (code === 'VALIDATION_FAILED' && has(details, 'approvedPercent')) {
+    return 'request.errors.percentRange';
+  }
+  if (code === 'VALIDATION_FAILED' && (has(details, 'reasonCode') || has(details, 'comment'))) {
+    return 'request.errors.decisionInvalid';
+  }
   if (code === 'NOT_FOUND') return 'request.errors.notFound';
   if (code === 'VALIDATION_FAILED' && has(details, 'cycle')) return 'request.errors.deadlinePassed';
   if (code === 'VALIDATION_FAILED' && details.some((d) => d.path.startsWith('lines.'))) {

@@ -82,6 +82,9 @@ export function record(overrides: Partial<IncrementRequestRecord> = {}): Increme
     updatedAt: new Date('2026-10-14T07:05:00Z'),
     submittedAt: null,
     submittedByName: null,
+    submittedBy: null,
+    statusChangedAt: new Date('2026-10-14T07:00:00Z'),
+    decidedAt: null,
     lines: [
       {
         id: LINE_1,
@@ -93,6 +96,8 @@ export function record(overrides: Partial<IncrementRequestRecord> = {}): Increme
         currency: 'AED',
         proposedKind: 'percent',
         proposedValue: '8.00',
+        reviewStatus: 'pending',
+        decision: null,
         // C1 complete; nothing saved for the others yet.
         criteria: [
           {
@@ -100,6 +105,7 @@ export function record(overrides: Partial<IncrementRequestRecord> = {}): Increme
             result: 'pass',
             justification: 'Rated 4 of 5 in the 2026 appraisal.',
             evidence: [evidenceRecord],
+            verification: null,
           },
         ],
       },
@@ -113,6 +119,8 @@ export function record(overrides: Partial<IncrementRequestRecord> = {}): Increme
         currency: 'AED',
         proposedKind: null,
         proposedValue: null,
+        reviewStatus: 'pending',
+        decision: null,
         criteria: [],
       },
     ],
@@ -201,6 +209,8 @@ export function dashboardRequest(
     cycleId: CYCLE_ID,
     createdAt: new Date('2026-10-14T07:00:00Z'),
     statusChangedAt: new Date('2026-10-14T07:00:00Z'),
+    submittedAt: null,
+    verifiedCriteria: 0,
     criteria,
     lines: [
       CRITERION_IDS.map((id, index) =>
@@ -241,6 +251,7 @@ export function dashboardLine(overrides: Partial<DashboardLineRecord> = {}): Das
           : notStarted(id),
     ),
     updatedAt: new Date('2026-10-14T07:05:00Z'),
+    reviewStatus: 'pending',
     ...overrides,
   };
 }

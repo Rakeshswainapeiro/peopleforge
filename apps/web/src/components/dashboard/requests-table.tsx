@@ -12,6 +12,7 @@ export interface RequestsTableLabels {
   status: string;
   age: string;
   with: string;
+  submitted: string;
   view: string;
 }
 
@@ -30,7 +31,8 @@ export function RequestsTable({ rows, showSubsidiary, labels }: RequestsTablePro
         <tr>
           <Th>{labels.request}</Th>
           {showSubsidiary ? <Th>{labels.subsidiary}</Th> : null}
-          <Th>{labels.created}</Th>
+          {/* Sirius HR's Request Tracker: when it was submitted; subsidiary HR: when created. */}
+          <Th>{showSubsidiary ? labels.submitted : labels.created}</Th>
           <Th>{labels.employees}</Th>
           <Th>{labels.stage}</Th>
           <Th>{labels.status}</Th>
@@ -50,7 +52,7 @@ export function RequestsTable({ rows, showSubsidiary, labels }: RequestsTablePro
               </Link>
             </Td>
             {showSubsidiary ? <Td className="whitespace-nowrap">{row.entityCode}</Td> : null}
-            <Td className="whitespace-nowrap">{row.created}</Td>
+            <Td className="whitespace-nowrap">{showSubsidiary ? row.submitted : row.created}</Td>
             <Td>
               <span className="inline-flex items-center gap-2 tabular-nums">
                 {row.employees}

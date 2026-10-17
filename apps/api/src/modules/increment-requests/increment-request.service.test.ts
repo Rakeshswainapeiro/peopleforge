@@ -64,6 +64,7 @@ describe('IncrementRequestService', () => {
         },
       ],
       missing: [],
+      verification: null,
     });
     expect(c2?.missing).toEqual(['result', 'justification', 'evidence']);
     // C5 takes files but doesn't need them.
@@ -81,6 +82,7 @@ describe('IncrementRequestService', () => {
       result: 'fail' as const,
       justification: 'Reason',
       evidence: [evidenceRecord],
+      verification: null,
     }));
     repository.get.mockResolvedValue(complete);
     const dto = await new IncrementRequestService(repository).get(alphaHr, REQUEST_ID);
@@ -310,6 +312,10 @@ describe('toDomainError', () => {
     ['evidence_not_found', NotFoundError, undefined],
     ['not_draft', ConflictError, { path: 'status', code: 'not_draft' }],
     ['idempotency_conflict', ConflictError, { path: 'Idempotency-Key', code: 'reused' }],
+    ['not_in_review', ConflictError, { path: 'status', code: 'not_in_review' }],
+    ['line_not_pending', ConflictError, { path: 'lineId', code: 'not_pending' }],
+    ['not_verified', ConflictError, { path: 'criteria', code: 'not_verified' }],
+    ['not_returned', ConflictError, { path: 'status', code: 'not_returned' }],
   ] as const)('maps %s', (reason: RequestDataErrorReason, type, detail) => {
     const error = toDomainError(new RequestDataError(reason));
     expect(error).toBeInstanceOf(type);
@@ -327,6 +333,7 @@ function readyRecord() {
       result: 'pass' as const,
       justification: 'Reason',
       evidence: [evidenceRecord],
+      verification: null,
     })),
   }));
   return ready;
@@ -449,5 +456,84 @@ describe('IncrementRequestService.submit [R1-07]', () => {
     await expect(
       new IncrementRequestService(repository).get(reviewer, REQUEST_ID),
     ).resolves.toMatchObject({ status: 'submitted' });
+  });
+});
+
+describe('decisions and verification in a request [R1-09, R1-10]', () => {
+  it('shows each employee’s latest decision with the figures as approved', async () => {
+    const repository = workingRepository();
+    const decided = record({
+      status: 'partly_approved',
+      decidedAt: new Date('2026-10-16T10:00:00Z'),
+    });
+    const [omar, neha] = decided.lines;
+    if (omar === undefined || neha === undefined) throw new Error('fixture');
+    const decision = {
+      reasonCode: null,
+      comment: '',
+      approved: null,
+      decidedAt: new Date('2026-10-16T09:00:00Z'),
+      decidedByName: 'Sara Al Mansoori',
+    };
+    omar.reviewStatus = 'approved';
+    omar.decision = { ...decision, decision: 'approved' };
+    omar.criteria = [
+      {
+        criterionId: CRITERION_1,
+        result: 'pass',
+        justification: 'x',
+        evidence: [],
+        verification: { verifiedAt: new Date('2026-10-15T09:00:00Z'), verifiedByName: 'Sara' },
+      },
+    ];
+    neha.reviewStatus = 'rejected';
+    // A code the contract no longer knows reads back as none.
+    neha.decision = {
+      ...decision,
+      decision: 'rejected',
+      reasonCode: 'retired_code',
+      comment: 'No.',
+    };
+    repository.get.mockResolvedValue(decided);
+    const dto = await new IncrementRequestService(repository).get(reviewer, REQUEST_ID);
+    expect(dto).toMatchObject({
+      status: 'partly_approved',
+      decidedAt: '2026-10-16T10:00:00.000Z',
+      stage: { kind: 'decided', of: 5 },
+    });
+    expect(dto.lines[0]?.criteria[0]?.verification).toEqual({
+      at: '2026-10-15T09:00:00.000Z',
+      byName: 'Sara',
+    });
+    expect(dto.lines[0]?.decision).toEqual({
+      decision: 'approved',
+      reasonCode: null,
+      comment: '',
+      approvedPercent: null,
+      approvedIncrease: '1720.00',
+      approvedSalary: '23220.00',
+      decidedAt: '2026-10-16T09:00:00.000Z',
+      decidedByName: 'Sara Al Mansoori',
+    });
+    expect(dto.lines[1]?.decision).toMatchObject({
+      decision: 'rejected',
+      reasonCode: null,
+      comment: 'No.',
+      approvedIncrease: null,
+    });
+    // Approved at 4.5% of AED 21,500 instead of the proposed 8%.
+    omar.decision = {
+      ...decision,
+      decision: 'approved',
+      reasonCode: 'budget',
+      approved: { kind: 'percent', value: '4.50' },
+    };
+    const changed = await new IncrementRequestService(repository).get(reviewer, REQUEST_ID);
+    expect(changed.lines[0]?.decision).toMatchObject({
+      reasonCode: 'budget',
+      approvedPercent: '4.50',
+      approvedIncrease: '967.50',
+      approvedSalary: '22467.50',
+    });
   });
 });

@@ -55,7 +55,15 @@ describe('dashboard routes [R1-10, NFR-SEC-01]', () => {
     const query = `cycleId=${CYCLE_ID}&status=draft&search=%20Rene%CC%81%20`;
     const summary = await request(server).get(`${SUMMARY}?${query}`).expect(200);
     expect(DashboardSummarySchema.parse(summary.body)).toEqual({
-      byStatus: { draft: 2, submitted: 0 },
+      byStatus: {
+        draft: 2,
+        submitted: 0,
+        under_review: 0,
+        returned: 0,
+        approved: 0,
+        partly_approved: 0,
+        rejected: 0,
+      },
       requests: 2,
       employees: 3,
     });
@@ -90,7 +98,7 @@ describe('dashboard routes [R1-10, NFR-SEC-01]', () => {
     [SUMMARY, 'cycleId=Q3-2026', 'cycleId'],
     [SUMMARY, 'page=2', ''],
     [REQUESTS, 'pageSize=1000', 'pageSize'],
-    [REQUESTS, 'status=approved', 'status'],
+    [REQUESTS, 'status=archived', 'status'],
     [LINES, 'requestId=INC-2026-0001', 'requestId'],
     [LINES, `search=${'x'.repeat(101)}`, 'search'],
   ])('refuses GET %s?%s (400 naming %s)', async (path, query, field) => {

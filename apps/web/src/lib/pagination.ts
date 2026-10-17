@@ -3,7 +3,7 @@ import type { Locale } from '@sirius/shared-types';
 import type { Translate } from '@/i18n/translator';
 
 /** The lists with their own pagination wording (each names what it pages). */
-export type PaginatedList = 'notifications' | 'dashboard';
+export type PaginatedList = 'notifications' | 'dashboard' | 'review';
 
 /** How many pages `total` items fill (at least one, so "Page 1 of 1" for an empty list). */
 export function pageCount(total: number, pageSize: number): number {

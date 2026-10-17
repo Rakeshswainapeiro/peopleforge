@@ -71,6 +71,7 @@ export function assessmentOf(
       result: null,
       justification: '',
       evidence: [],
+      verification: null,
     }
   );
 }

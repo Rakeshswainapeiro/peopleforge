@@ -4,6 +4,17 @@ All notable changes are recorded here. Format: [Keep a Changelog](https://keepac
 
 ## [Unreleased]
 
+### Added — slice S5a: Sirius HR's review, decisions, returns and resubmission (R1-07 … R1-10)
+
+- **Review queue** (`/review`, Sirius HR reviewers): every employee waiting for Sirius HR across subsidiaries, oldest first, with chips **To review · Returned · Past reminder · All open · All** and their counts, a subsidiary filter and search. Each row shows the request and its stage, the proposed %, what the subsidiary submitted per criterion, how many criteria are verified and how long the employee has waited (amber "Past 2-day reminder" after 2 calendar days). No salaries in the list.
+- **Review employee** (the employee page, for reviewers): **Mark verified** per criterion (and Undo), with who verified it and when; a **Decision** panel with **Approve** (enabled once all five are verified; as proposed, or a different % with a reason and comment), **Reject** and **Return** (reason and comment, which the subsidiary sees). After deciding: a confirmation and **Next employee**.
+- **Statuses** per employee (With Sirius HR / To review, Approved, Rejected, Returned) and per request (Under review, Returned, Approved, Partly approved, Rejected), shown everywhere with text and colour. The **stage** is now real: the first criterion not yet verified for every employee still in review, then Awaiting decision, then Decided.
+- **Returns (R1-08):** the request detail shows which employees came back and Sirius HR's question; **Update and resubmit** opens the editor where only the returned employees can change; **Resubmit to Sirius HR** asks for an optional note. Sirius HR checks resubmitted employees again from scratch. "Needs your action" lists returns beside drafts with **Respond**.
+- **Request Tracker** (Home for Sirius HR): subsidiary filter, Submitted date, who has each request (Sirius HR, the subsidiary, Closed) and cards for To review, Returned to subsidiaries, Approved (full / partly) and Rejected. Subsidiary HR's cards now count replies needed, approvals and rejections.
+- **Notifications and emails:** stage moved, employee approved / rejected / returned (action needed, **Respond**), request decided with its final status, and returned employees resubmitted (to reviewers). Display values only.
+- API: `PUT`/`DELETE /increment-requests/{id}/lines/{lineId}/verifications/{criterionId}`, `POST …/lines/{lineId}/decision` (Idempotency-Key), `POST …/{id}/resubmit` (Idempotency-Key), `GET /review-queue`; requests carry `stage`, `statusChangedAt`, `decidedAt`, and each employee `reviewStatus`, `decision` and per-criterion `verification`; the request list takes `entityId`. OpenAPI 0.9.0.
+- Migration `0009_review_decisions` (statuses, `decided_at`, `request_line.review_status`, `criterion_verification`, append-only `line_decision` with encrypted comments and approved values). ADR-013.
+
 ### Fixed — criteria cards (R1-03, R1-06)
 
 - **A criterion card now follows what's on screen.** Choosing Pass or Fail, typing a justification or attaching a file updates the card's mark, colour and "To complete" line straight away; before, they waited for **Save draft**, so a card with Pass chosen still said "choose Pass or Fail". The card uses the API's own completeness rule (now shared in `@peopleforge/contracts`), so it never disagrees with what saving records.

@@ -1,22 +1,29 @@
-import type { Me } from '@peopleforge/contracts';
+import type { IncrementRequest, Me } from '@peopleforge/contracts';
 import { render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getRequestLocale } from '@/i18n/request-locale';
 import { getRequest } from '@/server/increment-requests';
 import { requireViewer } from '@/server/session';
 import {
+  decisionOf,
   draftRequest,
   ENTITY,
   EVIDENCE_ID,
   LINE_1,
   LINE_2,
   REQUEST_ID,
+  submittedRequest,
+  VERIFIED,
 } from '@/test-support/requests';
 import EmployeeStatusPage from './page';
 
 vi.mock('@/i18n/request-locale', () => ({ getRequestLocale: vi.fn() }));
 vi.mock('@/server/session', () => ({ requireViewer: vi.fn() }));
 vi.mock('@/server/increment-requests', () => ({ getRequest: vi.fn() }));
+vi.mock('@/app/(portal)/review/actions', () => ({
+  verifyAction: vi.fn(),
+  decideAction: vi.fn(() => Promise.resolve({})),
+}));
 vi.mock('next/navigation', () => ({
   notFound: vi.fn(() => {
     throw new Error('NEXT_NOT_FOUND');
@@ -46,8 +53,11 @@ const REVIEWER: Me = {
 };
 const SUBMITTED = draftRequest({ status: 'submitted', submittedAt: '2026-10-10T06:00:00.000Z' });
 
-const statusPage = (lineId = LINE_1, id = REQUEST_ID) =>
-  EmployeeStatusPage({ params: Promise.resolve({ id, lineId }) });
+const statusPage = (lineId = LINE_1, id = REQUEST_ID, query: Record<string, string> = {}) =>
+  EmployeeStatusPage({
+    params: Promise.resolve({ id, lineId }),
+    searchParams: Promise.resolve(query),
+  });
 
 beforeEach(() => {
   vi.mocked(getRequestLocale).mockResolvedValue('en');
@@ -135,5 +145,166 @@ describe('Employee status [R1-06, R1-07]', () => {
     await expect(statusPage()).rejects.toThrow('Increment request API unavailable');
     vi.mocked(requireViewer).mockResolvedValue(null);
     await expect(statusPage()).resolves.toBeNull();
+  });
+});
+
+const SIRIUS_HR: Me = {
+  ...REVIEWER,
+  permissions: ['increment_request:read', 'increment_request:review', 'increment_request:decide'],
+};
+
+/** Under review: Omar has C1 verified by Sara. */
+function inReview(overrides: Partial<IncrementRequest> = {}): IncrementRequest {
+  const request = submittedRequest({
+    status: 'under_review',
+    stage: { kind: 'criterion', criterion: 1, of: 5 },
+    ...overrides,
+  });
+  return {
+    ...request,
+    lines: request.lines.map((line, index) =>
+      index === 0
+        ? {
+            ...line,
+            criteria: line.criteria.map((criterion, at) =>
+              at === 0 ? { ...criterion, verification: VERIFIED } : criterion,
+            ),
+          }
+        : line,
+    ),
+  };
+}
+
+describe('Review employee [R1-07 … R1-10]', () => {
+  beforeEach(() => {
+    vi.mocked(requireViewer).mockResolvedValue(SIRIUS_HR);
+    vi.mocked(getRequest).mockResolvedValue({ kind: 'ok', data: inReview() });
+  });
+
+  it('lets a reviewer verify each criterion and decide, from the queue', async () => {
+    render(await statusPage());
+    const breadcrumb = screen.getByRole('navigation', { name: 'Breadcrumb' });
+    expect(within(breadcrumb).getByRole('link', { name: 'Review queue' })).toHaveAttribute(
+      'href',
+      '/review',
+    );
+    expect(within(breadcrumb).getByRole('link', { name: 'INC-2026-0152' })).toHaveAttribute(
+      'href',
+      `/requests/${REQUEST_ID}`,
+    );
+    expect(screen.getByRole('link', { name: 'Back to review queue' })).toHaveAttribute(
+      'href',
+      '/review',
+    );
+    expect(screen.getByText('To review')).toBeInTheDocument();
+    // No "waiting" banner for the reviewer: they are the one to act.
+    expect(screen.queryByText('Waiting for Sirius HR')).toBeNull();
+    const table = screen.getByRole('table', { name: 'Eligibility criteria for Omar Haddad' });
+    expect(
+      within(table).getByRole('columnheader', { name: 'Sirius HR check' }),
+    ).toBeInTheDocument();
+    expect(table).toHaveTextContent('Verified by Sara Al Mansoori, 16 Oct 2026');
+    expect(
+      within(table).getByRole('button', { name: 'Undo the check of C1 for Omar Haddad' }),
+    ).toBeInTheDocument();
+    expect(
+      within(table).getByRole('button', { name: 'Mark C2 verified for Omar Haddad' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Check each criterion and its evidence/u)).toBeInTheDocument();
+    const panel = screen.getByRole('region', { name: 'Decision' });
+    expect(within(panel).getByText('Verify 4 more criteria before approving.')).toBeInTheDocument();
+  });
+
+  it('confirms a decision and offers the next employee, or the queue when none is left', async () => {
+    const decided = inReview();
+    vi.mocked(getRequest).mockResolvedValue({
+      kind: 'ok',
+      data: {
+        ...decided,
+        lines: decided.lines.map((line, index) =>
+          index === 0
+            ? { ...line, reviewStatus: 'approved' as const, decision: decisionOf() }
+            : line,
+        ),
+      },
+    });
+    render(await statusPage(LINE_1, REQUEST_ID, { decided: 'approved' }));
+    expect(screen.getByText('Omar Haddad approved.')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Next employee: Neha Iyer' })).toHaveAttribute(
+      'href',
+      `/requests/${REQUEST_ID}/employees/${LINE_2}`,
+    );
+    // Decided: the summary shows, nothing more to verify or decide.
+    expect(screen.getByText(/^Approved as proposed: 8%/u)).toBeInTheDocument();
+    expect(screen.getByText('By Sara Al Mansoori · 16 Oct 2026, 12:30')).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Decision' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Undo/u })).toBeNull();
+
+    vi.mocked(getRequest).mockResolvedValue({
+      kind: 'ok',
+      data: {
+        ...decided,
+        status: 'partly_approved',
+        decidedAt: '2026-10-16T09:00:00.000Z',
+        lines: decided.lines.map((line) => ({
+          ...line,
+          reviewStatus: 'rejected' as const,
+          decision: decisionOf({
+            decision: 'rejected',
+            reasonCode: 'budget',
+            comment: 'Over budget.',
+          }),
+        })),
+      },
+    });
+    render(await statusPage(LINE_1, REQUEST_ID, { decided: 'rejected' }));
+    expect(screen.getByText('Every employee of INC-2026-0152 is decided.')).toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: 'Back to review queue' }).length).toBeGreaterThan(1);
+    expect(screen.getByText('Reason: Budget')).toBeInTheDocument();
+    expect(screen.getByText('Over budget.')).toBeInTheDocument();
+  });
+
+  it('shows the subsidiary a returned employee with the question and Update and resubmit', async () => {
+    vi.mocked(requireViewer).mockResolvedValue({
+      ...PREPARER,
+      permissions: [...PREPARER.permissions, 'increment_request:submit'],
+    });
+    const request = inReview({ status: 'returned' });
+    vi.mocked(getRequest).mockResolvedValue({
+      kind: 'ok',
+      data: {
+        ...request,
+        lines: request.lines.map((line, index) =>
+          index === 0
+            ? {
+                ...line,
+                reviewStatus: 'returned' as const,
+                decision: decisionOf({
+                  decision: 'returned',
+                  reasonCode: 'missing_evidence',
+                  comment: 'Attach the appraisal.',
+                }),
+              }
+            : line,
+        ),
+      },
+    });
+    render(await statusPage(LINE_1, REQUEST_ID, { decided: 'returned' }));
+    expect(screen.getByText('Returned to Subsidiary A')).toBeInTheDocument();
+    expect(screen.getByText('Attach the appraisal.')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Update and resubmit' })).toHaveAttribute(
+      'href',
+      `/requests/${REQUEST_ID}/edit?employee=${LINE_1}`,
+    );
+    // Only reviewers get the decision confirmation; the subsidiary sees no checks to make.
+    expect(screen.queryByText(/returned to Subsidiary A\./u)).toBeNull();
+    expect(screen.queryByRole('button', { name: /verified for/u })).toBeNull();
+  });
+
+  it('shows why a check failed, from the URL', async () => {
+    render(await statusPage(LINE_1, REQUEST_ID, { error: 'request.errors.notPending' }));
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'This employee was already decided or returned.',
+    );
   });
 });

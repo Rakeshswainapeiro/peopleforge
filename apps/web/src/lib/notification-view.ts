@@ -1,4 +1,10 @@
-import type { Notification, NotificationFilter, NotificationPage } from '@peopleforge/contracts';
+import {
+  RequestStatusSchema,
+  type Notification,
+  type NotificationFilter,
+  type NotificationPage,
+} from '@peopleforge/contracts';
+import { statusBadge } from './request-status';
 import type { BadgeTone } from '@peopleforge/ui';
 import type { Locale } from '@sirius/shared-types';
 import type { MessageKey, Translate } from '@/i18n/translator';
@@ -14,6 +20,8 @@ export interface NotificationRowView {
   message: string;
   meta: string;
   unread: boolean;
+  /** "Respond" when the reader has to act, else "View". */
+  action: string;
 }
 
 function text(value: string | number | undefined): string {
@@ -22,11 +30,21 @@ function text(value: string | number | undefined): string {
 
 /** The sentence for a notification, in the reader's language, from its kind and values. */
 function messageOf(notification: Notification, locale: Locale, t: Translate): string {
-  const count = Number(notification.params.employees ?? 0);
+  const { params } = notification;
+  const number = new Intl.NumberFormat(locale);
+  const count = Number(params.employees ?? 0);
+  const criterion = Number(params.criterion ?? 0);
+  const status = RequestStatusSchema.safeParse(params.status);
   const values = {
-    count: new Intl.NumberFormat(locale).format(count),
-    entity: text(notification.params.entity),
-    actor: text(notification.params.actor),
+    count: number.format(count),
+    entity: text(params.entity),
+    actor: text(params.actor),
+    employee: text(params.employee),
+    criterion: number.format(criterion),
+    // The criterion verified for everyone just before this one.
+    done: number.format(Math.max(criterion - 1, 0)),
+    of: number.format(Number(params.of ?? 0)),
+    status: status.success ? statusBadge(status.data, t).label : '',
   };
   const key: MessageKey = `notifications.kinds.${notification.kind}.${pluralForm(count, locale)}`;
   return t(key, values);
@@ -47,6 +65,7 @@ export function notificationRows(
     message: messageOf(notification, locale, t),
     meta: formatDateTime(notification.createdAt, locale),
     unread: !notification.read,
+    action: notification.actionNeeded ? t('notifications.respond') : t('notifications.view'),
   }));
 }
 

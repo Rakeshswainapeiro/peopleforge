@@ -27,17 +27,24 @@ const line = (max: number) =>
     .max(max)
     // eslint-disable-next-line no-control-regex -- control characters are what is refused
     .regex(/^[^\u0000-\u001f\u007f]+$/u);
+const reference = line(40);
+const employees = z.number().int().min(0).max(10_000);
 const PARAMS = {
-  request_submitted: z.object({
-    reference: line(40),
-    employees: z.number().int().min(0).max(10_000),
+  request_submitted: z.object({ reference, employees }),
+  request_received: z.object({ reference, employees, entity: line(50), actor: line(200) }),
+  stage_changed: z.object({
+    reference,
+    criterion: z.number().int().min(1).max(50),
+    of: z.number().int().min(1).max(50),
   }),
-  request_received: z.object({
-    reference: line(40),
-    employees: z.number().int().min(0).max(10_000),
-    entity: line(50),
-    actor: line(200),
+  employee_approved: z.object({ reference, employee: line(200) }),
+  employee_rejected: z.object({ reference, employee: line(200) }),
+  employee_returned: z.object({ reference, employee: line(200) }),
+  request_decided: z.object({
+    reference,
+    status: z.enum(['approved', 'partly_approved', 'rejected']),
   }),
+  request_resubmitted: z.object({ reference, employees, entity: line(50), actor: line(200) }),
 } as const;
 
 type Kind = keyof typeof PARAMS;
@@ -78,13 +85,22 @@ export function renderEmail(job: OutboxJob, options: RenderOptions): Rendered {
   const parsed = PARAMS[job.kind].safeParse(job.params);
   if (!parsed.success) return { ok: false, reason: 'invalid_params' };
   const t = catalogues.translator(options.locale);
-  const values = {
-    ...parsed.data,
-    count: new Intl.NumberFormat(options.locale).format(parsed.data.employees),
-  };
+  const number = new Intl.NumberFormat(options.locale);
+  // Display values only: numbers in the reader's locale, a final status in their words.
+  const values: Record<string, string> = Object.fromEntries(
+    Object.entries(parsed.data).map(([key, value]) => [
+      key,
+      typeof value === 'number' ? number.format(value) : value,
+    ]),
+  );
+  if ('status' in parsed.data) values.status = t(`statuses.${parsed.data.status}`);
+  if ('employees' in parsed.data) values.count = number.format(parsed.data.employees);
   const subject = t(`kinds.${job.kind}.subject`, values);
+  // Kinds about a number of employees word it in the singular or plural.
   const body = t(
-    `kinds.${job.kind}.body.${pluralForm(parsed.data.employees, options.locale)}`,
+    'employees' in parsed.data
+      ? `kinds.${job.kind}.body.${pluralForm(parsed.data.employees, options.locale)}`
+      : `kinds.${job.kind}.body`,
     values,
   );
   const url = linkFor(options.portalUrl, job.requestId);

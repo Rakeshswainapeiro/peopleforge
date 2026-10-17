@@ -1,6 +1,6 @@
-# Schemas `core`, `increments`, `audit` and `notify` (slices S1–S4b)
+# Schemas `core`, `increments`, `audit` and `notify` (slices S1–S5a)
 
-Migrations: `packages/db/migrations/core/0001_core_schema`, `0002_placeholder_configuration`, `0003_increment_requests`, `0004_criteria_evidence`, `0005_submission_audit_notifications`, `0006_dashboard`, `0007_submitter_name`, `0008_email_worker` (up/down), recorded in `migrations.core`. Decisions: ADR-002 (data access, RLS), ADR-008 (field encryption), ADR-010 (evidence files), ADR-011 (audit trail and notifications). Design: `docs/design/r1-increment-portal.md` §3a.
+Migrations: `packages/db/migrations/core/0001_core_schema`, `0002_placeholder_configuration`, `0003_increment_requests`, `0004_criteria_evidence`, `0005_submission_audit_notifications`, `0006_dashboard`, `0007_submitter_name`, `0008_email_worker`, `0009_review_decisions` (up/down), recorded in `migrations.core`. Decisions: ADR-002 (data access, RLS), ADR-008 (field encryption), ADR-010 (evidence files), ADR-011 (audit trail and notifications), ADR-013 (review, decisions and returns). Design: `docs/design/r1-increment-portal.md` §3a.
 
 Every table here also carries `created_at`, `created_by`, `updated_at`, `updated_by` (UTC timestamps, user IDs), and `version` (optimistic locking) where rows are edited. `created_by`/`updated_by` is `seed` for migration and seed rows.
 
@@ -26,14 +26,19 @@ erDiagram
   INCREMENT_REQUEST ||--o{ NOTIFICATION : "about"
   NOTIFICATION ||--o{ NOTIFICATION_READ : "read by"
   NOTIFICATION ||--o| EMAIL_OUTBOX : "emailed as"
+  REQUEST_LINE ||--o{ CRITERION_VERIFICATION : "checked by Sirius HR"
+  CRITERION ||--o{ CRITERION_VERIFICATION : "verified in"
+  REQUEST_LINE ||--o{ LINE_DECISION : "decided by"
   ENTITY { uuid id PK; text code UK; jsonb name; char3 default_currency }
   USER_ENTITY { text user_id PK; uuid entity_id PK,FK }
   EMPLOYEE { uuid id PK; uuid entity_id FK; text employee_number; text full_name; text grade; bytea monthly_salary; char3 currency }
   INCREMENT_CYCLE { uuid id PK; jsonb name; date starts_on; date ends_on; date submission_deadline; text status }
   CRITERIA_SET { uuid id PK; int version UK; text status }
   CRITERION { uuid id PK; uuid criteria_set_id FK; smallint position; text code; jsonb name; jsonb description; text evidence_policy }
-  INCREMENT_REQUEST { uuid id PK; text reference UK; uuid entity_id FK; uuid cycle_id FK; uuid criteria_set_id FK; text status; int version; timestamptz submitted_at; text submitted_by; timestamptz status_changed_at }
-  REQUEST_LINE { uuid id PK; uuid request_id FK; uuid entity_id FK; uuid employee_id FK; text grade; bytea current_salary; char3 currency; text proposed_kind; bytea proposed_value }
+  INCREMENT_REQUEST { uuid id PK; text reference UK; uuid entity_id FK; uuid cycle_id FK; uuid criteria_set_id FK; text status; int version; timestamptz submitted_at; text submitted_by; timestamptz status_changed_at; timestamptz decided_at }
+  REQUEST_LINE { uuid id PK; uuid request_id FK; uuid entity_id FK; uuid employee_id FK; text grade; bytea current_salary; char3 currency; text proposed_kind; bytea proposed_value; text review_status; timestamptz review_changed_at }
+  CRITERION_VERIFICATION { uuid line_id PK,FK; uuid criterion_id PK,FK; uuid entity_id FK; text verified_by; text verified_by_name; timestamptz verified_at }
+  LINE_DECISION { uuid id PK; uuid line_id FK; uuid request_id FK; uuid entity_id FK; text decision; text reason_code; bytea comment; text approved_kind; bytea approved_value; text decided_by; text decided_by_name; timestamptz decided_at }
   IDEMPOTENCY_KEY { text user_id PK; text key PK; uuid request_id FK }
   REQUEST_SEQUENCE { uuid cycle_id PK; int last_number }
   CRITERION_RESULT { uuid id PK; uuid line_id FK; uuid entity_id FK; uuid criterion_id FK; text result; bytea justification }
@@ -117,7 +122,8 @@ Primary key `(user_id, entity_id)`. Rows are inserted and deleted, never updated
 | `entity_id`         | `uuid`        | No   | → `core.entity`; drives RLS                                                                                                                 | Internal     |
 | `cycle_id`          | `uuid`        | No   | → `core.increment_cycle` (must be `open` at creation)                                                                                       | Internal     |
 | `criteria_set_id`   | `uuid`        | No   | The criteria set active at creation; later changes don't affect it (R1-05)                                                                  | Internal     |
-| `status`            | `text`        | No   | `draft` or `submitted` (S4a); review and decision statuses arrive in S5                                                                     | Internal     |
+| `status`            | `text`        | No   | `draft`, `submitted`, `under_review`, `returned`, `approved`, `partly_approved` or `rejected` (0009; rules below)                           | Internal     |
+| `decided_at`        | `timestamptz` | Yes  | When the last employee was decided: set exactly when the status is final (CHECK). The end of the request's TAT (R1-11) (0009)               | Internal     |
 | `submitted_at`      | `timestamptz` | Yes  | When it was submitted; set exactly when `status` isn't `draft` (CHECK)                                                                      | Internal     |
 | `submitted_by`      | `text`        | Yes  | User ID of the submitter; set with `submitted_at`                                                                                           | Internal     |
 | `submitted_by_name` | `text`        | Yes  | The submitter's display name as read at submit time ("by Priya Nair"), 1–200 characters; null for drafts and requests submitted before 0007 | Confidential |
@@ -127,7 +133,9 @@ Primary key `(user_id, entity_id)`. Rows are inserted and deleted, never updated
 
 `submitted_by_name` is kept so the request page can say who submitted it without a user directory lookup (Phase 1 has no user profile table; the IdP holds names). It is a staff member's name, so Confidential, and goes with the request under its retention.
 
-Unique `(id, entity_id)` exists so lines can reference the pair. A submitted request is read-only: every change (lines, proposals, criteria, evidence) locks the request and refuses a non-draft (`not_draft`, 409). Submitting is idempotent per user and key (the `idempotency_key` table is reused).
+**Statuses (ADR-013).** `submitted` until Sirius HR's first verification or decision → `under_review`. While any employee is `returned` the request is `returned` (with the subsidiary). Once every employee is decided it is final: `approved` (all approved), `rejected` (all rejected) or `partly_approved` (some of each). Every change is a `status_event` and an audit entry.
+
+Unique `(id, entity_id)` exists so lines can reference the pair. A submitted request is read-only for the subsidiary, except for its returned employees (below): every change (lines, proposals, criteria, evidence) locks the request and refuses a non-draft (`not_draft`, 409). Submitting is idempotent per user and key (the `idempotency_key` table is reused).
 
 ### `increments.request_line` — an employee in a request
 
@@ -142,6 +150,10 @@ Unique `(id, entity_id)` exists so lines can reference the pair. A submitted req
 | `proposed_value`                        | `bytea`       | Yes  | Encrypted decimal (percentage or monthly amount), AD `…:proposed_value:<id>`; null with the kind | **Restricted** |
 | `created_at`                            | `timestamptz` | No   | `clock_timestamp()`: keeps the order employees were added within one transaction                 | Internal       |
 | `deleted_at`                            | `timestamptz` | Yes  | Soft delete (removing an employee); the same employee may be added again                         | Internal       |
+| `review_status`                         | `text`        | No   | `pending` (with Sirius HR), `approved`, `rejected` or `returned` (with the subsidiary) (0009)    | Confidential   |
+| `review_changed_at`                     | `timestamptz` | Yes  | When `review_status` last changed (null until then): the queue's "waiting since" (0009)          | Internal       |
+
+A returned employee is the only part of a submitted request the subsidiary can change: its proposal, criteria and evidence (the repository's `lockDraft` allows a `returned` request only for lines whose `review_status` is `returned`). Resubmitting sets them back to `pending` and deletes their verifications, so Sirius HR checks them again.
 
 Derived values (increase, new salary, percentage, totals) are computed by the API on read with decimal arithmetic and are **not stored** (no stale copies). Rules: `apps/api/src/modules/increment-requests/money.ts`.
 
@@ -190,6 +202,33 @@ The file itself is in the private bucket (**Restricted**: personal documents), e
 | `reason`                  | `text`        | Yes  | ≤ 2,000 characters; used for returns and rejections (S5), else null | Confidential |
 
 **Append-only**: the app role has `SELECT, INSERT` only, and the trigger `status_event_append_only` (`audit.refuse_change()`) refuses `UPDATE`, `DELETE` and `TRUNCATE` for every role, the owner included.
+
+### `increments.criterion_verification` — Sirius HR's check of one criterion (R1-07, R1-10, 0009)
+
+| Column                 | Type          | Null | Meaning                                                                                 | Sensitivity  |
+| ---------------------- | ------------- | ---- | --------------------------------------------------------------------------------------- | ------------ |
+| `line_id`, `entity_id` | `uuid`        | No   | → `request_line (id, entity_id)`                                                        | Internal     |
+| `criterion_id`         | `uuid`        | No   | → `criterion`; part of the primary key `(line_id, criterion_id)`                        | Internal     |
+| `verified_by`          | `text`        | No   | Reviewer's user ID                                                                      | Internal     |
+| `verified_by_name`     | `text`        | No   | Reviewer's display name at the time ("Verified by Sara, 16 Oct"), 1–200 characters      | Confidential |
+| `verified_at`          | `timestamptz` | No   | `clock_timestamp()`, UTC: the end of this criterion's TAT for this employee (R1-11, S7) | Internal     |
+
+"Mark verified" inserts a row; "Undo" deletes it; both are audited (`criterion.verified`, `criterion.unverified`). Resubmitting a returned employee deletes theirs. A request's **stage** is the number of criteria verified for every `pending` employee, plus one (criteria in any order; ADR-013).
+
+### `increments.line_decision` — every decision on an employee (R1-08, R1-09, 0009)
+
+| Column                               | Type           | Null | Meaning                                                                                                                             | Sensitivity    |
+| ------------------------------------ | -------------- | ---- | ----------------------------------------------------------------------------------------------------------------------------------- | -------------- |
+| `id`                                 | `uuid`         | No   | Primary key, chosen by the API (part of the ciphertexts' associated data)                                                           | Internal       |
+| `line_id`, `request_id`, `entity_id` | `uuid`         | No   | → `request_line` and `increment_request`, both with the entity                                                                      | Internal       |
+| `decision`                           | `text`         | No   | `approved`, `rejected` or `returned`                                                                                                | Confidential   |
+| `reason_code`                        | `text`         | Yes  | From the contract's list for the decision (`criteria_not_met`, `missing_evidence`, `budget`…); required unless approved as proposed | Confidential   |
+| `comment`                            | `bytea`        | Yes  | Reviewer's comment or question, AES-256-GCM, AD `increments.line_decision:comment:<id>`; null when none                             | **Restricted** |
+| `approved_kind`, `approved_value`    | `text`/`bytea` | Yes  | An approval at another increment: kind and encrypted decimal (AD `…:approved_value:<id>`); both null = as proposed                  | **Restricted** |
+| `decided_by`, `decided_by_name`      | `text`         | No   | Reviewer's user ID and display name at the time                                                                                     | Confidential   |
+| `decided_at`                         | `timestamptz`  | No   | `clock_timestamp()`, UTC                                                                                                            | Internal       |
+
+The latest row per employee is the current decision; earlier ones stay (a returned employee is later approved or rejected): this is the back-and-forth record for R1-12. **Append-only**: `SELECT, INSERT` for the app role and the `line_decision_append_only` trigger. Comments are encrypted because they can discuss appraisals and pay.
 
 ### `audit.audit_log` — audit trail (R1-15, R2-13, NFR-AUD-01, ADR-011)
 
@@ -263,6 +302,7 @@ Session settings, set per transaction by `withScope` (`set_config(…, true)`): 
 | `core.user_entity`                                                                                                   | Read: group scope, or the caller's own rows. Insert/delete: group scope only                                                                                            |
 | `core.employee`                                                                                                      | All commands: `core.can_access_entity(entity_id)` (USING and WITH CHECK, so rows can't move)                                                                            |
 | `increments.increment_request`, `increments.request_line`, `increments.criterion_result`, `increments.evidence_file` | All commands: `core.can_access_entity(entity_id)`                                                                                                                       |
+| `increments.criterion_verification`, `increments.line_decision`                                                      | All commands: `core.can_access_entity(entity_id)` (0009). Who may verify and decide (reviewers) is checked in the API                                                   |
 | `increments.idempotency_key`                                                                                         | Own rows only: `user_id = core.current_user_id()`                                                                                                                       |
 | `increments.status_event`                                                                                            | `core.can_access_entity(entity_id)`                                                                                                                                     |
 | `audit.audit_log`                                                                                                    | Insert: `actor = core.current_user_id()` and the entity accessible. Read: group scope only (`audit:read` checked in the API)                                            |
@@ -277,8 +317,9 @@ RLS is `FORCE`d, so the owner is bound too (the seed sets group scope explicitly
 **Grants to the app role:**
 
 - `SELECT, INSERT, UPDATE` on entity, cycle, employee, the criteria tables, `increment_request`, `request_line`, `request_sequence`, `criterion_result` and `evidence_file`.
-- `SELECT, INSERT` on `idempotency_key`, `status_event`, `audit_log`, `notification` and `notification_read`; `INSERT` only on `email_outbox`.
-- `UPDATE`/`DELETE`/`TRUNCATE` on `audit_log` and `status_event` are refused by trigger for every role.
+- `SELECT, INSERT` on `idempotency_key`, `status_event`, `line_decision`, `audit_log`, `notification` and `notification_read`; `INSERT` only on `email_outbox`.
+- `SELECT, INSERT, DELETE` on `criterion_verification` (unticking, and resubmission's fresh check).
+- `UPDATE`/`DELETE`/`TRUNCATE` on `audit_log`, `status_event` and `line_decision` are refused by trigger for every role.
 - `SELECT` on `role_mailbox` (for the admin screen, S7).
 
 **Grants to the worker role** (`peopleforge_worker`, ADR-012, 0008): `USAGE` on schema `notify`; `SELECT` on `notification` and `role_mailbox`; `SELECT` and `UPDATE (status, attempts, last_error, next_attempt_at, sent_at, message_id)` on `email_outbox`; and, from web migration 0002, `SELECT` on the view `auth.recipient_email`. Nothing else: no requests, employees, salaries, justifications, audit trail or sign-in tables (`email-outbox.test.ts` proves each refusal).
@@ -315,10 +356,18 @@ RLS is `FORCE`d, so the owner is bound too (the seed sets group scope explicitly
 | `increment_request_cycle_idx (cycle_id, status, created_at desc)` (live)                                 | Sirius HR's dashboard: every subsidiary in a cycle          |
 | `request_line_name_trgm_idx`, `request_line_number_trgm_idx` (GIN, `lower(…)` with `gin_trgm_ops`, live) | Dashboard search anywhere in an employee's name or number   |
 | `increment_request_reference_trgm_idx` (GIN, `lower(reference)`, live)                                   | Dashboard search by request reference                       |
+| `request_line_review_idx (review_status, request_id)` (live)                                             | The review queue: employees by review status (0009)         |
+| `criterion_verification_entity_idx (entity_id)`                                                          | RLS filter                                                  |
+| `line_decision_line_idx (line_id, decided_at desc)`                                                      | An employee's latest decision                               |
+| `line_decision_request_idx (request_id, decided_at)`, `line_decision_entity_idx (entity_id, decided_at)` | A request's decisions in order; back-and-forth (R1-12)      |
 
 ## Dashboard queries (S4b, `packages/db/src/dashboard.ts`)
 
 "My increment requests" reads requests, employees and counts under the same Row-Level Security as everything else. It never reads justifications or files, only whether they exist (`justification is not null`, a count of live files), and the API judges completeness from those facts with the same rule as the request page. Search is a parameterised `lower(column) LIKE lower($1)` with the user's `%`, `_` and `\` escaped. It uses the `pg_trgm` trigram indexes above (extension enabled by migration 0006; trusted, so the database owner can create it). Salaries are decrypted only to compute an amount proposal's percentage; lists never return them.
+
+## Review queries (S5a, `packages/db/src/review.ts`)
+
+The review queue lists live lines of non-draft requests with their review status, filtered by chip (`pending`, `returned`, `overdue` = pending since before the reminder cut-off, `open` = pending or returned, `all`), oldest waiting first, with the counts per chip in one aggregate query. It decrypts the salary only to derive a proposal's percentage; it never returns salaries, justifications or comments. Verifying, deciding and resubmitting lock the request row (`FOR UPDATE`), so two reviewers can't decide the same employee twice; decisions are idempotent per user and key.
 
 ## Retention (proposal, confirm with Sirius under NFR-PRIV-01)
 

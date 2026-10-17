@@ -94,7 +94,12 @@ export interface RequestSequenceTable {
   last_number: number;
 }
 
-export type RequestStatus = 'draft' | 'submitted';
+export type RequestStatus =
+  'draft' | 'submitted' | 'under_review' | 'returned' | 'approved' | 'partly_approved' | 'rejected';
+
+/** Where an employee stands in Sirius HR's review (0009). */
+export type LineReviewStatus = 'pending' | 'approved' | 'rejected' | 'returned';
+export type LineDecisionValue = 'approved' | 'rejected' | 'returned';
 
 export interface IncrementRequestTable {
   id: Generated<string>;
@@ -115,6 +120,8 @@ export interface IncrementRequestTable {
   submitted_by_name: string | null;
   /** Last status change (Age, Last update on the dashboard); set by every status change. */
   status_changed_at: Generated<Date>;
+  /** When the last employee was decided (0009); null until then. */
+  decided_at: Date | null;
 }
 
 export type ProposedKind = 'percent' | 'amount';
@@ -137,6 +144,8 @@ export interface RequestLineTable {
   created_by: string;
   updated_at: Timestamp;
   updated_by: string;
+  review_status: Generated<LineReviewStatus>;
+  review_changed_at: Date | null;
   deleted_at: Date | null;
 }
 
@@ -251,6 +260,32 @@ export interface RecipientEmailView {
   email: ColumnType<string, never, never>;
 }
 
+export interface CriterionVerificationTable {
+  line_id: string;
+  entity_id: string;
+  criterion_id: string;
+  verified_by: string;
+  verified_by_name: string;
+  verified_at: Generated<Date>;
+}
+
+export interface LineDecisionTable {
+  id: string;
+  line_id: string;
+  entity_id: string;
+  request_id: string;
+  decision: LineDecisionValue;
+  reason_code: string | null;
+  /** Ciphertext of the reviewer's comment (ADR-008). */
+  comment: Buffer | null;
+  approved_kind: ProposedKind | null;
+  /** Ciphertext of a decimal: the approved percentage or amount when it differs from the proposal. */
+  approved_value: Buffer | null;
+  decided_by: string;
+  decided_by_name: string;
+  decided_at: Generated<Date>;
+}
+
 /** Tables the application reads and writes, by schema-qualified name. */
 export interface Database {
   'core.entity': EntityTable;
@@ -271,5 +306,7 @@ export interface Database {
   'notify.notification_read': NotificationReadTable;
   'notify.email_outbox': EmailOutboxTable;
   'notify.role_mailbox': RoleMailboxTable;
+  'increments.criterion_verification': CriterionVerificationTable;
+  'increments.line_decision': LineDecisionTable;
   'auth.recipient_email': RecipientEmailView;
 }

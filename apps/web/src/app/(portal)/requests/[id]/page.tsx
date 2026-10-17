@@ -20,17 +20,20 @@ import {
   detailRows,
   detailSubtitle,
   reviewSteps,
+  returnedView,
   submittedBanner,
 } from '@/lib/request-detail-view';
+import { formatDate } from '@/lib/format';
+import { statusBadge } from '@/lib/request-status';
 import { requestFigures } from '@/lib/request-figures';
 import { markStateLabels } from '@/lib/request-view';
-import { editRequestHref, requestHref } from '@/lib/routes';
+import { editRequestHref, employeeStatusHref, requestHref } from '@/lib/routes';
 import { getRequest } from '@/server/increment-requests';
 import { requireViewer } from '@/server/session';
 
 interface RequestDetailPageProps {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ submitted?: string }>;
+  searchParams: Promise<{ submitted?: string; resubmitted?: string }>;
 }
 
 /**
@@ -60,6 +63,10 @@ export default async function RequestDetailPage({ params, searchParams }: Reques
   }
 
   const banner = query.submitted === '1' ? submittedBanner(request, locale, t) : null;
+  const group = me.scope === 'group';
+  const returned = returnedView(request, locale, t, group);
+  const canResubmit = me.permissions.includes('increment_request:submit');
+  const reviewer = me.permissions.includes('increment_request:review');
 
   return (
     <>
@@ -69,7 +76,10 @@ export default async function RequestDetailPage({ params, searchParams }: Reques
             label={t('breadcrumb.label')}
             as={Link}
             items={[
-              { label: t('breadcrumb.myRequests'), href: '/' },
+              {
+                label: t(group ? 'breadcrumb.requestTracker' : 'breadcrumb.myRequests'),
+                href: '/',
+              },
               { label: t('breadcrumb.requestDetail') },
             ]}
           />
@@ -114,6 +124,53 @@ export default async function RequestDetailPage({ params, searchParams }: Reques
         </Alert>
       )}
 
+      {query.resubmitted === '1' ? (
+        <Alert tone="success" title={t('resubmit.done')} className="mt-6" />
+      ) : null}
+
+      {returned === null ? null : (
+        <Alert
+          tone="warning"
+          title={returned.title}
+          className="mt-6"
+          actions={
+            canResubmit ? (
+              <ButtonLink href={editRequestHref(request.id)} size="sm" as={Link}>
+                {t('requestDetail.update')}
+              </ButtonLink>
+            ) : undefined
+          }
+        >
+          {group ? null : <p>{returned.body}</p>}
+          <ul className="mt-2 flex flex-col gap-2">
+            {returned.items.map((item) => (
+              <li key={item.id}>
+                <Link
+                  href={employeeStatusHref(request.id, item.id)}
+                  className="font-semibold text-ink underline-offset-2 hover:underline"
+                >
+                  {item.name}
+                </Link>
+                {item.reason === '' ? null : <span> · {item.reason}</span>}
+                {item.comment === '' ? null : (
+                  <span className="block whitespace-pre-line text-ink">“{item.comment}”</span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </Alert>
+      )}
+
+      {request.decidedAt === null ? null : (
+        <Alert
+          tone={request.status === 'rejected' ? 'danger' : 'success'}
+          title={t('requestDetail.decidedTitle', { status: statusBadge(request.status, t).label })}
+          className="mt-6"
+        >
+          {t('requestDetail.decidedBody', { date: formatDate(request.decidedAt, locale) })}
+        </Alert>
+      )}
+
       <Card className="mt-6" label={t('requestDetail.whereTitle')}>
         <CardHeader title={t('requestDetail.whereTitle')} />
         <div className="px-6 pt-4 pb-6">
@@ -143,7 +200,7 @@ export default async function RequestDetailPage({ params, searchParams }: Reques
         </div>
         <div className="px-6 pt-2 pb-6">
           <RequestEmployeesTable
-            rows={detailRows(request, locale, t)}
+            rows={detailRows(request, locale, t, group)}
             labels={{
               caption: t('requestDetail.tableCaption', { reference: request.reference }),
               employee: t('requestDetail.colEmployee'),
@@ -153,7 +210,7 @@ export default async function RequestDetailPage({ params, searchParams }: Reques
               criteria: criteriaColumn(request, t),
               status: t('requestDetail.colStatus'),
               action: t('requestDetail.colAction'),
-              viewStatus: t('dashboard.viewStatus'),
+              viewStatus: reviewer ? t('review.review') : t('dashboard.viewStatus'),
               stateLabels: markStateLabels(t),
             }}
           />

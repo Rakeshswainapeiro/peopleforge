@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createTranslator } from '@/i18n/translator';
 import {
+  decisionOf,
   draftRequest,
   LINE_1,
   LINE_2,
@@ -11,6 +12,7 @@ import {
   criteriaColumn,
   detailRows,
   detailSubtitle,
+  returnedView,
   reviewSteps,
   submittedBanner,
 } from './request-detail-view';
@@ -92,7 +94,7 @@ describe('detailRows', () => {
         { code: 'C5', state: 'pass' },
       ],
       marksLabel: 'C1 pass, C2 fail, C3 pass, C4 pass, C5 pass',
-      status: { tone: 'neutral', label: 'Submitted' },
+      status: { tone: 'neutral', label: 'With Sirius HR' },
       href: `/requests/${REQUEST_ID}/employees/${LINE_1}`,
       viewLabel: 'View the status of Omar Haddad',
     });
@@ -117,5 +119,109 @@ describe('criteriaColumn', () => {
   it('names the criteria range, or just "Criteria" without any', () => {
     expect(criteriaColumn(submittedRequest(), t)).toBe('Criteria C1–C5');
     expect(criteriaColumn(submittedRequest({ criteria: [] }), t)).toBe('Criteria');
+  });
+});
+
+describe('review in the request detail [R1-08 … R1-10]', () => {
+  it('says who has the request: the subsidiary when returned, nobody once decided', () => {
+    expect(detailSubtitle(submittedRequest({ status: 'returned' }), 'en', t)).toMatch(
+      / · With Subsidiary A$/u,
+    );
+    expect(
+      detailSubtitle(
+        submittedRequest({ status: 'approved', decidedAt: '2026-10-16T09:00:00.000Z' }),
+        'en',
+        t,
+      ),
+    ).toMatch(/ · Decided 16 Oct 2026$/u);
+  });
+
+  it('marks criteria verified for everyone done, the next current, then the decision', () => {
+    const at = (stage: Parameters<typeof reviewSteps>[0]['stage'], extra = {}) =>
+      reviewSteps(submittedRequest({ stage, ...extra }), 'en', t).map((step) => step.state);
+    expect(at({ kind: 'criterion', criterion: 3, of: 5 })).toEqual([
+      'done',
+      'done',
+      'done',
+      'current',
+      'todo',
+      'todo',
+      'todo',
+    ]);
+    const deciding = reviewSteps(submittedRequest({ stage: { kind: 'decision', of: 5 } }), 'en', t);
+    expect(deciding.at(-1)).toEqual({
+      label: 'Decision',
+      detail: 'Awaiting decision',
+      state: 'current',
+    });
+    expect(deciding[1]?.detail).toBe('Verified for everyone');
+    const decided = reviewSteps(
+      submittedRequest({
+        status: 'partly_approved',
+        stage: { kind: 'decided', of: 5 },
+        decidedAt: '2026-10-16T09:00:00.000Z',
+      }),
+      'en',
+      t,
+    );
+    expect(decided.at(-1)).toEqual({
+      label: 'Decision',
+      detail: 'Partly approved · 16 Oct 2026',
+      state: 'done',
+    });
+  });
+
+  it('shows each employee’s own status for Sirius HR', () => {
+    const request = submittedRequest({ status: 'returned' });
+    const [omar] = detailRows(
+      {
+        ...request,
+        lines: request.lines.map((line) => ({ ...line, reviewStatus: 'returned' as const })),
+      },
+      'en',
+      t,
+      true,
+    );
+    expect(omar?.status).toEqual({ tone: 'warning', label: 'Returned' });
+  });
+
+  it('lists returned employees with Sirius HR’s reason and question, or nothing', () => {
+    const request = submittedRequest({ status: 'returned' });
+    expect(returnedView(submittedRequest(), 'en', t, false)).toBeNull();
+    const returned = {
+      ...request,
+      lines: request.lines.map((line, index) =>
+        index === 0
+          ? {
+              ...line,
+              reviewStatus: 'returned' as const,
+              decision: decisionOf({
+                decision: 'returned',
+                reasonCode: 'missing_evidence',
+                comment: 'Attach the appraisal.',
+              }),
+            }
+          : line,
+      ),
+    };
+    expect(returnedView(returned, 'en', t, false)).toEqual({
+      title: 'Sirius HR returned 1 employee to you',
+      body: 'Answer each question, update the employee and resubmit. Employees not returned stay with Sirius HR.',
+      items: [
+        {
+          id: LINE_1,
+          name: 'Omar Haddad',
+          reason: 'Missing evidence',
+          comment: 'Attach the appraisal.',
+        },
+      ],
+    });
+    const both = {
+      ...request,
+      lines: request.lines.map((line) => ({ ...line, reviewStatus: 'returned' as const })),
+    };
+    const view = returnedView(both, 'en', t, true);
+    expect(view?.title).toBe('2 employees are back with Subsidiary A');
+    expect(view?.items[1]).toEqual({ id: LINE_2, name: 'Neha Iyer', reason: '', comment: '' });
   });
 });

@@ -61,6 +61,7 @@ export function employeeCards(line: RequestLine, locale: Locale, t: Translate): 
 
 export interface CriterionRowView {
   id: string;
+  code: string;
   name: string;
   result: { tone: BadgeTone; icon: IconName | undefined; label: string };
   justification: string;
@@ -80,6 +81,7 @@ export function criterionRows(
     return [
       {
         id: criterion.id,
+        code: criterion.code,
         name: `${criterion.code} · ${localised(criterion.name, locale)}`,
         result:
           assessment.result === 'pass'

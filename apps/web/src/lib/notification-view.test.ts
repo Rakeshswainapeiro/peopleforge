@@ -48,9 +48,11 @@ describe('notificationRows [R1-07]', () => {
         message: 'Submitted to Sirius HR with 1 employee.',
         meta: '14 Oct 2026, 16:05',
         unread: true,
+        action: 'View',
       },
       expect.objectContaining({
         tag: { tone: 'warning', label: 'Action needed' },
+        action: 'Respond',
         message: 'New request from SUB-A with 3 employees, submitted by Alpha HR.',
         unread: false,
       }),
@@ -74,5 +76,46 @@ describe('notificationsHref', () => {
     expect(notificationsHref('action_needed', 2)).toBe(
       '/notifications?filter=action_needed&page=2',
     );
+  });
+});
+
+describe('review notifications [R1-08 … R1-10]', () => {
+  it('words the stage, each decision and the final status', () => {
+    const rows = notificationRows(
+      page([
+        {
+          ...base,
+          kind: 'stage_changed',
+          params: { reference: 'INC-2026-0152', criterion: 3, of: 5 },
+        },
+        {
+          ...base,
+          kind: 'employee_returned',
+          params: { reference: 'INC-2026-0152', employee: 'Aisha Rahman' },
+          actionNeeded: true,
+        },
+        {
+          ...base,
+          kind: 'request_decided',
+          params: { reference: 'INC-2026-0152', status: 'partly_approved' },
+        },
+        {
+          ...base,
+          kind: 'request_decided',
+          params: { reference: 'INC-2026-0152', status: 'nonsense' },
+        },
+        { ...base, kind: 'stage_changed', params: {} },
+      ]),
+      'en',
+      t,
+    );
+    expect(rows.map((row) => row.message)).toEqual([
+      'Sirius HR verified criterion 2 for every employee. Criterion 3 of 5 is under review.',
+      'Aisha Rahman returned by Sirius HR with a question. Update and resubmit.',
+      'Every employee decided. Final status: Partly approved.',
+      'Every employee decided. Final status: .',
+      'Sirius HR verified criterion 0 for every employee. Criterion 0 of 0 is under review.',
+    ]);
+    expect(rows[1]?.action).toBe('Respond');
   });
 });

@@ -4,7 +4,9 @@ import type {
   DashboardSummary,
   IncrementRequest,
   IncrementRequestPage,
+  RequestLine,
   RequestLinePage,
+  ReviewQueuePage,
 } from '@peopleforge/contracts';
 
 /** Synthetic request fixtures for the web tests (shape: @peopleforge/contracts). */
@@ -28,6 +30,7 @@ export function notStarted(criterionId: string): CriterionAssessment {
     justification: '',
     evidence: [],
     missing: ['result', 'justification', 'evidence'],
+    verification: null,
   };
 }
 
@@ -49,6 +52,7 @@ export function omarCriteria(): CriterionAssessment[] {
         },
       ],
       missing: [],
+      verification: null,
     },
     {
       criterionId: String(c2),
@@ -64,6 +68,7 @@ export function omarCriteria(): CriterionAssessment[] {
         },
       ],
       missing: [],
+      verification: null,
     },
     {
       criterionId: String(c3),
@@ -71,6 +76,7 @@ export function omarCriteria(): CriterionAssessment[] {
       justification: '',
       evidence: [],
       missing: ['justification', 'evidence'],
+      verification: null,
     },
     notStarted(String(c4)),
     { ...notStarted(String(c5)), missing: ['result', 'justification'] },
@@ -99,6 +105,9 @@ export function draftRequest(overrides: Partial<IncrementRequest> = {}): Increme
     updatedAt: '2026-10-14T07:05:00.000Z',
     submittedAt: null,
     submittedByName: null,
+    statusChangedAt: '2026-10-14T07:00:00.000Z',
+    decidedAt: null,
+    stage: { kind: 'not_submitted', of: 5 },
     lines: [
       {
         id: LINE_1,
@@ -114,6 +123,8 @@ export function draftRequest(overrides: Partial<IncrementRequest> = {}): Increme
         newSalary: '23220.00',
         percent: '8.00',
         criteria: omarCriteria(),
+        reviewStatus: 'pending',
+        decision: null,
       },
       {
         id: LINE_2,
@@ -129,6 +140,8 @@ export function draftRequest(overrides: Partial<IncrementRequest> = {}): Increme
         newSalary: null,
         percent: null,
         criteria: CRITERION_IDS.map((id) => notStarted(id)),
+        reviewStatus: 'pending',
+        decision: null,
       },
     ],
     totals: {
@@ -150,6 +163,8 @@ export function submittedRequest(overrides: Partial<IncrementRequest> = {}): Inc
     status: 'submitted',
     submittedAt: '2026-10-15T07:14:00.000Z',
     submittedByName: 'Priya Nair',
+    statusChangedAt: '2026-10-15T07:14:00.000Z',
+    stage: { kind: 'criterion', criterion: 1, of: 5 },
     lines: draft.lines.map((line) => ({
       ...line,
       criteria: line.criteria.map((criterion) => ({
@@ -180,7 +195,20 @@ export const OPEN_CYCLE: Cycle = {
 export function dashboardSummaryFixture(
   overrides: Partial<DashboardSummary> = {},
 ): DashboardSummary {
-  return { byStatus: { draft: 1, submitted: 2 }, requests: 3, employees: 7, ...overrides };
+  return {
+    byStatus: {
+      draft: 1,
+      submitted: 2,
+      under_review: 1,
+      returned: 1,
+      approved: 2,
+      partly_approved: 1,
+      rejected: 1,
+    },
+    requests: 3,
+    employees: 7,
+    ...overrides,
+  };
 }
 
 type RequestSummary = IncrementRequestPage['items'][number];
@@ -195,6 +223,7 @@ export function requestSummary(overrides: Partial<RequestSummary> = {}): Request
     cycleId: CYCLE_ID,
     employeeCount: 4,
     createdAt: '2026-10-08T07:00:00.000Z',
+    submittedAt: null,
     statusChangedAt: '2026-10-08T07:00:00.000Z',
     stage: { kind: 'not_submitted', of: 5 },
     criteria: { complete: 15, total: 20 },
@@ -230,6 +259,7 @@ export function lineSummary(overrides: Partial<LineSummary> = {}): LineSummary {
       mark: index === 4 ? 'fail' : 'pass',
     })),
     status: 'submitted',
+    reviewStatus: 'pending',
     updatedAt: '2026-10-10T07:00:00.000Z',
     ...overrides,
   };
@@ -240,4 +270,77 @@ export function linePage(
   overrides: Partial<RequestLinePage> = {},
 ): RequestLinePage {
   return { items, page: 1, pageSize: 10, total: items.length, ...overrides };
+}
+
+type QueueItem = ReviewQueuePage['items'][number];
+
+/** Omar waiting for Sirius HR since 14 Oct, 2 of 5 criteria verified (Figma "Review queue"). */
+export function queueItem(overrides: Partial<QueueItem> = {}): QueueItem {
+  return {
+    lineId: LINE_1,
+    request: {
+      id: REQUEST_ID,
+      reference: 'INC-2026-0152',
+      status: 'under_review',
+      entity: { id: ENTITY, code: 'SUB-A' },
+      stage: { kind: 'criterion', criterion: 2, of: 5 },
+    },
+    employeeNumber: 'EMP-3318',
+    fullName: 'Omar Haddad',
+    grade: 'G7',
+    proposedPercent: '8.00',
+    criteria: CRITERION_IDS.map((criterionId, index) => ({
+      criterionId,
+      code: `C${String(index + 1)}`,
+      mark: index === 1 ? 'fail' : 'pass',
+    })),
+    verified: 2,
+    reviewStatus: 'pending',
+    waitingSince: '2026-10-14T07:00:00.000Z',
+    overdue: true,
+    ...overrides,
+  };
+}
+
+export function queuePage(
+  items: QueueItem[] = [queueItem()],
+  overrides: Partial<ReviewQueuePage> = {},
+): ReviewQueuePage {
+  return {
+    items,
+    page: 1,
+    pageSize: 10,
+    total: items.length,
+    counts: {
+      all: 6,
+      pending: 3,
+      returned: 1,
+      overdue: 1,
+      open: 4,
+      openRequests: 2,
+      openEntities: 2,
+    },
+    reminderDays: 2,
+    ...overrides,
+  };
+}
+
+/** Sara verified this criterion on 16 Oct. */
+export const VERIFIED = { at: '2026-10-16T06:00:00.000Z', byName: 'Sara Al Mansoori' };
+
+/** A decision as the API returns it (defaults: approved as proposed by Sara on 16 Oct). */
+export function decisionOf(
+  overrides: Partial<NonNullable<RequestLine['decision']>> = {},
+): NonNullable<RequestLine['decision']> {
+  return {
+    decision: 'approved',
+    reasonCode: null,
+    comment: '',
+    approvedPercent: null,
+    approvedIncrease: '1720.00',
+    approvedSalary: '23220.00',
+    decidedAt: '2026-10-16T08:30:00.000Z',
+    decidedByName: 'Sara Al Mansoori',
+    ...overrides,
+  };
 }

@@ -1,6 +1,19 @@
 'use client';
 
-import { Badge, Button, Dialog, StatCard, Table, TBody, Td, Th, THead, Tr } from '@peopleforge/ui';
+import {
+  Badge,
+  Button,
+  Dialog,
+  Field,
+  StatCard,
+  Table,
+  TBody,
+  Td,
+  Textarea,
+  Th,
+  THead,
+  Tr,
+} from '@peopleforge/ui';
 import { useState } from 'react';
 import { useDraftForm } from './draft-form';
 
@@ -46,6 +59,10 @@ export interface SubmitControlProps {
   describedBy: string;
   labels: SubmitControlLabels;
   dialog: SubmitDialogView;
+  /** What confirming does: submit a draft, or resubmit returned employees (R1-08). */
+  intent?: 'submit' | 'resubmit';
+  /** A note to Sirius HR, asked for in the dialog when resubmitting. */
+  note?: { label: string; placeholder: string; maxLength: number } | undefined;
 }
 
 /**
@@ -59,6 +76,8 @@ export function SubmitControl({
   describedBy,
   labels,
   dialog,
+  intent = 'submit',
+  note,
 }: SubmitControlProps) {
   const { formId, pending } = useDraftForm();
   const [open, setOpen] = useState(false);
@@ -92,7 +111,7 @@ export function SubmitControl({
             <Button variant="secondary" onClick={close} disabled={pending}>
               {labels.back}
             </Button>
-            <Button type="submit" form={formId} name="intent" value="submit" loading={pending}>
+            <Button type="submit" form={formId} name="intent" value={intent} loading={pending}>
               {/* The label itself says what's happening; the spinner is decoration. */}
               {pending ? labels.submitting : labels.confirm}
             </Button>
@@ -135,6 +154,20 @@ export function SubmitControl({
             </TBody>
           </Table>
         </div>
+        {note === undefined ? null : (
+          <Field label={note.label} className="mt-4">
+            {(ids) => (
+              <Textarea
+                id={ids.id}
+                aria-describedby={ids.describedBy}
+                name="note"
+                form={formId}
+                maxLength={note.maxLength}
+                placeholder={note.placeholder}
+              />
+            )}
+          </Field>
+        )}
         <p className="mt-4 rounded-card border border-brand-100 bg-brand-50 px-4 py-3 text-xs text-ink">
           {dialog.note} {dialog.unsaved}
         </p>

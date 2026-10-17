@@ -29,7 +29,7 @@ test.describe('language and direction switch', () => {
     // Translated text shows in Arabic; untranslated text falls back to English (Arabic content
     // is scaffolded only, a change request at go-live).
     await expect(page.getByRole('group', { name: 'اللغة' })).toBeVisible();
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Increment requests');
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Request Tracker');
 
     // Mirrored: the start is now on the right.
     expect(await centre(page, avatar)).toBeGreaterThan(0.5);

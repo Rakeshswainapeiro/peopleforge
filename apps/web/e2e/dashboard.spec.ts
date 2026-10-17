@@ -98,7 +98,7 @@ test('another subsidiary finds nothing of it, not even by its reference or link'
 
 test('Sirius HR sees every subsidiary’s submitted requests, never a draft', async ({ page }) => {
   await signIn(page, 'reviewer');
-  await expect(page.getByRole('heading', { level: 1, name: 'Increment requests' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: 'Request Tracker' })).toBeVisible();
   await expect(page.getByRole('region', { name: 'Needs your action' })).toHaveCount(0);
   await expect(page.getByRole('link', { name: 'New increment request' })).toHaveCount(0);
   await search(page, reference);

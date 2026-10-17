@@ -11,6 +11,7 @@ import type {
   IncrementRequestRepository,
   DashboardRepository,
   NotificationRepository,
+  ReviewRepository,
 } from '@peopleforge/db';
 import type { MalwareScanner, ObjectStore } from '@peopleforge/integrations';
 import { AuthenticateMiddleware, SiriusAuthModule } from '@sirius/auth-nest';
@@ -35,7 +36,10 @@ import {
   IncrementCyclesController,
   IncrementRequestLinesController,
   IncrementRequestsController,
+  ReviewController,
+  ReviewQueueController,
 } from '../modules/increment-requests/increment-requests.controller.js';
+import { ReviewService } from '../modules/increment-requests/review.service.js';
 import {
   ENTITY_DIRECTORY,
   ENV,
@@ -45,6 +49,7 @@ import {
   INCREMENT_REQUEST_SERVICE,
   LOGGER,
   READINESS_CHECKS,
+  REVIEW_SERVICE,
   SHUTDOWN_STATE,
 } from './tokens.js';
 
@@ -65,6 +70,8 @@ export interface AppDependencies {
   malwareScanner: MalwareScanner;
   /** "My increment requests": counts, requests and employees (R1-10). */
   dashboard: DashboardRepository;
+  /** Sirius HR's review: verification, decisions, resubmission and the queue (R1-07 … R1-09). */
+  review: ReviewRepository;
   /** The caller's in-app notifications (R1-07, R1-13). */
   notifications: NotificationRepository;
   readinessChecks: readonly ReadinessCheck[];
@@ -95,6 +102,8 @@ export class AppModule implements NestModule {
         IncrementCyclesController,
         EmployeesController,
         IncrementRequestLinesController,
+        ReviewController,
+        ReviewQueueController,
         EvidenceController,
         NotificationsController,
       ],
@@ -104,6 +113,7 @@ export class AppModule implements NestModule {
         { provide: ENTITY_DIRECTORY, useValue: deps.directory },
         { provide: INCREMENT_REQUEST_SERVICE, useValue: requests },
         { provide: DASHBOARD_SERVICE, useValue: new DashboardService(deps.dashboard) },
+        { provide: REVIEW_SERVICE, useValue: new ReviewService(requests, deps.review) },
         {
           provide: NOTIFICATION_SERVICE,
           useValue: new NotificationService(deps.notifications),

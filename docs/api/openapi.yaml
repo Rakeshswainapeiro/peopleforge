@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: PeopleForge API
-  version: 0.8.0
+  version: 0.9.0
   description: >
     Phase 1 API (BRD SIRIUS-HR-BRD-001). Every /api/v1 route requires an access token from the
     Sirius identity provider (Microsoft Entra ID; Keycloak locally) sent as
@@ -111,7 +111,22 @@ paths:
         criteria progress and when its status last changed (the Age).
       parameters:
         - { $ref: '#/components/parameters/CycleFilter' }
-        - { name: status, in: query, schema: { type: string, enum: [draft, submitted] } }
+        - {
+            name: status,
+            in: query,
+            schema:
+              {
+                type: string,
+                enum:
+                  [draft, submitted, under_review, returned, approved, partly_approved, rejected],
+              },
+          }
+        - {
+            name: entityId,
+            in: query,
+            description: 'One subsidiary (Request Tracker)',
+            schema: { type: string, format: uuid },
+          }
         - { $ref: '#/components/parameters/SearchFilter' }
         - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
         - { name: pageSize, in: query, schema: { type: integer, enum: [10, 25, 50], default: 10 } }
@@ -438,6 +453,146 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/increment-requests/{id}/lines/{lineId}/verifications/{criterionId}:
+    parameters:
+      - { $ref: '#/components/parameters/RequestId' }
+      - { name: lineId, in: path, required: true, schema: { type: string, format: uuid } }
+      - { name: criterionId, in: path, required: true, schema: { type: string, format: uuid } }
+    put:
+      tags: [review]
+      summary: Mark one criterion verified for one employee (R1-07, R1-10)
+      description: >
+        Needs `increment_request:review`. Moves a submitted request under review. Harmless when
+        already verified. Notifies the submitter when the stage moves. 409 when the employee is
+        decided or returned (`lineId`/`not_pending`) or the request is not in review
+        (`status`/`not_in_review`). Audited.
+      responses:
+        '200':
+          {
+            description: The request,
+            content:
+              { application/json: { schema: { $ref: '#/components/schemas/IncrementRequest' } } },
+          }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+    delete:
+      tags: [review]
+      summary: Undo a verification
+      description: Needs `increment_request:review`. Same rules as verifying. Audited.
+      responses:
+        '200':
+          {
+            description: The request,
+            content:
+              { application/json: { schema: { $ref: '#/components/schemas/IncrementRequest' } } },
+          }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/increment-requests/{id}/lines/{lineId}/decision:
+    post:
+      tags: [review]
+      summary: Approve, reject or return one employee (R1-08, R1-09)
+      description: >
+        Needs `increment_request:decide`. Approving needs every criterion verified (409
+        `criteria`/`not_verified`). The request's status follows (under review, returned, or final
+        once every employee is decided). The submitter is notified; a return asks for action.
+        Idempotent per user and `Idempotency-Key`. Comments and approved values are stored
+        encrypted. Audited.
+      parameters:
+        - { $ref: '#/components/parameters/RequestId' }
+        - { name: lineId, in: path, required: true, schema: { type: string, format: uuid } }
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: { type: string, pattern: '^[A-Za-z0-9_-]{8,128}$' }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/DecideLine' } } }
+      responses:
+        '200':
+          {
+            description: The request,
+            content:
+              { application/json: { schema: { $ref: '#/components/schemas/IncrementRequest' } } },
+          }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/increment-requests/{id}/resubmit:
+    post:
+      tags: [review]
+      summary: Send the returned employees back to Sirius HR (R1-08)
+      description: >
+        Needs `increment_request:submit` (subsidiary HR; own subsidiary by Row-Level Security).
+        Each returned employee needs a proposal and every criterion complete (400 `lines.N`/
+        `incomplete`). Their verifications are cleared, so Sirius HR checks them again. The note
+        is kept on the status history. Reviewers are notified. Version-checked and idempotent;
+        409 `status`/`not_returned` when nothing is returned.
+      parameters:
+        - { $ref: '#/components/parameters/RequestId' }
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: { type: string, pattern: '^[A-Za-z0-9_-]{8,128}$' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [version]
+              properties:
+                version: { type: integer, minimum: 1 }
+                note: { type: string, maxLength: 2000 }
+      responses:
+        '200':
+          {
+            description: The request,
+            content:
+              { application/json: { schema: { $ref: '#/components/schemas/IncrementRequest' } } },
+          }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/review-queue:
+    get:
+      tags: [review]
+      summary: Sirius HR's Review queue (R1-07)
+      description: >
+        Needs `increment_request:review`. Employees of submitted requests across subsidiaries,
+        oldest waiting first, with counts per filter. `overdue`: pending longer than the reminder
+        time (`reminderDays`, calendar days). Percentages only, never salaries.
+      parameters:
+        - { $ref: '#/components/parameters/CycleFilter' }
+        - { name: entityId, in: query, schema: { type: string, format: uuid } }
+        - { $ref: '#/components/parameters/SearchFilter' }
+        - {
+            name: filter,
+            in: query,
+            schema:
+              { type: string, enum: [pending, returned, overdue, open, all], default: pending },
+          }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: pageSize, in: query, schema: { type: integer, enum: [10, 25, 50], default: 10 } }
+      responses:
+        '200':
+          {
+            description: A page of employees,
+            content:
+              { application/json: { schema: { $ref: '#/components/schemas/ReviewQueuePage' } } },
+          }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
   /api/v1/notifications:
     get:
       tags: [notifications]
@@ -615,6 +770,8 @@ components:
           newSalary,
           percent,
           criteria,
+          reviewStatus,
+          decision,
         ]
       properties:
         id: { type: string, format: uuid }
@@ -633,6 +790,12 @@ components:
           type: array
           description: One per criterion of the request, in the same order as the request's `criteria`
           items: { $ref: '#/components/schemas/CriterionAssessment' }
+        reviewStatus: { type: string, enum: [pending, approved, rejected, returned] }
+        decision:
+          description: The latest decision on the employee; null while undecided (R1-09)
+          oneOf:
+            - type: 'null'
+            - { $ref: '#/components/schemas/LineDecision' }
     Criterion:
       type: object
       required:
@@ -666,7 +829,7 @@ components:
         createdAt: { type: string, format: date-time }
     CriterionAssessment:
       type: object
-      required: [criterionId, result, justification, evidence, missing]
+      required: [criterionId, result, justification, evidence, missing, verification]
       properties:
         criterionId: { type: string, format: uuid }
         result: { type: [string, 'null'], enum: [pass, fail, null] }
@@ -676,6 +839,175 @@ components:
           type: array
           description: What still stops the criterion counting as complete (R1-06); empty when complete
           items: { type: string, enum: [result, justification, evidence] }
+        verification:
+          description: Sirius HR's check of the criterion ("Mark verified"); null until verified
+          oneOf:
+            - type: 'null'
+            - type: object
+              required: [at, byName]
+              properties:
+                at: { type: string, format: date-time }
+                byName: { type: string }
+    LineDecision:
+      type: object
+      required:
+        [
+          decision,
+          reasonCode,
+          comment,
+          approvedPercent,
+          approvedIncrease,
+          approvedSalary,
+          decidedAt,
+          decidedByName,
+        ]
+      properties:
+        decision: { type: string, enum: [approved, rejected, returned] }
+        reasonCode:
+          type: [string, 'null']
+          enum:
+            [
+              criteria_not_met,
+              missing_evidence,
+              budget,
+              policy,
+              other,
+              unclear_justification,
+              proposal_change,
+              policy_band,
+              internal_equity,
+              null,
+            ]
+        comment:
+          { type: string, description: "The reviewer's comment or question; empty when none" }
+        approvedPercent:
+          {
+            $ref: '#/components/schemas/NullableDecimal',
+            description: 'Set when approved at another percentage than proposed',
+          }
+        approvedIncrease: { $ref: '#/components/schemas/NullableDecimal' }
+        approvedSalary: { $ref: '#/components/schemas/NullableDecimal' }
+        decidedAt: { type: string, format: date-time }
+        decidedByName: { type: string }
+    DecideLine:
+      description: >
+        Approve as proposed (`{decision: approved}`), or at another percentage with a change reason
+        and a comment; reject or return with that decision's reason and a comment (≤ 2,000).
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required: [decision]
+          properties:
+            decision: { type: string, const: approved }
+            approvedPercent:
+              { type: string, pattern: '^\d{1,9}(\.\d{1,2})?$', description: '> 0 and ≤ 100' }
+            reasonCode: { type: string, enum: [budget, policy_band, internal_equity, other] }
+            comment: { type: string, maxLength: 2000 }
+        - type: object
+          additionalProperties: false
+          required: [decision, reasonCode, comment]
+          properties:
+            decision: { type: string, const: rejected }
+            reasonCode:
+              { type: string, enum: [criteria_not_met, missing_evidence, budget, policy, other] }
+            comment: { type: string, minLength: 1, maxLength: 2000 }
+        - type: object
+          additionalProperties: false
+          required: [decision, reasonCode, comment]
+          properties:
+            decision: { type: string, const: returned }
+            reasonCode:
+              {
+                type: string,
+                enum: [missing_evidence, unclear_justification, proposal_change, other],
+              }
+            comment: { type: string, minLength: 1, maxLength: 2000 }
+    ReviewQueuePage:
+      type: object
+      required: [items, page, pageSize, total, counts, reminderDays]
+      properties:
+        page: { type: integer }
+        pageSize: { type: integer }
+        total: { type: integer }
+        reminderDays:
+          {
+            type: integer,
+            description: 'Days a pending employee may wait before it is past reminder time',
+          }
+        counts:
+          type: object
+          required: [all, pending, returned, overdue, open, openRequests, openEntities]
+          properties:
+            all: { type: integer }
+            pending: { type: integer }
+            returned: { type: integer }
+            overdue: { type: integer }
+            open: { type: integer }
+            openRequests: { type: integer }
+            openEntities: { type: integer }
+        items:
+          type: array
+          items:
+            type: object
+            required:
+              [
+                lineId,
+                request,
+                employeeNumber,
+                fullName,
+                grade,
+                proposedPercent,
+                criteria,
+                verified,
+                reviewStatus,
+                waitingSince,
+                overdue,
+              ]
+            properties:
+              lineId: { type: string, format: uuid }
+              request:
+                type: object
+                required: [id, reference, status, entity, stage]
+                properties:
+                  id: { type: string, format: uuid }
+                  reference: { type: string }
+                  status:
+                    {
+                      type: string,
+                      enum:
+                        [
+                          draft,
+                          submitted,
+                          under_review,
+                          returned,
+                          approved,
+                          partly_approved,
+                          rejected,
+                        ],
+                    }
+                  entity:
+                    type: object
+                    required: [id, code]
+                    properties: { id: { type: string, format: uuid }, code: { type: string } }
+                  stage: { $ref: '#/components/schemas/RequestStage' }
+              employeeNumber: { type: string }
+              fullName: { type: string }
+              grade: { type: string }
+              proposedPercent: { $ref: '#/components/schemas/NullableDecimal' }
+              criteria:
+                type: array
+                items:
+                  type: object
+                  required: [criterionId, code, mark]
+                  properties:
+                    criterionId: { type: string, format: uuid }
+                    code: { type: string }
+                    mark: { type: string, enum: [pass, fail, pending] }
+              verified:
+                { type: integer, description: 'Criteria Sirius HR has verified for this employee' }
+              reviewStatus: { type: string, enum: [pending, approved, rejected, returned] }
+              waitingSince: { type: string, format: date-time }
+              overdue: { type: boolean }
     IncrementRequest:
       type: object
       required:
@@ -691,13 +1023,20 @@ components:
           updatedAt,
           submittedAt,
           submittedByName,
+          statusChangedAt,
+          decidedAt,
+          stage,
           lines,
           totals,
         ]
       properties:
         id: { type: string, format: uuid }
         reference: { type: string, example: INC-2026-0001 }
-        status: { type: string, enum: [draft, submitted] }
+        status:
+          {
+            type: string,
+            enum: [draft, submitted, under_review, returned, approved, partly_approved, rejected],
+          }
         entity: { $ref: '#/components/schemas/EntitySummary' }
         cycle:
           type: object
@@ -722,6 +1061,12 @@ components:
           maxLength: 200
           description: The submitter's name as it was at submit time; null for drafts and requests submitted before it was kept
           example: Priya Nair
+        statusChangedAt: { type: string, format: date-time }
+        decidedAt:
+          type: [string, 'null']
+          format: date-time
+          description: When the last employee was decided (final status); null until then
+        stage: { $ref: '#/components/schemas/RequestStage' }
         lines: { type: array, items: { $ref: '#/components/schemas/RequestLine' } }
         totals:
           type: object
@@ -760,6 +1105,7 @@ components:
                 cycleId,
                 employeeCount,
                 createdAt,
+                submittedAt,
                 statusChangedAt,
                 stage,
                 criteria,
@@ -767,7 +1113,12 @@ components:
             properties:
               id: { type: string, format: uuid }
               reference: { type: string }
-              status: { type: string, enum: [draft, submitted] }
+              status:
+                {
+                  type: string,
+                  enum:
+                    [draft, submitted, under_review, returned, approved, partly_approved, rejected],
+                }
               entity:
                 type: object
                 required: [id, code]
@@ -775,6 +1126,7 @@ components:
               cycleId: { type: string, format: uuid }
               employeeCount: { type: integer }
               createdAt: { type: string, format: date-time }
+              submittedAt: { type: [string, 'null'], format: date-time }
               statusChangedAt:
                 { type: string, format: date-time, description: 'Last status change (Age)' }
               stage: { $ref: '#/components/schemas/RequestStage' }
@@ -785,14 +1137,15 @@ components:
                 properties: { complete: { type: integer }, total: { type: integer } }
     RequestStage:
       description: >
-        Where the request stands in Sirius HR's review. Until per-criterion review exists (S5) a
-        submitted request is at criterion 1. `of` is the criteria count.
+        Where the request stands in Sirius HR's review (R1-10, ADR-013): not submitted; at the
+        first criterion not yet verified for every employee still in review; at the decision once
+        all are verified; decided once final. `of` is the criteria count.
       oneOf:
         - type: object
           required: [kind, of]
           properties:
-            kind: { type: string, const: not_submitted }
-            of: { type: integer, minimum: 1 }
+            kind: { type: string, enum: [not_submitted, decision, decided] }
+            of: { type: integer, minimum: 0 }
         - type: object
           required: [kind, criterion, of]
           properties:
@@ -805,8 +1158,15 @@ components:
       properties:
         byStatus:
           type: object
-          required: [draft, submitted]
-          properties: { draft: { type: integer }, submitted: { type: integer } }
+          required: [draft, submitted, under_review, returned, approved, partly_approved, rejected]
+          properties:
+            draft: { type: integer }
+            submitted: { type: integer }
+            under_review: { type: integer }
+            returned: { type: integer }
+            approved: { type: integer }
+            partly_approved: { type: integer }
+            rejected: { type: integer }
         requests: { type: integer }
         employees: { type: integer }
     RequestLinePage:
@@ -840,7 +1200,20 @@ components:
                 properties:
                   id: { type: string, format: uuid }
                   reference: { type: string }
-                  status: { type: string, enum: [draft, submitted] }
+                  status:
+                    {
+                      type: string,
+                      enum:
+                        [
+                          draft,
+                          submitted,
+                          under_review,
+                          returned,
+                          approved,
+                          partly_approved,
+                          rejected,
+                        ],
+                    }
                   entityCode: { type: string }
               employeeNumber: { type: string }
               fullName: { type: string }
@@ -860,8 +1233,13 @@ components:
                       description: Pass or fail once complete; pending until then
               status:
                 type: string
-                enum: [draft, submitted]
-                description: The employee's status (the request's until per-employee decisions, S5)
+                enum:
+                  [draft, submitted, under_review, returned, approved, partly_approved, rejected]
+                description: The request's status
+              reviewStatus:
+                type: string
+                enum: [pending, approved, rejected, returned]
+                description: The employee's own place in the review (R1-09)
               updatedAt: { type: string, format: date-time }
     Notification:
       type: object
@@ -870,7 +1248,17 @@ components:
         id: { type: string, format: uuid }
         kind:
           type: string
-          enum: [request_submitted, request_received]
+          enum:
+            [
+              request_submitted,
+              request_received,
+              stage_changed,
+              employee_approved,
+              employee_rejected,
+              employee_returned,
+              request_decided,
+              request_resubmitted,
+            ]
           description: What happened; clients word it in the reader's language
         requestId: { type: [string, 'null'], format: uuid }
         params:

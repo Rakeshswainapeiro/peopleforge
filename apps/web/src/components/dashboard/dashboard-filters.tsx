@@ -1,6 +1,6 @@
 'use client';
 
-import { Field, Input, Select, Spinner } from '@peopleforge/ui';
+import { cn, Field, Input, Select, Spinner } from '@peopleforge/ui';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useTransition, type SyntheticEvent } from 'react';
 
@@ -14,33 +14,46 @@ export interface DashboardFiltersLabels {
   search: string;
   searchPlaceholder: string;
   applySearch: string;
-  period: string;
-  status: string;
+}
+
+/** A drop-down filter: its URL parameter, label, current value and choices. */
+export interface FilterSelect {
+  name: string;
+  label: string;
+  value: string;
+  options: readonly FilterOption[];
 }
 
 export interface DashboardFiltersProps {
+  /** The page the filters apply to ("/" or "/review"). */
+  path?: string;
   /** Values carried over from the URL that the filters don't change (view, request, size). */
   hidden: Readonly<Record<string, string>>;
   search: string;
-  period: string;
-  status: string;
-  periods: readonly FilterOption[];
-  statuses: readonly FilterOption[];
+  /** Period, Status, Subsidiary…: in this order after the search box. */
+  selects: readonly FilterSelect[];
   labels: DashboardFiltersLabels;
 }
 
 /** How long typing pauses before the list follows the search box. */
 export const SEARCH_DELAY_MS = 350;
 
-/** The form's values as a dashboard link: empty values dropped, back to page 1. */
-export function filtersHref(form: HTMLFormElement): string {
+/** The form's values as a link to its page: empty values dropped, back to page 1. */
+export function filtersHref(form: HTMLFormElement, path = '/'): string {
   const query = new URLSearchParams();
   for (const [name, value] of new FormData(form)) {
     if (typeof value === 'string' && value.trim() !== '') query.set(name, value.trim());
   }
   const search = query.toString();
-  return search === '' ? '/' : `/?${search}`;
+  return search === '' ? path : `${path}?${search}`;
 }
+
+const COLUMNS = new Map<number, string>([
+  [0, 'md:grid-cols-1'],
+  [1, 'md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]'],
+  [2, 'md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)]'],
+  [3, 'md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)]'],
+]);
 
 /**
  * Figma "Search · Period · Status". A plain GET form, so it works without JavaScript (Enter
@@ -48,12 +61,10 @@ export function filtersHref(form: HTMLFormElement): string {
  * the search box as you type, replacing the URL so Back isn't flooded with keystrokes.
  */
 export function DashboardFilters({
+  path = '/',
   hidden,
   search,
-  period,
-  status,
-  periods,
-  statuses,
+  selects,
   labels,
 }: DashboardFiltersProps) {
   const router = useRouter();
@@ -69,7 +80,7 @@ export function DashboardFilters({
 
   const apply = (target: HTMLFormElement) => {
     clearTimeout(timer.current);
-    const href = filtersHref(target);
+    const href = filtersHref(target, path);
     startTransition(() => {
       router.replace(href, { scroll: false });
     });
@@ -83,12 +94,12 @@ export function DashboardFilters({
   return (
     <form
       method="get"
-      action="/"
+      action={path}
       role="search"
       aria-label={labels.filters}
       aria-busy={pending || undefined}
       onSubmit={onSubmit}
-      className="grid gap-4 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)]"
+      className={cn('grid gap-4', COLUMNS.get(Math.min(selects.length, 3)))}
     >
       {Object.entries(hidden).map(([name, value]) => (
         <input key={name} type="hidden" name={name} value={value} />
@@ -123,46 +134,28 @@ export function DashboardFilters({
           </div>
         )}
       </Field>
-      <Field label={labels.period}>
-        {(ids) => (
-          <Select
-            id={ids.id}
-            aria-describedby={ids.describedBy}
-            name="cycle"
-            defaultValue={period}
-            onChange={(event) => {
-              // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- see above
-              apply(event.currentTarget.form!);
-            }}
-          >
-            {periods.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </Select>
-        )}
-      </Field>
-      <Field label={labels.status}>
-        {(ids) => (
-          <Select
-            id={ids.id}
-            aria-describedby={ids.describedBy}
-            name="status"
-            defaultValue={status}
-            onChange={(event) => {
-              // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- see above
-              apply(event.currentTarget.form!);
-            }}
-          >
-            {statuses.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </Select>
-        )}
-      </Field>
+      {selects.map((select) => (
+        <Field key={select.name} label={select.label}>
+          {(ids) => (
+            <Select
+              id={ids.id}
+              aria-describedby={ids.describedBy}
+              name={select.name}
+              defaultValue={select.value}
+              onChange={(event) => {
+                // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- see above
+                apply(event.currentTarget.form!);
+              }}
+            >
+              {select.options.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </Select>
+          )}
+        </Field>
+      ))}
       {/* Without JavaScript, Enter in the search box applies the filters; visible on focus. */}
       <button
         type="submit"

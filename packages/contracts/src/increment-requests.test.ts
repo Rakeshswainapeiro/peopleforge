@@ -159,7 +159,7 @@ describe('ListIncrementRequestsQuerySchema', () => {
         .success,
     ).toBe(false);
     expect(ListIncrementRequestsQuerySchema.safeParse({ cycleId: 'q3-2026' }).success).toBe(false);
-    expect(ListIncrementRequestsQuerySchema.safeParse({ status: 'approved' }).success).toBe(false);
+    expect(ListIncrementRequestsQuerySchema.safeParse({ status: 'archived' }).success).toBe(false);
     expect(ListIncrementRequestsQuerySchema.safeParse({ sort: 'name' }).success).toBe(false);
   });
 });
@@ -227,6 +227,9 @@ describe('IncrementRequestSchema', () => {
       updatedAt: '2026-10-14T07:05:00.000Z',
       submittedAt: null,
       submittedByName: null,
+      statusChangedAt: '2026-10-14T07:00:00.000Z',
+      decidedAt: null,
+      stage: { kind: 'not_submitted', of: 1 },
       lines: [
         {
           id: ID,
@@ -256,8 +259,11 @@ describe('IncrementRequestSchema', () => {
                 },
               ],
               missing: [],
+              verification: null,
             },
           ],
+          reviewStatus: 'pending',
+          decision: null,
         },
       ],
       totals: {

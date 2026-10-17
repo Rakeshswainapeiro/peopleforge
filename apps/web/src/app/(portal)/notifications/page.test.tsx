@@ -91,7 +91,9 @@ describe('Notifications page [R1-07, R1-13]', () => {
     );
     expect(row).toHaveTextContent('14 Oct 2026, 16:05');
     expect(row).toHaveAttribute('data-unread', 'true');
-    expect(within(row).getByRole('button', { name: 'View' })).toBeInTheDocument();
+    // Something to act on says so.
+    expect(within(row).getByRole('button', { name: 'Respond' })).toBeInTheDocument();
+    expect(within(read).getByRole('button', { name: 'View' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Mark all as Read' })).toBeEnabled();
     expect(listNotifications).toHaveBeenCalledWith('all', 1);
     expect(screen.queryByRole('navigation', { name: 'Notification pages' })).toBeNull();

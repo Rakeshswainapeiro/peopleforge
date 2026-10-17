@@ -32,6 +32,8 @@ const row: ProposalRowView = {
   criteriaLabel: '0/2 complete',
   kind: 'percent',
   value: '8',
+  locked: false,
+  lockedLabel: 'With Sirius HR',
   labels: {
     proposedAs: 'Proposed as, for Omar Haddad',
     value: 'Proposed increase for Omar Haddad',
@@ -183,6 +185,44 @@ describe('ProposalsTable', () => {
     expect(screen.queryByRole('button', { hidden: true })).not.toBeInTheDocument();
     expect(screen.getAllByText('%')).toHaveLength(1);
     expect(screen.getByText('AED', { selector: 'span' })).toBeInTheDocument();
+  });
+});
+
+describe('ProposalsTable while fixing returned employees [R1-08]', () => {
+  it('posts only the returned rows; the others show who has them, and nothing can be removed', () => {
+    const { container } = render(
+      <DraftForm
+        formId="draft-form"
+        requestId="11111111-1111-4111-8111-111111111111"
+        version={6}
+        editable
+        saveLabel="Save draft"
+      >
+        <ProposalsTable
+          editable
+          removable={false}
+          rows={[
+            row,
+            {
+              ...row,
+              lineId: 'line-2',
+              fullName: 'Neha Iyer',
+              locked: true,
+              labels: { ...row.labels, assess: 'Assess criteria for Neha Iyer' },
+            },
+          ]}
+          labels={tableLabels(t)}
+          messages={saveMessages(t)}
+          footer={null}
+        />
+      </DraftForm>,
+    );
+    const form = container.querySelector<HTMLFormElement>('form#draft-form');
+    expect(new FormData(form ?? undefined).getAll('lineId')).toEqual([LINE]);
+    expect(screen.getAllByRole('textbox')).toHaveLength(1);
+    expect(screen.getByText('With Sirius HR')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Remove/u })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Assess criteria for Neha Iyer' })).toBeNull();
   });
 });
 

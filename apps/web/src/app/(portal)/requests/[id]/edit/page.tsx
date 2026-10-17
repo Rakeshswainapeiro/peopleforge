@@ -15,6 +15,7 @@ import { parseErrorKey } from '@/lib/request-errors';
 import {
   criteriaCards,
   criteriaLabels,
+  linesToSend,
   evidenceMessages,
   proposalRows,
   readyView,
@@ -22,6 +23,7 @@ import {
   tableLabels,
   totalsView,
 } from '@/lib/request-view';
+import { decisionSummary } from '@/lib/review-view';
 import { requestHref } from '@/lib/routes';
 import { entityName } from '@/lib/viewer-display';
 import { getRequest, searchEmployees } from '@/server/increment-requests';
@@ -56,14 +58,20 @@ export default async function EditRequestPage({ params, searchParams }: EditRequ
   if (result.kind === 'error' && result.status === 404) notFound();
   if (result.kind !== 'ok') throw new Error('Increment request API unavailable');
   const request = result.data;
-  if (request.status !== 'draft') redirect(requestHref(request.id));
+  // A draft, or a request with employees returned to fix (R1-08); anything else is read-only.
+  const fixing = request.status === 'returned';
+  if (request.status !== 'draft' && !fixing) redirect(requestHref(request.id));
 
-  const employees = await searchEmployees(request.entity.id, request.id);
+  const employees = fixing
+    ? { kind: 'skipped' as const }
+    : await searchEmployees(request.entity.id, request.id);
   const entity = entityName(request.entity, locale);
   const totals = totalsView(request, locale, t);
   const error = parseErrorKey(query.error);
-  // The employee being assessed: the one asked for, else the first.
-  const selected = request.lines.find((line) => line.id === query.employee) ?? request.lines.at(0);
+  // The employee being assessed: the one asked for, else the first (that may change).
+  const assessable = linesToSend(request);
+  const selected = assessable.find((line) => line.id === query.employee) ?? assessable.at(0);
+  const question = selected === undefined ? null : decisionSummary(request, selected, locale, t);
 
   return (
     <DraftForm
@@ -81,12 +89,20 @@ export default async function EditRequestPage({ params, searchParams }: EditRequ
             as={Link}
             items={[
               { label: t('breadcrumb.myRequests'), href: '/' },
-              { label: t('request.breadcrumbDraft', { reference: request.reference }) },
+              {
+                label: fixing
+                  ? t('resubmit.breadcrumb', { reference: request.reference })
+                  : t('request.breadcrumbDraft', { reference: request.reference }),
+              },
             ]}
           />
         }
-        title={t('request.newTitle')}
-        description={t('request.newIntro', { count: request.criteria.length })}
+        title={fixing ? t('resubmit.title') : t('request.newTitle')}
+        description={
+          fixing
+            ? t('resubmit.intro', { reference: request.reference })
+            : t('request.newIntro', { count: request.criteria.length })
+        }
         actions={
           request.lines.length > 0 ? (
             <Button type="submit" form={FORM_ID} variant="secondary">
@@ -104,9 +120,10 @@ export default async function EditRequestPage({ params, searchParams }: EditRequ
       <Card className="mt-6" label={t('request.employeesSection')}>
         <CardHeader
           title={t('request.employeesSection')}
-          description={t('request.employeesHint', { entity })}
+          description={fixing ? undefined : t('request.employeesHint', { entity })}
           actions={
-            employees.kind === 'ok' && employees.data.length > 0 ? (
+            employees.kind === 'skipped' ? undefined : employees.kind === 'ok' &&
+              employees.data.length > 0 ? (
               <AddEmployeeForm
                 action={addEmployeeAction}
                 employees={employees.data}
@@ -125,6 +142,7 @@ export default async function EditRequestPage({ params, searchParams }: EditRequ
             // A new version (after a save) starts the fields afresh.
             key={request.version}
             editable
+            removable={!fixing}
             selectedLineId={selected?.id}
             rows={proposalRows(request, locale, t)}
             labels={tableLabels(t)}
@@ -163,6 +181,15 @@ export default async function EditRequestPage({ params, searchParams }: EditRequ
               />
             </div>
             <div className="px-6 pt-5 pb-6">
+              {question === null ? null : (
+                <Alert tone={question.tone} title={question.body} className="mb-5">
+                  {question.reason === '' ? null : <p>{question.reason}</p>}
+                  {question.comment === '' ? null : (
+                    <p className="mt-1 whitespace-pre-line text-ink">{question.comment}</p>
+                  )}
+                  <p className="mt-1">{question.by}</p>
+                </Alert>
+              )}
               <CriteriaEditor
                 // Afresh after a save, and for each employee.
                 key={`${String(request.version)}:${selected.id}`}

@@ -19,6 +19,9 @@ export interface ReadyPanelProps {
   submitDialog: SubmitDialogView;
   /** What submitting does (Figma caption). */
   caption: string;
+  /** Submit a draft, or resubmit returned employees with an optional note (R1-08). */
+  intent?: 'submit' | 'resubmit';
+  noteField?: { label: string; placeholder: string; maxLength: number } | undefined;
 }
 
 /**
@@ -33,6 +36,8 @@ export function ReadyPanel({
   submitLabels,
   submitDialog,
   caption,
+  intent = 'submit',
+  noteField,
 }: ReadyPanelProps) {
   return (
     <div className="flex flex-col gap-3">
@@ -63,6 +68,8 @@ export function ReadyPanel({
         describedBy="submit-caption"
         labels={submitLabels}
         dialog={submitDialog}
+        intent={intent}
+        note={noteField}
       />
       <p id="submit-caption" className="text-xs text-ink">
         {caption}

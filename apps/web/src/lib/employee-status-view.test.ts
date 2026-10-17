@@ -60,6 +60,7 @@ describe('criterionRows', () => {
     const rows = criterionRows(request, omar, 'en', t);
     expect(rows[0]).toEqual({
       id: CRITERION_IDS[0],
+      code: 'C1',
       name: 'C1 · [Placeholder] Criterion 1',
       result: { tone: 'success', icon: 'check', label: 'Pass' },
       justification: 'Rated 4 of 5 in the 2026 appraisal.',

@@ -15,7 +15,7 @@ import { z } from 'zod';
 import type { Translate } from '@/i18n/translator';
 import { daysBetween, formatAge, formatDate, formatPercent } from './format';
 import { pluralForm } from '@peopleforge/i18n';
-import { statusBadge, type StatusBadgeView } from './request-status';
+import { employeeBadge, statusBadge, type StatusBadgeView } from './request-status';
 import { localised } from './viewer-display';
 import { editRequestHref, employeeStatusHref, requestLinkFor } from './routes';
 
@@ -33,6 +33,8 @@ export interface DashboardState {
   view: DashboardView;
   /** A cycle ID, ALL_PERIODS, or undefined for the default: the first open cycle. */
   cycle?: string | undefined;
+  /** One subsidiary (Sirius HR's Request Tracker). */
+  entity?: string | undefined;
   status?: RequestStatus | undefined;
   search?: string | undefined;
   /** By employee only: one request's employees. */
@@ -62,17 +64,20 @@ export function dashboardState(params: SearchParams): DashboardState {
   const status = RequestStatusSchema.safeParse(first(params.status));
   const search = SearchTextSchema.safeParse(first(params.q));
   const request = Id.safeParse(first(params.request));
+  const entity = Id.safeParse(first(params.entity));
+  const show = first(params.show);
   const page = PageNumber.safeParse(first(params.page));
   const size = Number(first(params.size));
   return {
     view,
     cycle: cycle === ALL_PERIODS || Id.safeParse(cycle).success ? cycle : undefined,
+    entity: entity.success ? entity.data : undefined,
     status: status.success ? status.data : undefined,
     search: search.success ? search.data : undefined,
     requestId: view === 'employees' && request.success ? request.data : undefined,
     page: page.success ? page.data : 1,
     pageSize: (PAGE_SIZES as readonly number[]).includes(size) ? size : PAGE_SIZES[0],
-    show: first(params.show) === 'drafts' ? 'drafts' : undefined,
+    show: show === 'drafts' || show === 'returned' ? show : undefined,
   };
 }
 
@@ -88,6 +93,7 @@ export function dashboardHref(
   const query = new URLSearchParams();
   if (next.view === 'employees') query.set('view', 'employees');
   if (next.cycle !== undefined) query.set('cycle', next.cycle);
+  if (next.entity !== undefined) query.set('entity', next.entity);
   if (next.status !== undefined) query.set('status', next.status);
   if (next.search !== undefined) query.set('q', next.search);
   if (next.view === 'employees' && next.requestId !== undefined) {
@@ -122,20 +128,30 @@ export function periodOptions(cycles: readonly Cycle[], locale: Locale, t: Trans
   ];
 }
 
-/** Status choices: "All statuses" (empty value), then each status. */
-export function statusOptions(t: Translate): Option[] {
+/** Status choices: "All statuses" (empty value), then each status (no drafts for Sirius HR). */
+export function statusOptions(t: Translate, group = false): Option[] {
   return [
     { value: '', label: t('dashboard.allStatuses') },
-    ...RequestStatusSchema.options.map((status) => ({
-      value: status,
-      label: statusBadge(status, t).label,
-    })),
+    ...RequestStatusSchema.options
+      .filter((status) => !group || status !== 'draft')
+      .map((status) => ({ value: status, label: statusBadge(status, t).label })),
+  ];
+}
+
+/** Subsidiary choices for Sirius HR: "All subsidiaries" (empty value), then each by code. */
+export function entityOptions(
+  entities: readonly { id: string; code: string }[],
+  t: Translate,
+): Option[] {
+  return [
+    { value: '', label: t('dashboard.allSubsidiaries') },
+    ...entities.map((entity) => ({ value: entity.id, label: entity.code })),
   ];
 }
 
 /**
- * Figma KPI cards. Sirius HR never sees drafts, so it gets no Drafts card. Replies, approvals
- * and rejections arrive with S5 and count zero until then.
+ * Figma KPI cards. Subsidiary HR: drafts, with Sirius HR, needing their reply, approved (full and
+ * partly), rejected. Sirius HR never sees drafts: to review, returned, approved, rejected.
  */
 export function kpiCards(
   summary: DashboardSummary,
@@ -144,51 +160,105 @@ export function kpiCards(
   t: Translate,
 ): StatCardProps[] {
   const number = new Intl.NumberFormat(locale);
-  const zero = number.format(0);
-  const cards: StatCardProps[] = [
+  const counts = summary.byStatus;
+  const withSirius = number.format(counts.submitted + counts.under_review);
+  const decided: StatCardProps[] = [
+    {
+      label: t('dashboard.cards.approved'),
+      value: number.format(counts.approved + counts.partly_approved),
+      hint: t('dashboard.cards.approvedHint', {
+        full: number.format(counts.approved),
+        partly: number.format(counts.partly_approved),
+      }),
+    },
+    {
+      label: t('dashboard.cards.rejected'),
+      value: number.format(counts.rejected),
+      hint: t('dashboard.cards.rejectedHint'),
+    },
+  ];
+  if (group) {
+    return [
+      {
+        label: t('dashboard.cards.withSiriusGroup'),
+        value: withSirius,
+        hint: t('dashboard.cards.withSiriusGroupHint'),
+      },
+      {
+        label: t('dashboard.cards.needsReplyGroup'),
+        value: number.format(counts.returned),
+        hint: t('dashboard.cards.needsReplyGroupHint'),
+      },
+      ...decided,
+    ];
+  }
+  return [
+    {
+      label: t('dashboard.cards.drafts'),
+      value: number.format(counts.draft),
+      hint: t('dashboard.cards.draftsHint'),
+    },
     {
       label: t('dashboard.cards.withSirius'),
-      value: number.format(summary.byStatus.submitted),
+      value: withSirius,
       hint: t('dashboard.cards.withSiriusHint'),
     },
     {
       label: t('dashboard.cards.needsReply'),
-      value: zero,
+      value: number.format(counts.returned),
       hint: t('dashboard.cards.needsReplyHint'),
     },
-    {
-      label: t('dashboard.cards.approved'),
-      value: zero,
-      hint: t('dashboard.cards.approvedHint', { full: zero, partly: zero }),
-    },
-    { label: t('dashboard.cards.rejected'), value: zero, hint: t('dashboard.cards.rejectedHint') },
+    ...decided,
   ];
-  return group
-    ? cards
-    : [
-        {
-          label: t('dashboard.cards.drafts'),
-          value: number.format(summary.byStatus.draft),
-          hint: t('dashboard.cards.draftsHint'),
-        },
-        ...cards,
-      ];
 }
 
-/** "Not submitted" with an empty bar, or "Criterion 1 of 5" with one segment filled. */
+/**
+ * The review stage as a bar (R1-10): "Not submitted" empty, "Criterion 3 of 5" with three
+ * segments, "Awaiting decision" and "Decided" full.
+ */
 export function stageView(stage: RequestStage, locale: Locale, t: Translate): StageMeterProps {
   const number = new Intl.NumberFormat(locale);
-  if (stage.kind === 'not_submitted') {
-    return { filled: 0, total: stage.of, label: t('dashboard.stageNotSubmitted') };
+  switch (stage.kind) {
+    case 'not_submitted':
+      return { filled: 0, total: stage.of, label: t('dashboard.stageNotSubmitted') };
+    case 'criterion':
+      return {
+        filled: stage.criterion,
+        total: stage.of,
+        label: t('dashboard.stageCriterion', {
+          criterion: number.format(stage.criterion),
+          of: number.format(stage.of),
+        }),
+      };
+    case 'decision':
+      return { filled: stage.of, total: stage.of, label: t('dashboard.stageDecision') };
+    case 'decided':
+      return { filled: stage.of, total: stage.of, label: t('dashboard.stageDecided') };
   }
-  return {
-    filled: stage.criterion,
-    total: stage.of,
-    label: t('dashboard.stageCriterion', {
-      criterion: number.format(stage.criterion),
-      of: number.format(stage.of),
-    }),
-  };
+}
+
+/**
+ * Who has a request now (Figma "With"): the subsidiary for a draft or a return ("You" for its
+ * own HR), Sirius HR while in review, nobody once decided.
+ */
+export function withWhom(
+  status: RequestStatus,
+  entityCode: string,
+  group: boolean,
+  t: Translate,
+): string {
+  switch (status) {
+    case 'draft':
+    case 'returned':
+      return group ? t('dashboard.withSubsidiary', { entity: entityCode }) : t('dashboard.withYou');
+    case 'submitted':
+    case 'under_review':
+      return t('dashboard.withSirius');
+    case 'approved':
+    case 'partly_approved':
+    case 'rejected':
+      return t('dashboard.withNobody');
+  }
 }
 
 export interface RequestRowView {
@@ -203,8 +273,10 @@ export interface RequestRowView {
   stage: StageMeterProps;
   status: StatusBadgeView;
   age: string;
-  /** Who has it now: "You" for a draft, "Sirius HR" once submitted. */
+  /** Who has it now (see `withWhom`). */
   with: string;
+  /** When it went to Sirius HR; "—" for a draft. */
+  submitted: string;
 }
 
 export function requestRows(
@@ -213,6 +285,7 @@ export function requestRows(
   now: Date,
   locale: Locale,
   t: Translate,
+  group = false,
 ): RequestRowView[] {
   const number = new Intl.NumberFormat(locale);
   return page.items.map((item) => ({
@@ -227,7 +300,8 @@ export function requestRows(
     stage: stageView(item.stage, locale, t),
     status: statusBadge(item.status, t),
     age: formatAge(item.statusChangedAt, now, locale),
-    with: item.status === 'draft' ? t('dashboard.withYou') : t('dashboard.withSirius'),
+    with: withWhom(item.status, item.entity.code, group, t),
+    submitted: item.submittedAt === null ? '—' : formatDate(item.submittedAt, locale),
   }));
 }
 
@@ -246,7 +320,12 @@ export interface LineRowView {
   viewLabel: string;
 }
 
-export function lineRows(page: RequestLinePage, locale: Locale, t: Translate): LineRowView[] {
+export function lineRows(
+  page: RequestLinePage,
+  locale: Locale,
+  t: Translate,
+  group = false,
+): LineRowView[] {
   return page.items.map((line) => ({
     id: line.id,
     href: employeeStatusHref(line.request.id, line.id),
@@ -270,7 +349,7 @@ export function lineRows(page: RequestLinePage, locale: Locale, t: Translate): L
         }),
       )
       .join(', '),
-    status: statusBadge(line.status, t),
+    status: employeeBadge(line.request.status, line.reviewStatus, group, t),
     updated: formatDate(line.updatedAt, locale),
     viewLabel: t('dashboard.viewStatusOf', { name: line.fullName }),
   }));
@@ -282,8 +361,8 @@ export const ACTION_OVERDUE_DAYS = 5;
 /** How many items "Needs your action" lists before "See all" (Figma: 5). */
 export const ACTION_ROWS = 5;
 
-/** The "Show" choices of "Needs your action". Questions and returns join with S5. */
-export type ActionFilter = 'all' | 'drafts';
+/** The "Show" choices of "Needs your action": everything, drafts, or returns to answer. */
+export type ActionFilter = 'all' | 'drafts' | 'returned';
 
 export interface ActionRowView {
   id: string;
@@ -300,32 +379,41 @@ export interface ActionRowView {
 }
 
 /**
- * Figma "Needs your action" rows, longest waiting first: for now each draft, with how far its
- * criteria have got and how long it has waited.
+ * Figma "Needs your action" rows, longest waiting first: drafts to complete and submit, and
+ * requests Sirius HR returned with a question (R1-08), with how long each has waited.
  */
 export function actionRows(
-  drafts: IncrementRequestPage,
+  items: readonly IncrementRequestPage['items'][number][],
   now: Date,
   locale: Locale,
   t: Translate,
 ): ActionRowView[] {
   const number = new Intl.NumberFormat(locale);
-  // The API pages by 10, 25 or 50; the panel shows the first few.
-  return drafts.items.slice(0, ACTION_ROWS).map((draft) => ({
-    id: draft.id,
-    type: { tone: 'outline', label: t('dashboard.typeDraft') },
-    primary: t(`figures.employeeCount.${pluralForm(draft.employeeCount, locale)}`, {
-      count: number.format(draft.employeeCount),
-    }),
-    secondary: draft.reference,
-    needed: t('dashboard.needsSubmit'),
-    neededDetail: t('dashboard.needsCriteria', {
-      complete: number.format(draft.criteria.complete),
-      total: number.format(draft.criteria.total),
-    }),
-    waiting: formatAge(draft.statusChangedAt, now, locale),
-    overdue: daysBetween(draft.statusChangedAt, now) >= ACTION_OVERDUE_DAYS,
-    href: editRequestHref(draft.id),
-    action: t('dashboard.continueDraft'),
-  }));
+  return [...items]
+    .sort((a, b) => a.statusChangedAt.localeCompare(b.statusChangedAt))
+    .slice(0, ACTION_ROWS)
+    .map((item) => {
+      const returned = item.status === 'returned';
+      return {
+        id: item.id,
+        type: returned
+          ? { tone: 'warning', label: t('dashboard.typeReturned') }
+          : { tone: 'outline', label: t('dashboard.typeDraft') },
+        primary: t(`figures.employeeCount.${pluralForm(item.employeeCount, locale)}`, {
+          count: number.format(item.employeeCount),
+        }),
+        secondary: item.reference,
+        needed: returned ? t('dashboard.needsReply') : t('dashboard.needsSubmit'),
+        neededDetail: returned
+          ? stageView(item.stage, locale, t).label
+          : t('dashboard.needsCriteria', {
+              complete: number.format(item.criteria.complete),
+              total: number.format(item.criteria.total),
+            }),
+        waiting: formatAge(item.statusChangedAt, now, locale),
+        overdue: daysBetween(item.statusChangedAt, now) >= ACTION_OVERDUE_DAYS,
+        href: editRequestHref(item.id),
+        action: returned ? t('dashboard.respond') : t('dashboard.continueDraft'),
+      };
+    });
 }

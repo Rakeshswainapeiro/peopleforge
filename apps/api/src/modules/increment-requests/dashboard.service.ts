@@ -5,7 +5,6 @@ import {
   type ListIncrementRequestsQuery,
   type ListRequestLinesQuery,
   type RequestLinePage,
-  type RequestStage,
   type RequestStatus,
 } from '@peopleforge/contracts';
 import type {
@@ -17,17 +16,7 @@ import { scopeOf, type Principal } from '../../auth/principal.js';
 import { markOf, missingFor, withFacts } from './criteria.js';
 import { seesDrafts } from './increment-request.service.js';
 import { lineFigures } from './money.js';
-
-/**
- * Where a request stands (R1-10). Until Sirius HR's per-criterion review exists (S5), a
- * submitted request waits at the first criterion, as the Figma shows (Q7 open).
- */
-export function stageOf(status: RequestStatus, criteriaCount: number): RequestStage {
-  const of = Math.max(criteriaCount, 1);
-  return status === 'draft'
-    ? { kind: 'not_submitted', of }
-    : { kind: 'criterion', criterion: 1, of };
-}
+import { stageOf } from './stage.js';
 
 function completeCriteria(record: DashboardRequestRecord): number {
   return record.lines.reduce(
@@ -49,8 +38,9 @@ function toRequestSummary(record: DashboardRequestRecord): IncrementRequestPage[
     cycleId: record.cycleId,
     employeeCount: record.lines.length,
     createdAt: record.createdAt.toISOString(),
+    submittedAt: record.submittedAt === null ? null : record.submittedAt.toISOString(),
     statusChangedAt: record.statusChangedAt.toISOString(),
-    stage: stageOf(record.status, record.criteria.length),
+    stage: stageOf(record.status, record.criteria.length, record.verifiedCriteria),
     criteria: {
       complete: completeCriteria(record),
       total: record.lines.length * record.criteria.length,
@@ -79,6 +69,7 @@ function toLineSummary(record: DashboardLineRecord): RequestLinePage['items'][nu
       mark: markOf(facts.result, missingFor(criterion, facts)),
     })),
     status: record.request.status,
+    reviewStatus: record.reviewStatus,
     updatedAt: record.updatedAt.toISOString(),
   };
 }
@@ -101,6 +92,11 @@ export class DashboardService {
       byStatus: {
         draft: record.byStatus.draft ?? 0,
         submitted: record.byStatus.submitted ?? 0,
+        under_review: record.byStatus.under_review ?? 0,
+        returned: record.byStatus.returned ?? 0,
+        approved: record.byStatus.approved ?? 0,
+        partly_approved: record.byStatus.partly_approved ?? 0,
+        rejected: record.byStatus.rejected ?? 0,
       } satisfies Record<RequestStatus, number>,
       requests: record.requests,
       employees: record.employees,

@@ -7,6 +7,7 @@ import {
   criteriaLabels,
   employeesAdded,
   evidenceMessages,
+  linesToSend,
   progressSteps,
   proposalRows,
   readyView,
@@ -346,5 +347,91 @@ describe('progressSteps', () => {
       ['Decision', 'todo'],
     ]);
     expect(progressSteps(submitted, 'en', t)[1]?.detail).toBe('15 Oct 2026');
+  });
+});
+
+describe('fixing a returned request [R1-08]', () => {
+  const allComplete = (line: RequestLine) =>
+    line.criteria.map((c) => ({ ...c, missing: [] as CriterionMissing[] }));
+  const returned = (complete: boolean) => {
+    const draft = request();
+    const omar = must(draft.lines[0]);
+    const neha = must(draft.lines[1]);
+    return request({
+      status: 'returned',
+      lines: [
+        {
+          ...omar,
+          reviewStatus: 'returned',
+          criteria: complete ? allComplete(omar) : omar.criteria,
+        },
+        { ...neha, reviewStatus: 'pending' },
+      ],
+    });
+  };
+
+  it('locks the employees still with Sirius HR', () => {
+    const [omar, neha] = proposalRows(returned(false), 'en', t);
+    expect(omar).toMatchObject({ locked: false, lockedLabel: 'With Sirius HR' });
+    expect(neha?.locked).toBe(true);
+    expect(linesToSend(returned(false)).map((line) => line.fullName)).toEqual(['Omar Haddad']);
+    expect(linesToSend(request())).toHaveLength(2);
+  });
+
+  it('resubmits only the returned employees, once ready, with a note', () => {
+    const blocked = readyView(returned(false), 'en', t, 'key-1');
+    expect(blocked).toMatchObject({
+      canSubmit: false,
+      note: '1 returned employee still needs a proposal or complete criteria.',
+      intent: 'resubmit',
+      noteField: { label: 'Note to Sirius HR (optional)', maxLength: 2000 },
+      caption: 'Only returned employees can be changed.',
+      submitLabels: { submit: 'Resubmit to Sirius HR', confirm: 'Yes, resubmit' },
+    });
+    expect(blocked.items.map((item) => item.fullName)).toEqual(['Omar Haddad']);
+    const ready = readyView(returned(true), 'en', t, 'key-1');
+    expect(ready).toMatchObject({
+      canSubmit: true,
+      note: 'Every returned employee is ready to go back.',
+    });
+    expect(ready.submitDialog).toMatchObject({
+      title: 'Resubmit INC-2026-0001 to Sirius HR?',
+      note: 'Sirius HR is notified.',
+    });
+    expect(ready.submitDialog.rows.map((row) => row.name)).toEqual(['Omar Haddad']);
+    const two = request({
+      status: 'returned',
+      lines: request().lines.map((line) => ({ ...line, reviewStatus: 'returned' as const })),
+    });
+    expect(readyView(two, 'en', t, 'k').note).toBe(
+      '2 returned employees still need a proposal or complete criteria.',
+    );
+  });
+
+  it('follows the review on the progress card', () => {
+    const base = { status: 'under_review' as const, submittedAt: '2026-10-15T06:00:00.000Z' };
+    expect(
+      progressSteps(
+        request({ ...base, stage: { kind: 'criterion', criterion: 3, of: 5 } }),
+        'en',
+        t,
+      )[2]?.detail,
+    ).toBe('Criterion 3 of 5');
+    expect(
+      progressSteps(request({ ...base, stage: { kind: 'decision', of: 5 } }), 'en', t).map(
+        (step) => step.state,
+      ),
+    ).toEqual(['done', 'done', 'done', 'current']);
+    const decided = progressSteps(
+      request({
+        ...base,
+        status: 'approved',
+        stage: { kind: 'decided', of: 5 },
+        decidedAt: '2026-10-16T06:00:00.000Z',
+      }),
+      'en',
+      t,
+    );
+    expect(decided.at(-1)).toMatchObject({ state: 'done', detail: '16 Oct 2026' });
   });
 });

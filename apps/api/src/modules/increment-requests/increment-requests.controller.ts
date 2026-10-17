@@ -16,6 +16,10 @@ import {
   AddRequestLineSchema,
   CreateIncrementRequestSchema,
   DashboardFilterSchema,
+  DecideLineSchema,
+  ResubmitRequestSchema,
+  ReviewQueueQuerySchema,
+  type ReviewQueuePage,
   EmployeeSearchQuerySchema,
   ListIncrementRequestsQuerySchema,
   ListRequestLinesQuerySchema,
@@ -34,9 +38,14 @@ import { z } from 'zod';
 import { Authenticated, RequirePermission } from '../../auth/policy.js';
 import { principal } from '../../auth/principal.js';
 import { API_V1 } from '../../bootstrap/routes.js';
-import { DASHBOARD_SERVICE, INCREMENT_REQUEST_SERVICE } from '../../bootstrap/tokens.js';
+import {
+  DASHBOARD_SERVICE,
+  INCREMENT_REQUEST_SERVICE,
+  REVIEW_SERVICE,
+} from '../../bootstrap/tokens.js';
 import type { DashboardService } from './dashboard.service.js';
 import type { IncrementRequestService } from './increment-request.service.js';
+import type { ReviewService } from './review.service.js';
 
 export const Id = z.uuid();
 /** Client-generated, e.g. a UUID; unique per user. */
@@ -152,6 +161,96 @@ export class IncrementRequestsController {
       SubmitRequestSchema.parse(body),
       idempotencyKey,
     );
+  }
+}
+
+/**
+ * Sirius HR's review (R1-07 … R1-09): verifying criteria and deciding each employee need
+ * `increment_request:review` and `…:decide` (reviewers only); resubmitting returned employees
+ * needs `…:submit` (subsidiary HR, own subsidiary by Row-Level Security).
+ */
+@Controller(`${API_V1}/increment-requests`)
+export class ReviewController {
+  constructor(@Inject(REVIEW_SERVICE) private readonly review: ReviewService) {}
+
+  @Put(':id/lines/:lineId/verifications/:criterionId')
+  @RequirePermission('increment_request:review')
+  verify(
+    @Req() req: IncomingMessage,
+    @Param('id') id: string,
+    @Param('lineId') lineId: string,
+    @Param('criterionId') criterionId: string,
+  ): Promise<IncrementRequest> {
+    return this.review.verify(
+      principal.require(req),
+      { requestId: Id.parse(id), lineId: Id.parse(lineId), criterionId: Id.parse(criterionId) },
+      true,
+    );
+  }
+
+  @Delete(':id/lines/:lineId/verifications/:criterionId')
+  @HttpCode(200)
+  @RequirePermission('increment_request:review')
+  unverify(
+    @Req() req: IncomingMessage,
+    @Param('id') id: string,
+    @Param('lineId') lineId: string,
+    @Param('criterionId') criterionId: string,
+  ): Promise<IncrementRequest> {
+    return this.review.verify(
+      principal.require(req),
+      { requestId: Id.parse(id), lineId: Id.parse(lineId), criterionId: Id.parse(criterionId) },
+      false,
+    );
+  }
+
+  @Post(':id/lines/:lineId/decision')
+  @HttpCode(200)
+  @RequirePermission('increment_request:decide')
+  decide(
+    @Req() req: IncomingMessage,
+    @Param('id') id: string,
+    @Param('lineId') lineId: string,
+    @Body() body: unknown,
+    @Headers('idempotency-key') key: unknown,
+  ): Promise<IncrementRequest> {
+    const idempotencyKey = idempotencyKeyOf(key);
+    return this.review.decide(
+      principal.require(req),
+      { requestId: Id.parse(id), lineId: Id.parse(lineId) },
+      DecideLineSchema.parse(body),
+      idempotencyKey,
+    );
+  }
+
+  @Post(':id/resubmit')
+  @HttpCode(200)
+  @RequirePermission('increment_request:submit')
+  resubmit(
+    @Req() req: IncomingMessage,
+    @Param('id') id: string,
+    @Body() body: unknown,
+    @Headers('idempotency-key') key: unknown,
+  ): Promise<IncrementRequest> {
+    const idempotencyKey = idempotencyKeyOf(key);
+    return this.review.resubmit(
+      principal.require(req),
+      Id.parse(id),
+      ResubmitRequestSchema.parse(body),
+      idempotencyKey,
+    );
+  }
+}
+
+/** Sirius HR's Review queue (R1-07): employees to review across subsidiaries, no salaries. */
+@Controller(`${API_V1}/review-queue`)
+export class ReviewQueueController {
+  constructor(@Inject(REVIEW_SERVICE) private readonly review: ReviewService) {}
+
+  @Get()
+  @RequirePermission('increment_request:review')
+  list(@Req() req: IncomingMessage, @Query() query: unknown): Promise<ReviewQueuePage> {
+    return this.review.queue(principal.require(req), ReviewQueueQuerySchema.parse(query));
   }
 }
 

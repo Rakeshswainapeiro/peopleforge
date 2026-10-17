@@ -446,3 +446,37 @@ describe('useDraftForm', () => {
     expect(() => render(<Orphan />)).toThrow('useDraftForm must be used inside <DraftForm>');
   });
 });
+
+describe('ReadyPanel when resubmitting [R1-08]', () => {
+  it('asks for a note in the dialog and posts intent=resubmit with it', async () => {
+    const returned = draftRequest({
+      status: 'returned',
+      lines: draftRequest().lines.map((line, index) => ({
+        ...line,
+        reviewStatus: index === 0 ? ('returned' as const) : ('pending' as const),
+        criteria: line.criteria.map((criterion) => ({ ...criterion, missing: [] })),
+      })),
+    });
+    const view = readyView(returned, 'en', t, 'resubmit-key-1');
+    render(
+      <DraftForm formId="draft-form" requestId={REQUEST_ID} version={6} editable saveLabel="Save">
+        <ReadyPanel {...view} />
+      </DraftForm>,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Resubmit to Sirius HR' }));
+    const dialog = screen.getByRole('alertdialog', {
+      name: 'Resubmit INC-2026-0001 to Sirius HR?',
+    });
+    const note = within(dialog).getByRole('textbox', { name: 'Note to Sirius HR (optional)' });
+    expect(note).toHaveAttribute('form', 'draft-form');
+    expect(note).toHaveAttribute('maxlength', '2000');
+    await userEvent.type(note, 'Appraisal attached.');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Yes, resubmit' }));
+    await waitFor(() => {
+      expect(saveDraft).toHaveBeenCalled();
+    });
+    const posted = vi.mocked(saveDraft).mock.calls.at(-1)?.[1];
+    expect(posted?.get('intent')).toBe('resubmit');
+    expect(posted?.get('note')).toBe('Appraisal attached.');
+  });
+});

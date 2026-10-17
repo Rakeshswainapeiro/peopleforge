@@ -27,23 +27,31 @@ function filters(hidden: Record<string, string> = { view: 'employees' }) {
     <DashboardFilters
       hidden={hidden}
       search="Omar"
-      period={CYCLE}
-      status=""
-      periods={[
-        { value: CYCLE, label: 'Increment cycle 2026' },
-        { value: 'all', label: 'All periods' },
-      ]}
-      statuses={[
-        { value: '', label: 'All statuses' },
-        { value: 'draft', label: 'Draft' },
+      selects={[
+        {
+          name: 'cycle',
+          label: 'Period',
+          value: CYCLE,
+          options: [
+            { value: CYCLE, label: 'Increment cycle 2026' },
+            { value: 'all', label: 'All periods' },
+          ],
+        },
+        {
+          name: 'status',
+          label: 'Status',
+          value: '',
+          options: [
+            { value: '', label: 'All statuses' },
+            { value: 'draft', label: 'Draft' },
+          ],
+        },
       ]}
       labels={{
         filters: 'Filter requests',
         search: 'Search',
         searchPlaceholder: 'Employee name, employee ID or request ID',
         applySearch: 'Apply',
-        period: 'Period',
-        status: 'Status',
       }}
     />,
   );

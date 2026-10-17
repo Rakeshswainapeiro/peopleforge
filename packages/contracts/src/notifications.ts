@@ -9,6 +9,17 @@ export const NotificationKindSchema = z.enum([
   'request_submitted',
   /** To Sirius HR reviewers: a new request to review. */
   'request_received',
+  /** To the submitter: Sirius HR verified a criterion for everyone; the next is under review. */
+  'stage_changed',
+  /** To the submitter: one employee approved, or rejected, by Sirius HR (R1-09). */
+  'employee_approved',
+  'employee_rejected',
+  /** To the submitter, action needed: an employee is back with a question (R1-08). */
+  'employee_returned',
+  /** To the submitter: every employee is decided; the request has its final status. */
+  'request_decided',
+  /** To Sirius HR reviewers: returned employees came back, fixed. */
+  'request_resubmitted',
 ]);
 export type NotificationKind = z.infer<typeof NotificationKindSchema>;
 

@@ -5,7 +5,12 @@ describe('errorKeyFor', () => {
   it.each([
     ['CONFLICT', 'version', 'request.errors.stale'],
     ['CONFLICT', 'employeeId', 'request.errors.duplicate'],
-    ['CONFLICT', 'criteria', 'request.errors.generic'],
+    ['CONFLICT', 'criteria', 'request.errors.notVerified'],
+    ['CONFLICT', 'lineId', 'request.errors.notPending'],
+    ['VALIDATION_FAILED', 'approvedPercent', 'request.errors.percentRange'],
+    ['VALIDATION_FAILED', 'reasonCode', 'request.errors.decisionInvalid'],
+    ['VALIDATION_FAILED', 'comment', 'request.errors.decisionInvalid'],
+    ['CONFLICT', 'other', 'request.errors.generic'],
     ['VALIDATION_FAILED', 'employeeId', 'request.errors.employeeNotFound'],
     ['VALIDATION_FAILED', 'cycleId', 'request.errors.cycleNotOpen'],
     ['VALIDATION_FAILED', 'entityId', 'request.errors.generic'],
@@ -53,6 +58,20 @@ describe('evidenceErrorKey [R1-04]', () => {
   ] as const)('%i %s %s %s → %s', (status, code, path, detail, expected) => {
     expect(evidenceErrorKey(status, code, path === '' ? [] : [{ path, code: detail }])).toBe(
       expected,
+    );
+  });
+});
+
+describe('errorKeyFor in review [R1-08, R1-09]', () => {
+  it('tells a closed review and nothing to resubmit apart from a submitted draft', () => {
+    expect(errorKeyFor('CONFLICT', [{ path: 'status', code: 'not_in_review' }])).toBe(
+      'request.errors.notInReview',
+    );
+    expect(errorKeyFor('CONFLICT', [{ path: 'status', code: 'not_returned' }])).toBe(
+      'request.errors.notReturned',
+    );
+    expect(errorKeyFor('CONFLICT', [{ path: 'status', code: 'not_draft' }])).toBe(
+      'request.errors.notDraft',
     );
   });
 });

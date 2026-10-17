@@ -76,6 +76,49 @@ describe('renderEmail [R1-07, R1-13]', () => {
   });
 });
 
+describe('review emails [R1-08, R1-09, R1-10]', () => {
+  const job = (kind: string, params: Record<string, string | number>) =>
+    rendered(submittedJob({ kind, params }));
+
+  it('tells the submitter the stage moved', () => {
+    const email = job('stage_changed', { reference: 'INC-2026-0152', criterion: 3, of: 5 });
+    expect(email.subject).toBe('INC-2026-0152: criterion 3 of 5 under review');
+    expect(email.text).toContain('Criterion 3 of 5 is now under review.');
+  });
+
+  it.each([
+    ['employee_approved', 'Aisha Rahman approved in INC-2026-0152'],
+    ['employee_rejected', 'Aisha Rahman rejected in INC-2026-0152'],
+    ['employee_returned', 'Action needed: Aisha Rahman returned in INC-2026-0152'],
+  ])('words %s', (kind, subject) => {
+    const email = job(kind, { reference: 'INC-2026-0152', employee: 'Aisha Rahman' });
+    expect(email.subject).toBe(subject);
+    expect(email.text).toContain('Aisha Rahman');
+  });
+
+  it('names the final status in words', () => {
+    const email = job('request_decided', { reference: 'INC-2026-0152', status: 'partly_approved' });
+    expect(email.subject).toBe('INC-2026-0152 decided: Partly approved');
+    expect(
+      renderEmail(
+        submittedJob({ kind: 'request_decided', params: { reference: 'X', status: 'draft' } }),
+        OPTIONS,
+      ),
+    ).toEqual({ ok: false, reason: 'invalid_params' });
+  });
+
+  it('tells reviewers what came back', () => {
+    const email = rendered(
+      receivedJob({
+        kind: 'request_resubmitted',
+        params: { reference: 'INC-2026-0152', employees: 2, entity: 'SUB-A', actor: 'Priya Nair' },
+      }),
+    );
+    expect(email.subject).toBe('INC-2026-0152 resubmitted by SUB-A');
+    expect(email.text).toContain('with 2 returned employees');
+  });
+});
+
 describe('linkFor', () => {
   it('links to the request, or to notifications without one', () => {
     expect(linkFor('https://hr.example.ae/', REQUEST_ID)).toBe(

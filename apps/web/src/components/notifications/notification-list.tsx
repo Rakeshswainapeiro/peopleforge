@@ -5,17 +5,16 @@ import type { NotificationRowView } from '@/lib/notification-view';
 export interface NotificationListProps {
   rows: readonly NotificationRowView[];
   label: string;
-  viewLabel: string;
   unreadLabel: string;
 }
 
 /**
- * Figma "Notifications" list: tag, reference, message and time, with "View" (which marks the
+ * Figma "Notifications" list: tag, reference, message and time, with "View" or "Respond" (which marks the
  * notification read and opens its request). The whole row is the click target (View's hit area
  * is stretched over it), so nobody has to aim for the button. Unread rows are shaded, bold and
  * carry a dot (shape as well as colour).
  */
-export function NotificationList({ rows, label, viewLabel, unreadLabel }: NotificationListProps) {
+export function NotificationList({ rows, label, unreadLabel }: NotificationListProps) {
   return (
     <ul aria-label={label} className="flex flex-col divide-y divide-line">
       {rows.map((row) => (
@@ -50,7 +49,7 @@ export function NotificationList({ rows, label, viewLabel, unreadLabel }: Notifi
               // The whole row (the positioned <li>) clicks View.
               stretched
             >
-              {viewLabel}
+              {row.action}
             </Button>
           </form>
         </li>

@@ -108,3 +108,44 @@ describe('increment request client', () => {
     expect(callApi).not.toHaveBeenCalled();
   });
 });
+
+describe('review client [R1-07 … R1-09]', () => {
+  it('calls the review paths', async () => {
+    const { decideEmployee, resubmitRequest, reviewQueue, verifyCriterion } =
+      await import('./increment-requests');
+    vi.mocked(callApi).mockClear();
+    await verifyCriterion(ID, OTHER, ID, true);
+    await verifyCriterion(ID, OTHER, ID, false);
+    await decideEmployee(ID, OTHER, { decision: 'approved' }, 'key-12345678');
+    await resubmitRequest(ID, 3, 'Fixed.', 'key-12345678');
+    await reviewQueue();
+    await reviewQueue({
+      cycleId: ID,
+      entityId: OTHER,
+      search: 'Aisha',
+      filter: 'overdue',
+      page: 2,
+      pageSize: 25,
+    });
+    await listRequests({ entityId: OTHER });
+    const verify = `/api/v1/increment-requests/${ID}/lines/${OTHER}/verifications/${ID}`;
+    expect(calls()).toEqual([
+      [verify, { method: 'PUT' }],
+      [verify, { method: 'DELETE' }],
+      [
+        `/api/v1/increment-requests/${ID}/lines/${OTHER}/decision`,
+        { method: 'POST', body: { decision: 'approved' }, idempotencyKey: 'key-12345678' },
+      ],
+      [
+        `/api/v1/increment-requests/${ID}/resubmit`,
+        { method: 'POST', body: { version: 3, note: 'Fixed.' }, idempotencyKey: 'key-12345678' },
+      ],
+      ['/api/v1/review-queue?filter=pending&page=1&pageSize=10', undefined],
+      [
+        `/api/v1/review-queue?cycleId=${ID}&entityId=${OTHER}&search=Aisha&filter=overdue&page=2&pageSize=25`,
+        undefined,
+      ],
+      [`/api/v1/increment-requests?entityId=${OTHER}&page=1&pageSize=10`, undefined],
+    ]);
+  });
+});

@@ -3,12 +3,20 @@ import { MAX_EVIDENCE_PER_CRITERION } from '@peopleforge/contracts';
 import { sql, type Kysely, type Transaction } from 'kysely';
 import { recordAudit, type AuditEntry } from './audit.js';
 import { loadCriteriaSets, type CriterionRecord } from './criteria-sets.js';
-import { JUSTIFICATION, PROPOSED, SALARY } from './encrypted-fields.js';
+import {
+  APPROVED_VALUE,
+  DECISION_COMMENT,
+  JUSTIFICATION,
+  PROPOSED,
+  SALARY,
+} from './encrypted-fields.js';
 import type { FieldCipher } from './field-crypto.js';
 import { insertNotifications, type NewNotification } from './notifications.js';
 import type {
   CriterionResultValue,
   Database,
+  LineDecisionValue,
+  LineReviewStatus,
   LocalisedText,
   ProposedKind,
   RequestStatus,
@@ -48,6 +56,12 @@ export interface EvidenceRecord {
   createdAt: Date;
 }
 
+/** Sirius HR's check of one criterion (R1-07, "Mark verified"). */
+export interface VerificationRecord {
+  verifiedAt: Date;
+  verifiedByName: string;
+}
+
 /** An employee's standing on one criterion: result, justification, files (R1-03, R1-04). */
 export interface CriterionAssessmentRecord {
   criterionId: string;
@@ -55,6 +69,20 @@ export interface CriterionAssessmentRecord {
   /** Plain text; empty when none. */
   justification: string;
   evidence: EvidenceRecord[];
+  /** Null until Sirius HR verifies it. */
+  verification: VerificationRecord | null;
+}
+
+/** Sirius HR's latest decision on an employee (R1-09). */
+export interface LineDecisionRecord {
+  decision: LineDecisionValue;
+  reasonCode: string | null;
+  /** Plain text; empty when none. */
+  comment: string;
+  /** Set when approved at a different increment than proposed. */
+  approved: { kind: ProposedKind; value: string } | null;
+  decidedAt: Date;
+  decidedByName: string;
 }
 
 export interface RequestLineRecord {
@@ -71,6 +99,9 @@ export interface RequestLineRecord {
   proposedValue: string | null;
   /** One entry per criterion of the request's set, in display order. */
   criteria: CriterionAssessmentRecord[];
+  reviewStatus: LineReviewStatus;
+  /** The latest decision, or null while pending (never decided). */
+  decision: LineDecisionRecord | null;
 }
 
 export interface IncrementRequestRecord {
@@ -88,6 +119,11 @@ export interface IncrementRequestRecord {
   submittedAt: Date | null;
   /** Who submitted it, as their name read then; null for a draft or an older submission. */
   submittedByName: string | null;
+  /** Who submitted it (user ID): the subsidiary's contact for decisions and returns. */
+  submittedBy: string | null;
+  statusChangedAt: Date;
+  /** When the last employee was decided; null until then. */
+  decidedAt: Date | null;
   lines: RequestLineRecord[];
 }
 
@@ -149,7 +185,11 @@ export type RequestDataErrorReason =
   | 'evidence_limit'
   | 'evidence_not_found'
   | 'not_draft'
-  | 'idempotency_conflict';
+  | 'idempotency_conflict'
+  | 'not_in_review'
+  | 'line_not_pending'
+  | 'not_verified'
+  | 'not_returned';
 
 /** An expected refusal (bad reference, stale version, …), mapped to 4xx by the API. */
 export class RequestDataError extends Error {
@@ -225,8 +265,11 @@ export function createIncrementRequestRepository(
   db: Kysely<Database>,
   cipher: FieldCipher,
 ): IncrementRequestRepository {
-  /** Locks the request for the rest of the transaction (serialises concurrent edits). */
-  async function lockDraft(trx: Trx, requestId: string) {
+  /**
+   * Locks the request for the rest of the transaction (serialises concurrent edits). Drafts can
+   * be edited; a returned request only in its returned employees (R1-08), named in `lineIds`.
+   */
+  async function lockDraft(trx: Trx, requestId: string, lineIds?: readonly string[]) {
     const request = await trx
       .selectFrom('increments.increment_request')
       .select(['id', 'entity_id', 'version', 'criteria_set_id', 'status', 'reference'])
@@ -235,9 +278,21 @@ export function createIncrementRequestRepository(
       .forUpdate()
       .executeTakeFirst();
     if (request === undefined) throw new RequestDataError('not_found');
-    // A submitted request is Sirius HR's to review: nothing in it changes any more.
-    if (request.status !== 'draft') throw new RequestDataError('not_draft');
-    return request;
+    if (request.status === 'draft') return request;
+    // Sirius HR returned some employees: those, and only those, are the subsidiary's to fix.
+    if (request.status === 'returned' && lineIds !== undefined && lineIds.length > 0) {
+      const returned = await trx
+        .selectFrom('increments.request_line')
+        .select('id')
+        .where('request_id', '=', requestId)
+        .where('id', 'in', lineIds)
+        .where('review_status', '=', 'returned')
+        .where('deleted_at', 'is', null)
+        .execute();
+      if (returned.length === new Set(lineIds).size) return request;
+    }
+    // Otherwise it is Sirius HR's to review: nothing in it changes.
+    throw new RequestDataError('not_draft');
   }
 
   /** A live line of the request, or line_not_found. */
@@ -545,6 +600,9 @@ export function createIncrementRequestRepository(
             'c.name as cycle_name',
             'r.submitted_at',
             'r.submitted_by_name',
+            'r.submitted_by',
+            'r.status_changed_at',
+            'r.decided_at',
             sql<string | null>`to_char(c.submission_deadline, 'YYYY-MM-DD')`.as('deadline'),
           ])
           .where('r.id', '=', id)
@@ -588,6 +646,48 @@ export function createIncrementRequestRepository(
           .orderBy('f.created_at')
           .orderBy('f.id')
           .execute();
+        const verifications = await trx
+          .selectFrom('increments.criterion_verification as v')
+          .innerJoin('increments.request_line as l', 'l.id', 'v.line_id')
+          .select(['v.line_id', 'v.criterion_id', 'v.verified_at', 'v.verified_by_name'])
+          .where('l.request_id', '=', id)
+          .where('l.deleted_at', 'is', null)
+          .execute();
+        const verified = new Map(
+          verifications.map((row) => [
+            `${row.line_id}:${row.criterion_id}`,
+            { verifiedAt: row.verified_at, verifiedByName: row.verified_by_name },
+          ]),
+        );
+        // The latest decision per employee (a returned employee may be decided again later).
+        const decisions = await trx
+          .selectFrom('increments.line_decision')
+          .selectAll()
+          .where('request_id', '=', id)
+          .orderBy('decided_at', 'desc')
+          .orderBy('id')
+          .execute();
+        const latest = new Map<string, LineDecisionRecord>();
+        for (const row of decisions) {
+          if (latest.has(row.line_id)) continue;
+          latest.set(row.line_id, {
+            decision: row.decision,
+            reasonCode: row.reason_code,
+            comment:
+              row.comment === null
+                ? ''
+                : cipher.decrypt(row.comment, { ...DECISION_COMMENT, rowId: row.id }),
+            approved:
+              row.approved_kind === null || row.approved_value === null
+                ? null
+                : {
+                    kind: row.approved_kind,
+                    value: cipher.decrypt(row.approved_value, { ...APPROVED_VALUE, rowId: row.id }),
+                  },
+            decidedAt: row.decided_at,
+            decidedByName: row.decided_by_name,
+          });
+        }
         const saved = new Map(
           results.map((row) => [
             `${row.line_id}:${row.criterion_id}`,
@@ -607,6 +707,7 @@ export function createIncrementRequestRepository(
               criterionId: criterion.id,
               result: entry?.result ?? null,
               justification: entry?.justification ?? '',
+              verification: verified.get(`${lineId}:${criterion.id}`) ?? null,
               evidence: files
                 .filter((file) => file.line_id === lineId && file.criterion_id === criterion.id)
                 .map((file) => ({
@@ -635,6 +736,9 @@ export function createIncrementRequestRepository(
           updatedAt: request.updated_at,
           submittedAt: request.submitted_at,
           submittedByName: request.submitted_by_name,
+          submittedBy: request.submitted_by,
+          statusChangedAt: request.status_changed_at,
+          decidedAt: request.decided_at,
           lines: lines.map((line) => ({
             id: line.id,
             employeeId: line.employee_id,
@@ -649,6 +753,8 @@ export function createIncrementRequestRepository(
                 ? null
                 : cipher.decrypt(line.proposed_value, { ...PROPOSED, rowId: line.id }),
             criteria: assessmentsFor(line.id),
+            reviewStatus: line.review_status,
+            decision: latest.get(line.id) ?? null,
           })),
         };
       }),
@@ -706,7 +812,10 @@ export function createIncrementRequestRepository(
 
     saveDraft: (scope, requestId, input) =>
       withScope(db, scope, async (trx) => {
-        const request = await lockDraft(trx, requestId);
+        const request = await lockDraft(trx, requestId, [
+          ...input.proposals.map((proposal) => proposal.lineId),
+          ...(input.assessment === undefined ? [] : [input.assessment.lineId]),
+        ]);
         if (request.version !== input.version) throw new RequestDataError('version_conflict');
         for (const proposal of input.proposals) {
           const value =
@@ -748,7 +857,7 @@ export function createIncrementRequestRepository(
 
     addEvidence: (scope, requestId, file) =>
       withScope(db, scope, async (trx) => {
-        const request = await lockDraft(trx, requestId);
+        const request = await lockDraft(trx, requestId, [file.lineId]);
         await assertLine(trx, requestId, file.lineId);
         await assertCriterion(trx, request.criteria_set_id, file.criterionId);
         // Counted under the request's row lock, so two uploads can't both take the last slot.
@@ -811,7 +920,17 @@ export function createIncrementRequestRepository(
 
     removeEvidence: (scope, requestId, evidenceId) =>
       withScope(db, scope, async (trx) => {
-        const request = await lockDraft(trx, requestId);
+        // Which employee the file belongs to: on a returned request, only theirs may change.
+        const owner = await trx
+          .selectFrom('increments.evidence_file')
+          .select('line_id')
+          .where('id', '=', evidenceId)
+          .executeTakeFirst();
+        const request = await lockDraft(
+          trx,
+          requestId,
+          owner === undefined ? undefined : [owner.line_id],
+        );
         const removed = await trx
           .updateTable('increments.evidence_file')
           .set({ deleted_at: sql`now()`, deleted_by: scope.userId })

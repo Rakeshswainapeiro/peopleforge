@@ -10,11 +10,12 @@ test.describe('portal shell', () => {
     const nav = page.getByRole('navigation', { name: 'Main' });
     // The bell may carry an unread count, depending on what other tests did.
     await expect(nav.getByRole('link')).toHaveText([
-      'Increment requests',
+      'Request Tracker',
+      'Review Queue',
       /^Notifications/u,
       'Reports',
     ]);
-    await expect(nav.getByRole('link', { name: 'Increment requests' })).toHaveAttribute(
+    await expect(nav.getByRole('link', { name: 'Request Tracker' })).toHaveAttribute(
       'aria-current',
       'page',
     );

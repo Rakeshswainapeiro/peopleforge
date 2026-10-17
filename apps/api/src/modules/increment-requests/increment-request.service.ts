@@ -1,7 +1,9 @@
-import { businessDay, ROLES } from '@peopleforge/contracts';
+import { businessDay, DecisionReasonSchema, ROLES } from '@peopleforge/contracts';
 import type {
   CreateIncrementRequest,
   Cycle,
+  DecisionReason,
+  RequestLine,
   EmployeeOption,
   IncrementRequest,
   RemoveLineResult,
@@ -13,6 +15,7 @@ import {
   type NewNotification,
   type IncrementRequestRecord,
   type IncrementRequestRepository,
+  type RequestLineRecord,
 } from '@peopleforge/db';
 import { permissionsOfPrincipal, scopeOf, type Principal } from '../../auth/principal.js';
 import type { DomainError } from '../../errors/domain-errors.js';
@@ -23,7 +26,8 @@ import {
   ValidationError,
 } from '../../errors/domain-errors.js';
 import { assessmentOf, effectiveMaxFileMb, missingFor } from './criteria.js';
-import { lineFigures, proposalProblem, requestTotals, toMoney } from './money.js';
+import { figuresOf, lineFigures, proposalProblem, requestTotals, toMoney } from './money.js';
+import { stageOf } from './stage.js';
 
 /** Most employees one search returns; the picker narrows by typing. */
 export const EMPLOYEE_SEARCH_LIMIT = 50;
@@ -69,6 +73,22 @@ export function toDomainError(error: RequestDataError): DomainError {
       return new ConflictError('Idempotency key already used for another request', [
         { path: 'Idempotency-Key', code: 'reused' },
       ]);
+    case 'not_in_review':
+      return new ConflictError('Request is not in review', [
+        { path: 'status', code: 'not_in_review' },
+      ]);
+    case 'line_not_pending':
+      return new ConflictError('Employee already decided or returned', [
+        { path: 'lineId', code: 'not_pending' },
+      ]);
+    case 'not_verified':
+      return new ConflictError('Verify every criterion before approving', [
+        { path: 'criteria', code: 'not_verified' },
+      ]);
+    case 'not_returned':
+      return new ConflictError('Nothing returned to resubmit', [
+        { path: 'status', code: 'not_returned' },
+      ]);
   }
 }
 
@@ -113,11 +133,55 @@ export function canSee(caller: Principal, status: string): boolean {
   return !isDraft(status) || seesDrafts(caller);
 }
 
+/** A stored reason code, read back through the contract (text in the database). */
+function reasonOf(code: string | null): DecisionReason | null {
+  const parsed = DecisionReasonSchema.safeParse(code);
+  return parsed.success ? parsed.data : null;
+}
+
+/** The latest decision as clients see it, with the figures as approved (R1-09). */
+function decisionOf(line: RequestLineRecord): RequestLine['decision'] {
+  const { decision } = line;
+  if (decision === null) return null;
+  // Approved at another increment (R1-09): its figures; else the proposal's, when approved.
+  const changed =
+    decision.approved === null
+      ? null
+      : figuresOf(line.currentSalary, decision.approved.kind, decision.approved.value);
+  const approved =
+    decision.decision === 'approved'
+      ? (changed ?? lineFigures(line.currentSalary, line.proposedKind, line.proposedValue))
+      : null;
+  return {
+    decision: decision.decision,
+    reasonCode: reasonOf(decision.reasonCode),
+    comment: decision.comment,
+    approvedPercent: changed?.percent ?? null,
+    approvedIncrease: approved?.increase ?? null,
+    approvedSalary: approved?.newSalary ?? null,
+    decidedAt: decision.decidedAt.toISOString(),
+    decidedByName: decision.decidedByName,
+  };
+}
+
+/** Criteria verified for every employee still pending; all of them when none is (R1-10). */
+export function verifiedForAll(record: IncrementRequestRecord): number {
+  const pending = record.lines.filter((line) => line.reviewStatus === 'pending');
+  return record.criteria.filter((criterion) =>
+    pending.every((line) =>
+      line.criteria.some(
+        (entry) => entry.criterionId === criterion.id && entry.verification !== null,
+      ),
+    ),
+  ).length;
+}
+
 function toDto(record: IncrementRequestRecord): IncrementRequest {
   const lines = record.lines.map((line) => {
     const figures = lineFigures(line.currentSalary, line.proposedKind, line.proposedValue);
     const criteria = record.criteria.map((criterion) => {
       const assessment = assessmentOf(criterion, line.criteria);
+      const { verification } = assessment;
       return {
         criterionId: criterion.id,
         result: assessment.result,
@@ -127,6 +191,10 @@ function toDto(record: IncrementRequestRecord): IncrementRequest {
           createdAt: file.createdAt.toISOString(),
         })),
         missing: missingFor(criterion, assessment),
+        verification:
+          verification === null
+            ? null
+            : { at: verification.verifiedAt.toISOString(), byName: verification.verifiedByName },
       };
     });
     return {
@@ -144,6 +212,8 @@ function toDto(record: IncrementRequestRecord): IncrementRequest {
         newSalary: figures?.newSalary ?? null,
         percent: figures?.percent ?? null,
         criteria,
+        reviewStatus: line.reviewStatus,
+        decision: decisionOf(line),
       },
       totalsInput: {
         currency: line.currency,
@@ -160,6 +230,9 @@ function toDto(record: IncrementRequestRecord): IncrementRequest {
     cycle: record.cycle,
     submittedAt: record.submittedAt === null ? null : record.submittedAt.toISOString(),
     submittedByName: record.submittedByName,
+    statusChangedAt: record.statusChangedAt.toISOString(),
+    decidedAt: record.decidedAt === null ? null : record.decidedAt.toISOString(),
+    stage: stageOf(record.status, record.criteria.length, verifiedForAll(record)),
     criteria: record.criteria.map((criterion) => ({
       ...criterion,
       maxFileMb: effectiveMaxFileMb(criterion),

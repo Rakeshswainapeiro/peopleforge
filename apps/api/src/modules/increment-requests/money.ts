@@ -27,7 +27,11 @@ export function lineFigures(
   kind: ProposedKind | null,
   value: string | null,
 ): LineFigures | null {
-  if (kind === null || value === null) return null;
+  return kind === null || value === null ? null : figuresOf(currentSalary, kind, value);
+}
+
+/** Increase, new salary and percentage for an increment given as a percentage or an amount. */
+export function figuresOf(currentSalary: string, kind: ProposedKind, value: string): LineFigures {
   const current = new Money(currentSalary);
   const proposed = new Money(value);
   const increase =

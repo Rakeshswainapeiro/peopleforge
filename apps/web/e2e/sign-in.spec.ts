@@ -16,7 +16,7 @@ test.describe('organisation sign-in', () => {
   test('signs in, shows the API-confirmed identity, and signs out', async ({ page }) => {
     await signIn(page, 'reviewer');
     await expect(page.getByTestId('viewer-name')).toContainText('Reviewer Test');
-    await expect(page.getByRole('heading', { level: 1, name: 'Increment requests' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Request Tracker' })).toBeVisible();
 
     const cookies = await page.context().cookies();
     const session = cookies.find((cookie) => cookie.name === 'peopleforge.session_token');

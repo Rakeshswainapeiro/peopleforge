@@ -76,7 +76,6 @@ export default async function NotificationsPage({ searchParams }: NotificationsP
             <NotificationList
               rows={notificationRows(data, locale, t)}
               label={t('notifications.listLabel')}
-              viewLabel={t('notifications.view')}
               unreadLabel={t('notifications.unreadMark')}
             />
           )}

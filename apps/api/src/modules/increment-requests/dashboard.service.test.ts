@@ -11,35 +11,43 @@ import {
   reviewer,
   workingDashboard,
 } from '../../test-support/increment-requests.js';
-import { DashboardService, stageOf } from './dashboard.service.js';
+import { DashboardService } from './dashboard.service.js';
 
 const scopeA = { userId: 'alpha', kind: 'entity', entityIds: [SUB_A] };
 const scopeGroup = { userId: 'reviewer', kind: 'group' };
-
-describe('stageOf [R1-10]', () => {
-  it('puts a draft before review and a submitted request at its first criterion', () => {
-    expect(stageOf('draft', 5)).toEqual({ kind: 'not_submitted', of: 5 });
-    expect(stageOf('submitted', 5)).toEqual({ kind: 'criterion', criterion: 1, of: 5 });
-    expect(stageOf('submitted', 0)).toEqual({ kind: 'criterion', criterion: 1, of: 1 });
-  });
-});
 
 describe('DashboardService.summary', () => {
   it('counts every status (zero when none) in the caller’s scope, drafts only for preparers', async () => {
     const repository = workingDashboard();
     const service = new DashboardService(repository);
     await expect(service.summary(alphaHr, { cycleId: CYCLE_ID, search: 'omar' })).resolves.toEqual({
-      byStatus: { draft: 2, submitted: 0 },
+      byStatus: {
+        draft: 2,
+        submitted: 0,
+        under_review: 0,
+        returned: 0,
+        approved: 0,
+        partly_approved: 0,
+        rejected: 0,
+      },
       requests: 2,
       employees: 3,
     });
     repository.summary.mockResolvedValueOnce({
-      byStatus: { submitted: 4 },
+      byStatus: { submitted: 4, partly_approved: 1 },
       requests: 4,
       employees: 9,
     });
     await expect(service.summary(reviewer, {})).resolves.toEqual({
-      byStatus: { draft: 0, submitted: 4 },
+      byStatus: {
+        draft: 0,
+        submitted: 4,
+        under_review: 0,
+        returned: 0,
+        approved: 0,
+        partly_approved: 1,
+        rejected: 0,
+      },
       requests: 4,
       employees: 9,
     });
@@ -81,6 +89,7 @@ describe('DashboardService.requests', () => {
           cycleId: CYCLE_ID,
           employeeCount: 2,
           createdAt: '2026-10-14T07:00:00.000Z',
+          submittedAt: null,
           statusChangedAt: '2026-10-14T07:00:00.000Z',
           stage: { kind: 'not_submitted', of: 5 },
           // Omar's C1 is complete; nothing else of the 2 × 5.
@@ -90,10 +99,17 @@ describe('DashboardService.requests', () => {
     });
   });
 
-  it('shows Sirius submitted requests at their first criterion', async () => {
+  it('shows Sirius the stage: the first criterion not verified for everyone [R1-10]', async () => {
     const repository = workingDashboard();
     repository.requests.mockResolvedValueOnce({
-      items: [dashboardRequest({ status: 'submitted', lines: [] })],
+      items: [
+        dashboardRequest({
+          status: 'under_review',
+          lines: [],
+          submittedAt: new Date('2026-10-15T07:14:00Z'),
+          verifiedCriteria: 2,
+        }),
+      ],
       total: 1,
     });
     const page = await new DashboardService(repository).requests(reviewer, {
@@ -108,7 +124,8 @@ describe('DashboardService.requests', () => {
       offset: 0,
     });
     expect(page.items[0]).toMatchObject({
-      stage: { kind: 'criterion', criterion: 1, of: 5 },
+      submittedAt: '2026-10-15T07:14:00.000Z',
+      stage: { kind: 'criterion', criterion: 3, of: 5 },
       employeeCount: 0,
       criteria: { complete: 0, total: 0 },
     });
@@ -147,6 +164,7 @@ describe('DashboardService.lines', () => {
         { criterionId: CRITERION_IDS[4], code: 'C5', mark: 'pending' },
       ],
       status: 'draft',
+      reviewStatus: 'pending',
       updatedAt: '2026-10-14T07:05:00.000Z',
     });
     expect(JSON.stringify(page)).not.toContain('21500');

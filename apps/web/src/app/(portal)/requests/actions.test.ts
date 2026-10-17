@@ -5,6 +5,7 @@ import {
   createRequest,
   removeEmployee,
   removeEvidence,
+  resubmitRequest,
   saveDraftChanges,
   submitRequest,
   uploadEvidence,
@@ -25,6 +26,7 @@ vi.mock('@/server/increment-requests', () => ({
   removeEmployee: vi.fn(),
   saveDraftChanges: vi.fn(),
   submitRequest: vi.fn(),
+  resubmitRequest: vi.fn(),
   uploadEvidence: vi.fn(),
   removeEvidence: vi.fn(),
 }));
@@ -396,6 +398,76 @@ describe('saveDraft with intent=submit [R1-07]', () => {
       `NEXT_REDIRECT /requests/${REQUEST}/edit?error=request.errors.generic`,
     );
     expect(submitRequest).not.toHaveBeenCalled();
+  });
+});
+
+describe('saveDraft with intent=resubmit [R1-08]', () => {
+  const KEY = 'b6a1d1c2-4d0e-4c47-9b8f-0b1d3a2f9e02';
+  const resubmitting = (key = KEY, note = '  Appraisal attached. ') =>
+    form({
+      requestId: REQUEST,
+      version: '6',
+      lineId: [LINE_1],
+      [`kind:${LINE_1}`]: 'percent',
+      [`value:${LINE_1}`]: '4',
+      intent: 'resubmit',
+      submitKey: key,
+      note,
+    });
+
+  beforeEach(() => {
+    vi.mocked(saveDraftChanges).mockResolvedValue({
+      kind: 'ok',
+      data: { id: REQUEST, version: 7 },
+    } as unknown as ApiResult<never>);
+    vi.mocked(resubmitRequest).mockResolvedValue(ok);
+  });
+
+  it('saves the returned employees, then resubmits the saved version with the note', async () => {
+    await expect(saveDraft({ rows: [] }, resubmitting())).rejects.toThrow(
+      `NEXT_REDIRECT /requests/${REQUEST}?resubmitted=1`,
+    );
+    expect(resubmitRequest).toHaveBeenCalledWith(REQUEST, 7, 'Appraisal attached.', KEY);
+    expect(refreshPortalShell).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    [
+      {
+        kind: 'error',
+        status: 400,
+        code: 'VALIDATION_FAILED',
+        details: [{ path: 'lines.0', code: 'incomplete' }],
+      },
+      'request.errors.notReadyResubmit',
+    ],
+    [
+      {
+        kind: 'error',
+        status: 409,
+        code: 'CONFLICT',
+        details: [{ path: 'status', code: 'not_returned' }],
+      },
+      'request.errors.notReturned',
+    ],
+    [{ kind: 'unavailable' }, 'request.errors.generic'],
+  ])('reloads the editor with the reason when resubmitting fails (%j)', async (result, error) => {
+    vi.mocked(resubmitRequest).mockResolvedValue(result as ApiResult<never>);
+    await expect(saveDraft({ rows: [] }, resubmitting())).rejects.toThrow(
+      `NEXT_REDIRECT /requests/${REQUEST}/edit?error=${error}`,
+    );
+  });
+
+  it('ends a dead session, and refuses a tampered key without resubmitting', async () => {
+    vi.mocked(resubmitRequest).mockResolvedValue({ kind: 'unauthenticated' });
+    await expect(saveDraft({ rows: [] }, resubmitting())).rejects.toThrow(
+      'NEXT_REDIRECT /session-ended',
+    );
+    vi.mocked(resubmitRequest).mockClear();
+    await expect(saveDraft({ rows: [] }, resubmitting('../x'))).rejects.toThrow(
+      `NEXT_REDIRECT /requests/${REQUEST}/edit?error=request.errors.generic`,
+    );
+    expect(resubmitRequest).not.toHaveBeenCalled();
   });
 });
 

@@ -57,6 +57,14 @@ export const NAV_ITEMS: readonly NavItem[] = [
     // Figma: the draft editor keeps "New Request" selected.
     activeFor: ['/requests/*/edit'],
   },
+  {
+    href: '/review',
+    label: 'nav.reviewQueue',
+    icon: 'check',
+    anyOf: ['increment_request:review'],
+    // Reviewing an employee (Figma "Review employee") belongs to the queue for reviewers.
+    activeFor: ['/requests/*/employees/*'],
+  },
   { href: '/notifications', label: 'nav.notifications', icon: 'bell', showsUnread: true },
   {
     href: '/reports',

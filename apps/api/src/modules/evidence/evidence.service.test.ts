@@ -125,6 +125,7 @@ describe('EvidenceService.upload [R1-04]', () => {
         result: 'pass',
         justification: 'x',
         evidence: [0, 1, 2, 3, 4].map(() => evidenceRecord),
+        verification: null,
       },
     ];
     repository.get.mockResolvedValue(full);

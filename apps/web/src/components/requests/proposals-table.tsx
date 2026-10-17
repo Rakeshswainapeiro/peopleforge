@@ -34,6 +34,10 @@ export interface ProposalRowView {
   criteriaLabel: string;
   kind: 'percent' | 'amount';
   value: string;
+  /** With Sirius HR while the subsidiary fixes returned employees: shown, not changed. */
+  locked: boolean;
+  /** "With Sirius HR", shown in place of the actions of a locked row. */
+  lockedLabel: string;
   labels: { proposedAs: string; value: string; remove: string; assess: string };
 }
 
@@ -54,6 +58,8 @@ export interface ProposalsTableLabels {
 
 export interface ProposalsTableProps {
   editable: boolean;
+  /** Rows can be removed (a draft); not while fixing returned employees. */
+  removable?: boolean;
   /** The employee whose criteria are open below the table. */
   selectedLineId?: string | undefined;
   rows: readonly ProposalRowView[];
@@ -71,6 +77,7 @@ export interface ProposalsTableProps {
  */
 export function ProposalsTable({
   editable,
+  removable = true,
   selectedLineId,
   rows,
   labels,
@@ -107,16 +114,20 @@ export function ProposalsTable({
             // Remount after a refused save so the inputs start from what was typed (React resets
             // a form to its default values once its action finishes).
             const key = `${row.lineId}:${typed?.kind ?? ''}:${typed?.value ?? ''}`;
+            // A locked row posts nothing: only the rows that may change are saved.
+            const changeable = editable && !row.locked;
             return (
               <Tr key={row.lineId} selected={row.lineId === selectedLineId}>
                 <Td>
-                  <input type="hidden" name="lineId" value={row.lineId} form={formId} />
+                  {changeable ? (
+                    <input type="hidden" name="lineId" value={row.lineId} form={formId} />
+                  ) : null}
                   <CellStack primary={row.fullName} secondary={row.employeeNumber} />
                 </Td>
                 <Td>{row.grade}</Td>
                 <Td className="whitespace-nowrap font-semibold tabular-nums">{row.current}</Td>
                 <Td>
-                  {editable ? (
+                  {changeable ? (
                     <SegmentedChoice
                       key={key}
                       name={`kind:${row.lineId}`}
@@ -134,7 +145,7 @@ export function ProposalsTable({
                   )}
                 </Td>
                 <Td className="min-w-32">
-                  {editable ? (
+                  {changeable ? (
                     <div className="w-40">
                       <Input
                         key={key}
@@ -167,7 +178,11 @@ export function ProposalsTable({
                     stateLabels={labels.criterionStates}
                   />
                 </Td>
-                {editable ? (
+                {editable && row.locked ? (
+                  <Td className="text-end text-xs whitespace-nowrap text-ink-muted">
+                    {row.lockedLabel}
+                  </Td>
+                ) : editable ? (
                   <Td className="whitespace-nowrap text-end">
                     {/* Saves the draft (nothing typed is lost), then opens this employee's
                         criteria: the action reads `selectLine`. */}
@@ -187,20 +202,22 @@ export function ProposalsTable({
                     >
                       <Icon name="pencil" className="size-5" />
                     </button>
-                    <button
-                      type="submit"
-                      form={formId}
-                      formAction={removeEmployeeAction.bind(null, row.lineId)}
-                      aria-label={row.labels.remove}
-                      title={row.labels.remove}
-                      className={cn(
-                        'inline-flex size-9 items-center justify-center rounded-control text-ink hover:bg-danger-50 hover:text-danger-600',
-                        transition,
-                        focusRing,
-                      )}
-                    >
-                      <Icon name="trash" className="size-5" />
-                    </button>
+                    {removable ? (
+                      <button
+                        type="submit"
+                        form={formId}
+                        formAction={removeEmployeeAction.bind(null, row.lineId)}
+                        aria-label={row.labels.remove}
+                        title={row.labels.remove}
+                        className={cn(
+                          'inline-flex size-9 items-center justify-center rounded-control text-ink hover:bg-danger-50 hover:text-danger-600',
+                          transition,
+                          focusRing,
+                        )}
+                      >
+                        <Icon name="trash" className="size-5" />
+                      </button>
+                    ) : null}
                   </Td>
                 ) : null}
               </Tr>

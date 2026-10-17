@@ -1,5 +1,5 @@
 import { ListIncrementRequestsQuerySchema, type Me } from '@peopleforge/contracts';
-import { render, screen, within } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import { usePathname } from 'next/navigation';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getRequestLocale } from '@/i18n/request-locale';
@@ -180,6 +180,15 @@ describe('HomePage for roles without increment requests', () => {
   });
 });
 
+const RETURNED_ID = '11111111-1111-4111-8111-111111111149';
+const RETURNED = requestSummary({
+  id: RETURNED_ID,
+  reference: 'INC-2026-0149',
+  status: 'returned',
+  statusChangedAt: '2026-10-09T07:00:00.000Z',
+  stage: { kind: 'criterion', criterion: 3, of: 5 },
+});
+
 const page = (params: Record<string, string> = {}) =>
   HomePage({ searchParams: Promise.resolve(params) });
 
@@ -192,13 +201,15 @@ describe('HomePage: My increment requests [R1-10, DASH-D1]', () => {
         data:
           query.status === 'draft'
             ? requestPage()
-            : requestPage([
-                requestSummary({
-                  reference: 'INC-2026-0152',
-                  status: 'submitted',
-                  stage: { kind: 'criterion', criterion: 1, of: 5 },
-                }),
-              ]),
+            : query.status === 'returned'
+              ? requestPage([RETURNED])
+              : requestPage([
+                  requestSummary({
+                    reference: 'INC-2026-0152',
+                    status: 'submitted',
+                    stage: { kind: 'criterion', criterion: 1, of: 5 },
+                  }),
+                ]),
       }),
     );
   });
@@ -220,8 +231,10 @@ describe('HomePage: My increment requests [R1-10, DASH-D1]', () => {
     expect(cards).toHaveTextContent('Drafts1Not yet submitted');
 
     const action = screen.getByRole('region', { name: 'Needs your action' });
-    expect(action).toHaveTextContent('1 item needs your action');
-    expect(action).toHaveTextContent('1 draft not submitted. Longest waiting first.');
+    expect(action).toHaveTextContent('2 items need your action');
+    expect(action).toHaveTextContent(
+      '2 items: drafts to submit and returns to answer. Longest waiting first.',
+    );
     const actions = within(action).getByRole('table', { name: 'Requests that need your action' });
     expect(actions).toHaveTextContent('4 employeesINC-2026-0150');
     expect(actions).toHaveTextContent('Criteria 15 of 20 complete');
@@ -229,7 +242,13 @@ describe('HomePage: My increment requests [R1-10, DASH-D1]', () => {
       'href',
       `/requests/${REQUEST_ID}/edit`,
     );
-    expect(action).toHaveTextContent('Showing 1 of 1');
+    // A return to answer, after the older draft (R1-08).
+    expect(actions).toHaveTextContent('Returned4 employeesINC-2026-0149');
+    expect(within(action).getByRole('link', { name: 'Respond' })).toHaveAttribute(
+      'href',
+      `/requests/${RETURNED_ID}/edit`,
+    );
+    expect(action).toHaveTextContent('Showing 2 of 2');
     expect(within(action).getByRole('link', { name: 'See all drafts' })).toHaveAttribute(
       'href',
       '/?status=draft',
@@ -264,6 +283,11 @@ describe('HomePage: My increment requests [R1-10, DASH-D1]', () => {
     expect(listRequests).toHaveBeenCalledWith({ cycleId: CYCLE_ID, page: 1, pageSize: 10 });
     // Drafts for the panel from every cycle, longest waiting first.
     expect(listRequests).toHaveBeenCalledWith({ status: 'draft', order: 'oldest', pageSize: 10 });
+    expect(listRequests).toHaveBeenCalledWith({
+      status: 'returned',
+      order: 'oldest',
+      pageSize: 10,
+    });
     // Every query is one the API accepts (it allows only its page sizes).
     for (const [query] of vi.mocked(listRequests).mock.calls) {
       expect(ListIncrementRequestsQuerySchema.safeParse(query).success).toBe(true);
@@ -309,12 +333,14 @@ describe('HomePage: My increment requests [R1-10, DASH-D1]', () => {
   it('shows Sirius HR every subsidiary without drafts, a Subsidiary column and no New request', async () => {
     vi.mocked(requireViewer).mockResolvedValue(SIRIUS_READER);
     render(await page());
+    expect(screen.getByRole('heading', { level: 1, name: 'Request Tracker' })).toBeInTheDocument();
     expect(
-      screen.getByRole('heading', { level: 1, name: 'Increment requests' }),
+      screen.getByText(
+        "Every subsidiary's increment requests, where each one is and who it is with.",
+      ),
     ).toBeInTheDocument();
-    expect(
-      screen.getByText('Increment requests submitted by every subsidiary.'),
-    ).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'Subsidiary' })).toHaveValue('');
+    expect(screen.getByRole('columnheader', { name: 'Submitted' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'New increment request' })).toBeNull();
     expect(screen.queryByRole('region', { name: 'Needs your action' })).toBeNull();
     expect(
@@ -427,5 +453,57 @@ describe('PortalLoading', () => {
     // Only the content area: no second sidebar or navigation.
     expect(screen.queryByRole('navigation')).toBeNull();
     expect(container.querySelectorAll('[aria-hidden="true"]').length).toBeGreaterThan(3);
+  });
+});
+
+describe('HomePage: Needs your action choices [R1-08]', () => {
+  beforeEach(() => {
+    vi.mocked(requireViewer).mockResolvedValue(PREPARER);
+    vi.mocked(listRequests).mockImplementation((query = {}) =>
+      Promise.resolve({
+        kind: 'ok',
+        data: query.status === 'returned' ? requestPage([RETURNED]) : requestPage(),
+      }),
+    );
+  });
+
+  it('shows only returns when asked, with See all pointing at them', async () => {
+    render(await page({ show: 'returned' }));
+    const action = screen.getByRole('region', { name: 'Needs your action' });
+    expect(within(action).getByRole('combobox', { name: 'Show' })).toHaveValue('returned');
+    expect(action).toHaveTextContent('Showing 1 of 1');
+    expect(within(action).getByRole('link', { name: 'See all drafts' })).toHaveAttribute(
+      'href',
+      '/?status=returned&show=returned',
+    );
+    expect(listRequests).not.toHaveBeenCalledWith(expect.objectContaining({ status: 'draft' }));
+  });
+
+  it('shows only drafts when asked, and nothing when nothing waits', async () => {
+    render(await page({ show: 'drafts' }));
+    expect(listRequests).not.toHaveBeenCalledWith(expect.objectContaining({ status: 'returned' }));
+    cleanup();
+    vi.mocked(dashboardSummary).mockResolvedValue({
+      kind: 'ok',
+      data: dashboardSummaryFixture({
+        byStatus: {
+          draft: 0,
+          submitted: 1,
+          under_review: 0,
+          returned: 0,
+          approved: 0,
+          partly_approved: 0,
+          rejected: 0,
+        },
+      }),
+    });
+    render(await page());
+    expect(screen.queryByRole('region', { name: 'Needs your action' })).toBeNull();
+  });
+
+  it('lets Sirius HR filter by subsidiary', async () => {
+    vi.mocked(requireViewer).mockResolvedValue(SIRIUS_READER);
+    render(await page({ entity: SUB_A }));
+    expect(dashboardSummary).toHaveBeenCalledWith(expect.objectContaining({ entityId: SUB_A }));
   });
 });

@@ -1,15 +1,17 @@
 import type { Me } from '@peopleforge/contracts';
-import { render, screen, within } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getRequestLocale } from '@/i18n/request-locale';
 import type { ApiResult } from '@/server/api-client';
 import { getRequest, openCycles, searchEmployees } from '@/server/increment-requests';
 import { requireViewer } from '@/server/session';
 import {
+  decisionOf,
   draftRequest,
   EVIDENCE_ID,
   LINE_1,
   LINE_2,
+  must,
   submittedRequest,
 } from '@/test-support/requests';
 import EditRequestPage from './[id]/edit/page';
@@ -413,5 +415,156 @@ describe('Request detail [R1-06, R1-07]', () => {
     await expect(detailPage()).rejects.toThrow('Increment request API unavailable');
     vi.mocked(requireViewer).mockResolvedValue(null);
     await expect(detailPage()).resolves.toBeNull();
+  });
+});
+
+const ALPHA_SUBMITTER: Me = {
+  ...ALPHA_HR,
+  permissions: ['increment_request:read', 'increment_request:create', 'increment_request:submit'],
+};
+
+/** INC-2026-0152 with Omar returned by Sirius HR (missing evidence) and Neha still in review. */
+function returnedRequest() {
+  const request = submittedRequest({ status: 'returned', version: 6 });
+  return {
+    ...request,
+    lines: request.lines.map((line, index) =>
+      index === 0
+        ? {
+            ...line,
+            reviewStatus: 'returned' as const,
+            decision: decisionOf({
+              decision: 'returned',
+              reasonCode: 'missing_evidence',
+              comment: 'Attach the 2026 appraisal for C1.',
+            }),
+          }
+        : line,
+    ),
+  };
+}
+
+describe('Returned requests [R1-08]', () => {
+  it('shows the subsidiary what came back, with the question and Update and resubmit', async () => {
+    vi.mocked(requireViewer).mockResolvedValue(ALPHA_SUBMITTER);
+    vi.mocked(getRequest).mockResolvedValue({ kind: 'ok', data: returnedRequest() });
+    render(await detailPage());
+    expect(
+      screen.getByText(
+        'Submitted 15 Oct 2026, 11:14 by Priya Nair · Subsidiary A · With Subsidiary A',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Sirius HR returned 1 employee to you')).toBeInTheDocument();
+    expect(screen.getByText('“Attach the 2026 appraisal for C1.”')).toBeInTheDocument();
+    expect(screen.getByText(/· Missing evidence/u)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Omar Haddad' })).toHaveAttribute(
+      'href',
+      `/requests/${REQUEST}/employees/${LINE_1}`,
+    );
+    expect(screen.getByRole('link', { name: 'Update and resubmit' })).toHaveAttribute(
+      'href',
+      `/requests/${REQUEST}/edit`,
+    );
+    const table = screen.getByRole('table', { name: 'Employees in INC-2026-0152' });
+    expect(table).toHaveTextContent('Returned');
+    expect(table).toHaveTextContent('With Sirius HR');
+  });
+
+  it('confirms a resubmission, and tells Sirius HR who is back with the subsidiary', async () => {
+    vi.mocked(getRequest).mockResolvedValue({ kind: 'ok', data: submittedRequest() });
+    render(await detailPage(REQUEST, { resubmitted: '1' }));
+    expect(screen.getByText('Resubmitted to Sirius HR.')).toBeInTheDocument();
+    vi.mocked(requireViewer).mockResolvedValue({
+      ...SIRIUS_REVIEWER,
+      permissions: ['increment_request:read', 'increment_request:review'],
+    });
+    const both = returnedRequest();
+    vi.mocked(getRequest).mockResolvedValue({
+      kind: 'ok',
+      data: {
+        ...both,
+        lines: both.lines.map((line) => ({ ...line, reviewStatus: 'returned' as const })),
+      },
+    });
+    render(await detailPage());
+    expect(screen.getByText('2 employees are back with Subsidiary A')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Update and resubmit' })).toBeNull();
+    const breadcrumb = screen.getAllByRole('navigation', { name: 'Breadcrumb' }).at(-1);
+    expect(
+      within(must(breadcrumb)).getByRole('link', { name: 'Request Tracker' }),
+    ).toBeInTheDocument();
+    // Reviewers review each employee from here.
+    expect(screen.getAllByText('Review').length).toBeGreaterThan(0);
+  });
+
+  it('shows the final status once every employee is decided', async () => {
+    vi.mocked(getRequest).mockResolvedValue({
+      kind: 'ok',
+      data: submittedRequest({
+        status: 'rejected',
+        stage: { kind: 'decided', of: 5 },
+        decidedAt: '2026-10-16T09:00:00.000Z',
+      }),
+    });
+    render(await detailPage());
+    expect(screen.getByText('Final status: Rejected')).toBeInTheDocument();
+    cleanup();
+    vi.mocked(getRequest).mockResolvedValue({
+      kind: 'ok',
+      data: submittedRequest({
+        status: 'approved',
+        stage: { kind: 'decided', of: 5 },
+        decidedAt: '2026-10-16T09:00:00.000Z',
+      }),
+    });
+    render(await detailPage());
+    expect(screen.getByText('Final status: Approved')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Sirius HR decided every employee on 16 Oct 2026. Open an employee to see the decision.',
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('lets the subsidiary fix only the returned employees and resubmit them', async () => {
+    vi.mocked(requireViewer).mockResolvedValue(ALPHA_SUBMITTER);
+    vi.mocked(getRequest).mockResolvedValue({ kind: 'ok', data: returnedRequest() });
+    render(await requestPage(REQUEST, { employee: LINE_2 }));
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Update returned employees' }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: 'Breadcrumb' })).toHaveTextContent(
+      'INC-2026-0152 · returned',
+    );
+    // Neha is with Sirius HR: not editable, and not the one assessed even when asked for.
+    expect(screen.getAllByRole('textbox', { name: /^Proposed increase/u })).toHaveLength(1);
+    expect(screen.getByText('With Sirius HR')).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: '2. Eligibility criteria for Omar Haddad' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Sirius HR asks')).toBeInTheDocument();
+    expect(screen.getByText('Attach the 2026 appraisal for C1.')).toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: 'Add employee' })).toBeNull();
+    expect(searchEmployees).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Resubmit to Sirius HR' })).toBeInTheDocument();
+  });
+
+  it('shows a returned employee’s question without reason or comment when there is none', async () => {
+    vi.mocked(requireViewer).mockResolvedValue(ALPHA_SUBMITTER);
+    const request = returnedRequest();
+    vi.mocked(getRequest).mockResolvedValue({
+      kind: 'ok',
+      data: {
+        ...request,
+        lines: request.lines.map((line) =>
+          line.decision === null
+            ? line
+            : { ...line, decision: decisionOf({ decision: 'returned' }) },
+        ),
+      },
+    });
+    render(await requestPage());
+    expect(screen.getByText('Sirius HR asks')).toBeInTheDocument();
+    expect(screen.queryByText(/^Reason:/u)).toBeNull();
   });
 });

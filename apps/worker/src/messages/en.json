@@ -20,6 +20,38 @@
         "one": "{actor} submitted increment request {reference} from {entity} with {count} employee. It is waiting for your review.",
         "other": "{actor} submitted increment request {reference} from {entity} with {count} employees. It is waiting for your review."
       }
+    },
+    "stage_changed": {
+      "subject": "{reference}: criterion {criterion} of {of} under review",
+      "body": "Sirius HR verified the earlier criteria of increment request {reference} for every employee. Criterion {criterion} of {of} is now under review."
+    },
+    "employee_approved": {
+      "subject": "{employee} approved in {reference}",
+      "body": "Sirius HR approved the increment for {employee} in request {reference}. Open the request to see the approved figures."
+    },
+    "employee_rejected": {
+      "subject": "{employee} rejected in {reference}",
+      "body": "Sirius HR rejected the increment for {employee} in request {reference}. Open the request to see the reason."
+    },
+    "employee_returned": {
+      "subject": "Action needed: {employee} returned in {reference}",
+      "body": "Sirius HR returned {employee} in request {reference} with a question. Update the employee and resubmit."
+    },
+    "request_decided": {
+      "subject": "{reference} decided: {status}",
+      "body": "Sirius HR decided every employee in increment request {reference}. Final status: {status}."
+    },
+    "request_resubmitted": {
+      "subject": "{reference} resubmitted by {entity}",
+      "body": {
+        "one": "{actor} resubmitted increment request {reference} from {entity} with {count} returned employee. It is waiting for your review.",
+        "other": "{actor} resubmitted increment request {reference} from {entity} with {count} returned employees. It is waiting for your review."
+      }
     }
+  },
+  "statuses": {
+    "approved": "Approved",
+    "partly_approved": "Partly approved",
+    "rejected": "Rejected"
   }
 }

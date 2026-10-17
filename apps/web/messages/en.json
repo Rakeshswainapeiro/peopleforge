@@ -11,7 +11,8 @@
     "notifications": "Notifications",
     "reports": "Reports",
     "myRequests": "My Request",
-    "requests": "Increment requests"
+    "requests": "Request Tracker",
+    "reviewQueue": "Review Queue"
   },
   "home": {
     "heading": "Welcome",
@@ -140,6 +141,30 @@
       "request_received": {
         "one": "New request from {entity} with {count} employee, submitted by {actor}.",
         "other": "New request from {entity} with {count} employees, submitted by {actor}."
+      },
+      "stage_changed": {
+        "one": "Sirius HR verified criterion {done} for every employee. Criterion {criterion} of {of} is under review.",
+        "other": "Sirius HR verified criterion {done} for every employee. Criterion {criterion} of {of} is under review."
+      },
+      "employee_approved": {
+        "one": "{employee} approved by Sirius HR.",
+        "other": "{employee} approved by Sirius HR."
+      },
+      "employee_rejected": {
+        "one": "{employee} rejected by Sirius HR.",
+        "other": "{employee} rejected by Sirius HR."
+      },
+      "employee_returned": {
+        "one": "{employee} returned by Sirius HR with a question. Update and resubmit.",
+        "other": "{employee} returned by Sirius HR with a question. Update and resubmit."
+      },
+      "request_decided": {
+        "one": "Every employee decided. Final status: {status}.",
+        "other": "Every employee decided. Final status: {status}."
+      },
+      "request_resubmitted": {
+        "one": "{entity} resubmitted {count} returned employee ({actor}).",
+        "other": "{entity} resubmitted {count} returned employees ({actor})."
       }
     },
     "pagination": {
@@ -149,7 +174,8 @@
       "previous": "Previous page",
       "next": "Next page",
       "last": "Last page"
-    }
+    },
+    "respond": "Respond"
   },
   "reports": {
     "heading": "Reports",
@@ -211,7 +237,14 @@
       "justificationTooLong": "A justification can be at most 2,000 characters.",
       "notReady": "Every employee needs a proposed increment and all criteria complete before you can submit.",
       "deadlinePassed": "The submission deadline for this cycle has passed.",
-      "notDraft": "This request has already been submitted and can’t be changed."
+      "notDraft": "This request has already been submitted and can’t be changed.",
+      "notPending": "This employee was already decided or returned. Reload to see the latest.",
+      "notVerified": "Verify every criterion before approving.",
+      "notInReview": "This request is no longer in review.",
+      "notReturned": "Nothing is waiting to be resubmitted.",
+      "decisionInvalid": "Choose a reason and write a comment.",
+      "percentRange": "Enter a percentage above 0 and at most 100, with at most 2 decimals.",
+      "notReadyResubmit": "Every returned employee needs a proposed increment and all criteria complete before you can resubmit."
     },
     "colCriteria": "Criteria",
     "criteriaComplete": "{done}/{total} complete",
@@ -304,13 +337,18 @@
   },
   "requestStatus": {
     "draft": "Draft",
-    "submitted": "Submitted"
+    "submitted": "Submitted",
+    "under_review": "Under review",
+    "returned": "Returned",
+    "approved": "Approved",
+    "partly_approved": "Partly approved",
+    "rejected": "Rejected"
   },
   "dashboard": {
     "title": "My increment requests",
     "intro": "Requests raised by {entity}. Other entities are not visible to you.",
-    "introGroup": "Increment requests submitted by every subsidiary.",
-    "titleGroup": "Increment requests",
+    "introGroup": "Every subsidiary's increment requests, where each one is and who it is with.",
+    "titleGroup": "Request Tracker",
     "newRequest": "New increment request",
     "cards": {
       "label": "Request counts",
@@ -323,7 +361,11 @@
       "approved": "Approved",
       "approvedHint": "{full} full, {partly} partly",
       "rejected": "Rejected",
-      "rejectedHint": "This cycle"
+      "rejectedHint": "This cycle",
+      "needsReplyGroup": "Returned to subsidiaries",
+      "needsReplyGroupHint": "Waiting for the subsidiary",
+      "withSiriusGroup": "To review",
+      "withSiriusGroupHint": "Submitted or under review"
     },
     "actionTitle": "Needs your action",
     "continueDraft": "Continue draft",
@@ -393,8 +435,8 @@
       "other": "{count} items need your action"
     },
     "actionSummary": {
-      "one": "{count} draft not submitted. Longest waiting first.",
-      "other": "{count} drafts not submitted. Longest waiting first."
+      "one": "{count} item: drafts to submit and returns to answer. Longest waiting first.",
+      "other": "{count} items: drafts to submit and returns to answer. Longest waiting first."
     },
     "show": "Show",
     "showAll": "All ({count})",
@@ -408,7 +450,22 @@
     "needsCriteria": "Criteria {complete} of {total} complete",
     "overdue": "(waiting long)",
     "showing": "Showing {shown} of {total}",
-    "seeAllDrafts": "See all drafts"
+    "seeAllDrafts": "See all drafts",
+    "stageDecision": "Awaiting decision",
+    "stageDecided": "Decided",
+    "withSubsidiary": "{entity}",
+    "withNobody": "Closed",
+    "subsidiary": "Subsidiary",
+    "allSubsidiaries": "All subsidiaries",
+    "colSubmitted": "Submitted",
+    "typeReturned": "Returned",
+    "needsReply": "Answer Sirius HR and resubmit",
+    "needsReturned": {
+      "one": "{count} employee returned",
+      "other": "{count} employees returned"
+    },
+    "respond": "Respond",
+    "showReturned": "Returned ({count})"
   },
   "employeeStatus": {
     "current": "Employee status",
@@ -448,7 +505,8 @@
   "breadcrumb": {
     "label": "Breadcrumb",
     "myRequests": "My requests",
-    "requestDetail": "Request detail"
+    "requestDetail": "Request detail",
+    "requestTracker": "Request Tracker"
   },
   "figures": {
     "employees": "Employees",
@@ -468,8 +526,8 @@
     }
   },
   "requestDetail": {
-    "subtitle": "Submitted {date} by {name} · {entity} · With Sirius HR",
-    "subtitleNoName": "Submitted {date} · {entity} · With Sirius HR",
+    "subtitle": "Submitted {date} by {name} · {entity} · {with}",
+    "subtitleNoName": "Submitted {date} · {entity} · {with}",
     "submittedTitle": "{reference} submitted to Sirius HR",
     "submittedBody": "{employees} · {amount} per month · Status: Submitted · Next: Sirius HR reviews Criterion 1 of {of}. You and Sirius HR have been notified.",
     "viewEmployees": "View Employees",
@@ -489,6 +547,161 @@
     "colCriteria": "Criteria {first}–{last}",
     "colStatus": "Status",
     "colAction": "Action",
-    "increase": "+ {amount}"
+    "increase": "+ {amount}",
+    "withSirius": "With Sirius HR",
+    "withSubsidiary": "With {entity}",
+    "closed": "Decided {date}",
+    "stepVerified": "Verified for everyone",
+    "stepAwaiting": "Awaiting decision",
+    "stepDecided": "{status} · {date}",
+    "returnedTitle": {
+      "one": "Sirius HR returned {count} employee to you",
+      "other": "Sirius HR returned {count} employees to you"
+    },
+    "returnedBody": "Answer each question, update the employee and resubmit. Employees not returned stay with Sirius HR.",
+    "returnedGroupTitle": {
+      "one": "{count} employee is back with {entity}",
+      "other": "{count} employees are back with {entity}"
+    },
+    "update": "Update and resubmit",
+    "decidedTitle": "Final status: {status}",
+    "decidedBody": "Sirius HR decided every employee on {date}. Open an employee to see the decision."
+  },
+  "lineStatus": {
+    "pending": "With Sirius HR",
+    "pendingGroup": "To review",
+    "approved": "Approved",
+    "rejected": "Rejected",
+    "returned": "Returned"
+  },
+  "reasons": {
+    "criteria_not_met": "Criteria not met",
+    "missing_evidence": "Missing evidence",
+    "budget": "Budget",
+    "policy": "Policy",
+    "other": "Other",
+    "unclear_justification": "Unclear justification",
+    "proposal_change": "Proposal needs a change",
+    "policy_band": "Policy band",
+    "internal_equity": "Internal equity"
+  },
+  "decision": {
+    "approvedTitle": "Approved",
+    "rejectedTitle": "Rejected",
+    "returnedTitle": "Returned to {entity}",
+    "by": "By {name} · {date}",
+    "reason": "Reason: {reason}",
+    "asProposed": "Approved as proposed: {percent} (+ {amount} per month).",
+    "changed": "Approved at {percent} instead of {proposed}: + {amount} per month, new salary {salary}.",
+    "rejectedBody": "No increment for this employee in this cycle.",
+    "question": "Sirius HR asks",
+    "noComment": "No comment.",
+    "panelTitle": "Decision",
+    "panelIntro": "Decide this employee. The subsidiary is told straight away.",
+    "tabs": "Decision",
+    "approve": "Approve",
+    "reject": "Reject",
+    "return": "Return",
+    "approveHint": "Approves the proposed increment unless you change it.",
+    "changeIncrement": "Approve a different increment",
+    "approvedPercent": "Approved increment (%)",
+    "approvedPercentHint": "Proposed: {percent}",
+    "reasonLabel": "Reason",
+    "reasonPlaceholder": "Choose a reason",
+    "comment": "Comment",
+    "commentRequired": "Comment (required)",
+    "commentPlaceholderApprove": "Why the increment changed",
+    "commentPlaceholderReject": "Why this employee is rejected",
+    "commentPlaceholderReturn": "What the subsidiary should answer or fix",
+    "rejectHint": "Rejects the increment for this employee. This can't be undone.",
+    "returnHint": "Sends this employee back to the subsidiary with your question. Once resubmitted, every criterion is checked again.",
+    "confirmApprove": "Approve {name}",
+    "confirmReject": "Reject {name}",
+    "confirmReturn": "Return {name}",
+    "deciding": "Saving decision…",
+    "verifyFirst": {
+      "one": "Verify {count} more criterion before approving.",
+      "other": "Verify {count} more criteria before approving."
+    },
+    "saved": {
+      "approved": "{name} approved.",
+      "rejected": "{name} rejected.",
+      "returned": "{name} returned to {entity}."
+    },
+    "next": "Next employee: {name}",
+    "backToQueue": "Back to review queue",
+    "allDone": "Every employee of {reference} is decided."
+  },
+  "review": {
+    "heading": "Review queue",
+    "intro": "Employees waiting for Sirius HR across {count} subsidiaries. Oldest first.",
+    "introNone": "Employees waiting for Sirius HR. Oldest first.",
+    "chips": "Show",
+    "filters": {
+      "pending": "To review",
+      "returned": "Returned",
+      "overdue": "Past reminder",
+      "open": "All open",
+      "all": "All"
+    },
+    "colEmployee": "Employee",
+    "colRequest": "Request",
+    "colProposed": "Proposed",
+    "colSubmitted": "Submitted results",
+    "colVerified": "Verified",
+    "colWaiting": "Waiting",
+    "colAction": "Action",
+    "caption": "Employees in the review queue",
+    "verifiedOf": "{verified} of {total}",
+    "overdue": "Past {days}-day reminder",
+    "review": "Review",
+    "reviewOf": "Review {name}",
+    "view": "View",
+    "viewOf": "View {name}",
+    "emptyTitle": "Nothing to review",
+    "emptyBody": "New and resubmitted requests appear here.",
+    "noMatchTitle": "No employees match",
+    "noMatchBody": "Try another search, subsidiary or filter.",
+    "searchPlaceholder": "Employee name, employee ID or request ID",
+    "pagination": {
+      "navigation": "Review queue pages",
+      "pageOf": "Page {page} of {pages}",
+      "first": "First page",
+      "previous": "Previous page",
+      "next": "Next page",
+      "last": "Last page"
+    },
+    "breadcrumb": "Review queue",
+    "colVerification": "Sirius HR check",
+    "verified": "Verified",
+    "verifiedBy": "Verified by {name}, {date}",
+    "markVerified": "Mark verified",
+    "markVerifiedFor": "Mark {code} verified for {name}",
+    "undo": "Undo",
+    "undoFor": "Undo the check of {code} for {name}",
+    "notVerified": "Not verified",
+    "criteriaIntro": "As submitted by {entity} for {name}. Check each criterion and its evidence, then decide.",
+    "stage": "Stage: {stage}"
+  },
+  "resubmit": {
+    "title": "Update returned employees",
+    "intro": "Answer Sirius HR's questions for {reference}: change what they asked for, then resubmit. Other employees stay with Sirius HR.",
+    "breadcrumb": "{reference} · returned",
+    "section": "Resubmit to Sirius HR",
+    "note": "Note to Sirius HR (optional)",
+    "notePlaceholder": "What you changed",
+    "submit": "Resubmit to Sirius HR",
+    "confirm": "Yes, resubmit",
+    "confirmTitle": "Resubmit {reference} to Sirius HR?",
+    "confirmIntro": "These returned employees go back to Sirius HR, who check every criterion again.",
+    "confirmNote": "Sirius HR is notified.",
+    "caption": "Only returned employees can be changed.",
+    "notReady": {
+      "one": "{count} returned employee still needs a proposal or complete criteria.",
+      "other": "{count} returned employees still need a proposal or complete criteria."
+    },
+    "allReady": "Every returned employee is ready to go back.",
+    "done": "Resubmitted to Sirius HR.",
+    "locked": "With Sirius HR"
   }
 }

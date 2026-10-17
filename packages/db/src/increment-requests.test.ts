@@ -495,6 +495,7 @@ describe('criteria configuration on a request [R1-03, R1-05]', () => {
         result: null,
         justification: '',
         evidence: [],
+        verification: null,
       })),
     );
   });

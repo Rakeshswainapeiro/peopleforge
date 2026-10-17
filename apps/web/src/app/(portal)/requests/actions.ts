@@ -3,6 +3,7 @@
 import {
   CriterionResultSchema,
   DecimalString,
+  MAX_COMMENT_LENGTH,
   MAX_EVIDENCE_FILE_MB,
   type CriterionInput,
   type ProposedKind,
@@ -24,6 +25,7 @@ import {
   createRequest,
   removeEmployee,
   removeEvidence,
+  resubmitRequest,
   saveDraftChanges,
   submitRequest,
   uploadEvidence,
@@ -207,8 +209,17 @@ export async function saveDraft(
     ...(assessment === undefined ? {} : { assessment: assessment.input }),
   });
   if (result.kind === 'ok') {
-    if (field(formData, 'intent') === 'submit') {
+    const intent = field(formData, 'intent');
+    if (intent === 'submit') {
       await submitSaved(requestId, result.data.version, field(formData, 'submitKey'));
+    }
+    if (intent === 'resubmit') {
+      await resubmitSaved(
+        requestId,
+        result.data.version,
+        field(formData, 'submitKey'),
+        field(formData, 'note'),
+      );
     }
     if (next.success) redirect(`${editRequestHref(requestId, { employee: next.data })}#criteria`);
     redirect(
@@ -250,6 +261,36 @@ async function submitSaved(requestId: string, version: number, keyInput: string)
   if (result.kind === 'unauthenticated') redirect('/session-ended');
   const error =
     result.kind === 'error' ? errorKeyFor(result.code, result.details) : 'request.errors.generic';
+  redirect(editRequestHref(requestId, { error }));
+}
+
+/**
+ * "Resubmit to Sirius HR" for a returned request (R1-08): like submitting, the form is saved
+ * first, then the saved version goes back with the note. The API checks every returned
+ * employee is ready.
+ */
+async function resubmitSaved(
+  requestId: string,
+  version: number,
+  keyInput: string,
+  noteInput: string,
+): Promise<never> {
+  const key = Key.safeParse(keyInput);
+  if (!key.success) redirect(editRequestHref(requestId, { error: 'request.errors.generic' }));
+  const note = noteInput.normalize('NFC').trim().slice(0, MAX_COMMENT_LENGTH);
+  const result = await resubmitRequest(requestId, version, note, key.data);
+  if (result.kind === 'ok') {
+    refreshPortalShell();
+    redirect(requestHref(requestId, { resubmitted: '1' }));
+  }
+  if (result.kind === 'unauthenticated') redirect('/session-ended');
+  const error =
+    result.kind === 'error'
+      ? result.code === 'VALIDATION_FAILED' &&
+        result.details.some((detail) => detail.path.startsWith('lines.'))
+        ? 'request.errors.notReadyResubmit'
+        : errorKeyFor(result.code, result.details)
+      : 'request.errors.generic';
   redirect(editRequestHref(requestId, { error }));
 }
 

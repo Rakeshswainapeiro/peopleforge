@@ -2,7 +2,13 @@ import { sql, type Kysely, type RawBuilder, type Transaction } from 'kysely';
 import { loadCriteriaSets, type CriterionRecord } from './criteria-sets.js';
 import { PROPOSED, SALARY } from './encrypted-fields.js';
 import type { FieldCipher } from './field-crypto.js';
-import type { CriterionResultValue, Database, ProposedKind, RequestStatus } from './schema.js';
+import type {
+  CriterionResultValue,
+  Database,
+  LineReviewStatus,
+  ProposedKind,
+  RequestStatus,
+} from './schema.js';
 import { withScope, type Scope } from './scope.js';
 
 /**
@@ -14,6 +20,8 @@ import { withScope, type Scope } from './scope.js';
 
 export interface DashboardFilter {
   cycleId?: string | undefined;
+  /** One subsidiary (Sirius HR's entity filter); Row-Level Security limits it anyway. */
+  entityId?: string | undefined;
   status?: RequestStatus | undefined;
   /** Matches anywhere in an employee's name or number, or the request reference. */
   search?: string | undefined;
@@ -45,6 +53,9 @@ export interface DashboardRequestRecord {
   cycleId: string;
   createdAt: Date;
   statusChangedAt: Date;
+  submittedAt: Date | null;
+  /** Criteria verified for every employee still pending review (the stage, R1-10). */
+  verifiedCriteria: number;
   /** The request's pinned criteria, in display order. */
   criteria: CriterionRecord[];
   /** One entry per live employee (in the order added): facts per criterion, in set order. */
@@ -73,6 +84,7 @@ export interface DashboardLineRecord {
   facts: CriterionFacts[];
   /** The later of the employee's last change and the request's last status change. */
   updatedAt: Date;
+  reviewStatus: LineReviewStatus;
 }
 
 export interface DashboardSummaryRecord {
@@ -108,6 +120,9 @@ function requestConditions(filter: DashboardFilter, withStatus = true): Conditio
   const conditions: Condition[] = [sql<boolean>`r.deleted_at is null`];
   if (!filter.includeDrafts) conditions.push(sql<boolean>`r.status <> 'draft'`);
   if (filter.cycleId !== undefined) conditions.push(sql<boolean>`r.cycle_id = ${filter.cycleId}`);
+  if (filter.entityId !== undefined) {
+    conditions.push(sql<boolean>`r.entity_id = ${filter.entityId}`);
+  }
   if (withStatus && filter.status !== undefined) {
     conditions.push(sql<boolean>`r.status = ${filter.status}`);
   }
@@ -156,6 +171,17 @@ function lineConditions(filter: DashboardFilter & { requestId?: string | undefin
   }
   return all(conditions);
 }
+
+/**
+ * Criteria verified for every employee still pending review, per request (alias `r`): the
+ * review stage, "Criterion n of 5" (R1-10). Same rule as the review repository.
+ */
+const VERIFIED_CRITERIA = sql<number>`(select count(*)::int from increments.criterion c
+  where c.criteria_set_id = r.criteria_set_id and not exists (
+    select 1 from increments.request_line vl
+    where vl.request_id = r.id and vl.deleted_at is null and vl.review_status = 'pending'
+      and not exists (select 1 from increments.criterion_verification v
+                      where v.line_id = vl.id and v.criterion_id = c.id)))`;
 
 const EMPTY_FACTS = { result: null, hasJustification: false, evidenceCount: 0 } as const;
 
@@ -254,6 +280,8 @@ export function createDashboardRepository(
             'r.criteria_set_id',
             'r.created_at',
             'r.status_changed_at',
+            'r.submitted_at',
+            VERIFIED_CRITERIA.as('verified_criteria'),
           ])
           .where(where)
           .orderBy('r.created_at', query.order === 'oldest' ? 'asc' : 'desc')
@@ -296,6 +324,8 @@ export function createDashboardRepository(
               cycleId: row.cycle_id,
               createdAt: row.created_at,
               statusChangedAt: row.status_changed_at,
+              submittedAt: row.submitted_at,
+              verifiedCriteria: row.verified_criteria,
               criteria,
               lines: lines
                 .filter((line) => line.request_id === row.id)
@@ -333,6 +363,7 @@ export function createDashboardRepository(
             'l.current_salary',
             'l.proposed_kind',
             'l.proposed_value',
+            'l.review_status',
             sql<Date>`greatest(l.updated_at, r.status_changed_at)`.as('updated_at'),
           ])
           .where(where)
@@ -377,6 +408,7 @@ export function createDashboardRepository(
               criteria,
               facts: factsOf(row.id, criteria),
               updatedAt: row.updated_at,
+              reviewStatus: row.review_status,
             };
           }),
         };

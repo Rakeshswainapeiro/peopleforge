@@ -1,4 +1,5 @@
 import {
+  MAX_COMMENT_LENGTH,
   MAX_EVIDENCE_PER_CRITERION,
   type CriterionAssessment,
   type IncrementRequest,
@@ -20,6 +21,7 @@ import { requestFigures } from './request-figures';
 import { EVIDENCE_ERROR_KEYS, REQUEST_ERROR_KEYS } from './request-errors';
 import { localised } from './viewer-display';
 import { evidenceHref } from './routes';
+import { stageView } from './dashboard-view';
 
 /**
  * A criterion's mark in the table: its result once complete, "not complete yet" before (also
@@ -59,6 +61,8 @@ export function proposalRows(
     }),
     kind: line.proposedKind ?? 'percent',
     value: line.proposedValue === null ? '' : trimDecimal(line.proposedValue),
+    locked: request.status === 'returned' && line.reviewStatus !== 'returned',
+    lockedLabel: t('resubmit.locked'),
     labels: {
       proposedAs: t('request.proposedAsFor', { name: line.fullName }),
       value: t('request.valueFor', { name: line.fullName }),
@@ -173,9 +177,20 @@ function criteriaIncomplete(count: number, locale: Locale, t: Translate): string
 }
 
 /**
+ * The employees a submission sends: every one of a draft, or only those Sirius HR returned
+ * (R1-08); the others stay with Sirius HR.
+ */
+export function linesToSend(request: IncrementRequest): RequestLine[] {
+  return request.status === 'returned'
+    ? request.lines.filter((line) => line.reviewStatus === 'returned')
+    : request.lines;
+}
+
+/**
  * Figma "3. Ready to submit?": a row per employee ("All 5 criteria complete" / "5 criteria
  * incomplete"), and a note saying what still blocks submitting. Ready = a proposed increment
- * and every criterion complete (the API's `totals.ready`).
+ * and every criterion complete. For a returned request, the same for its returned employees,
+ * resubmitted with an optional note.
  */
 export function readyView(
   request: IncrementRequest,
@@ -185,16 +200,22 @@ export function readyView(
 ): ReadyPanelProps {
   const number = new Intl.NumberFormat(locale);
   const total = request.criteria.length;
-  const rows = request.lines.map((line) => ({
+  const fixing = request.status === 'returned';
+  const lines = linesToSend(request);
+  const rows = lines.map((line) => ({
     line,
     open: line.criteria.length - completeCount(line),
     proposed: line.proposedValue !== null,
   }));
   const withOpenCriteria = rows.filter((row) => row.open > 0).length;
   const withoutProposal = rows.filter((row) => !row.proposed).length;
-  const employees = number.format(request.lines.length);
-  const note =
-    withOpenCriteria > 0
+  const employees = number.format(lines.length);
+  const notReady = rows.filter((row) => row.open > 0 || !row.proposed).length;
+  const note = fixing
+    ? notReady > 0
+      ? t(`resubmit.notReady.${pluralForm(notReady, locale)}`, { count: number.format(notReady) })
+      : t('resubmit.allReady')
+    : withOpenCriteria > 0
       ? t('request.notReadyCriteria', {
           count: number.format(withOpenCriteria),
           total: employees,
@@ -223,16 +244,33 @@ export function readyView(
       };
     }),
     note,
-    canSubmit: request.lines.length > 0 && request.totals.ready === request.lines.length,
+    canSubmit: lines.length > 0 && notReady === 0,
     submitKey,
-    submitLabels: {
-      submit: t('request.submit'),
-      confirm: t('request.submitConfirm'),
-      submitting: t('request.submitting'),
-      back: t('request.submitBack'),
-    },
+    submitLabels: fixing
+      ? {
+          submit: t('resubmit.submit'),
+          confirm: t('resubmit.confirm'),
+          submitting: t('request.submitting'),
+          back: t('request.submitBack'),
+        }
+      : {
+          submit: t('request.submit'),
+          confirm: t('request.submitConfirm'),
+          submitting: t('request.submitting'),
+          back: t('request.submitBack'),
+        },
     submitDialog: submitDialogView(request, locale, t),
-    caption: t('request.submitCaption'),
+    caption: fixing ? t('resubmit.caption') : t('request.submitCaption'),
+    ...(fixing
+      ? {
+          intent: 'resubmit' as const,
+          noteField: {
+            label: t('resubmit.note'),
+            placeholder: t('resubmit.notePlaceholder'),
+            maxLength: MAX_COMMENT_LENGTH,
+          },
+        }
+      : {}),
   };
 }
 
@@ -244,9 +282,12 @@ export function submitDialogView(
 ): SubmitDialogView {
   const number = new Intl.NumberFormat(locale);
   const total = number.format(request.criteria.length);
+  const fixing = request.status === 'returned';
   return {
-    title: t('request.submitConfirmTitle', { reference: request.reference }),
-    intro: t('request.submitConfirmIntro'),
+    title: fixing
+      ? t('resubmit.confirmTitle', { reference: request.reference })
+      : t('request.submitConfirmTitle', { reference: request.reference }),
+    intro: fixing ? t('resubmit.confirmIntro') : t('request.submitConfirmIntro'),
     figures: requestFigures(request, locale, t).map(({ label, value }) => ({ label, value })),
     table: {
       caption: t('request.submitTableCaption'),
@@ -255,7 +296,7 @@ export function submitDialogView(
       proposed: t('request.colProposed'),
       criteria: t('request.colCriteria'),
     },
-    rows: request.lines.map((line) => ({
+    rows: linesToSend(request).map((line) => ({
       id: line.id,
       name: line.fullName,
       number: line.employeeNumber,
@@ -266,7 +307,7 @@ export function submitDialogView(
         total,
       }),
     })),
-    note: t('request.submitConfirmNote', { of: total }),
+    note: fixing ? t('resubmit.confirmNote') : t('request.submitConfirmNote', { of: total }),
     unsaved: t('request.submitConfirmUnsaved'),
   };
 }
@@ -339,11 +380,14 @@ export function employeesAdded(count: number, locale: Locale, t: Translate): str
 }
 
 /**
- * Figma "Progress" for a request: Added → Submitted to Sirius HR → Review → Decision. Review
- * and decisions arrive with S5, so a submitted request waits at Review.
+ * Figma "Progress" for a request: Added → Submitted to Sirius HR → Review → Decision (R1-10).
+ * Review shows the stage while Sirius HR checks criteria; Decision is done once every employee
+ * is decided.
  */
 export function progressSteps(request: IncrementRequest, locale: Locale, t: Translate): Step[] {
   const submitted = request.submittedAt;
+  const decided = request.decidedAt;
+  const reviewed = decided !== null || request.stage.kind === 'decision';
   return [
     {
       label: t('request.progressSteps.added'),
@@ -357,13 +401,16 @@ export function progressSteps(request: IncrementRequest, locale: Locale, t: Tran
     },
     {
       label: t('request.progressSteps.review'),
-      detail: t('request.progressPending'),
-      state: submitted === null ? 'todo' : 'current',
+      detail:
+        submitted === null
+          ? t('request.progressPending')
+          : stageView(request.stage, locale, t).label,
+      state: submitted === null ? 'todo' : reviewed ? 'done' : 'current',
     },
     {
       label: t('request.progressSteps.decision'),
-      detail: t('request.progressPending'),
-      state: 'todo',
+      detail: decided === null ? t('request.progressPending') : formatDate(decided, locale),
+      state: decided !== null ? 'done' : reviewed ? 'current' : 'todo',
     },
   ];
 }
