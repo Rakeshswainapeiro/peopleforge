@@ -1,6 +1,5 @@
 import {
   FINAL_STATUSES,
-  REVIEW_REMINDER_DAYS,
   ROLES,
   type DecideLine,
   type IncrementRequest,
@@ -195,8 +194,11 @@ export class ReviewService {
   /** The Review queue (R1-07): employees across subsidiaries, with the chips' counts. */
   async queue(caller: Principal, query: ReviewQueueQuery): Promise<ReviewQueuePage> {
     const { page, pageSize, ...filter } = query;
-    const overdueBefore = new Date(this.now().getTime() - REVIEW_REMINDER_DAYS * DAY_MS);
-    const result = await this.repository.queue(scopeOf(caller), {
+    const scope = scopeOf(caller);
+    // The configured trigger (settings, R1-13): the same days the worker reminds after.
+    const reminderDays = await this.repository.reminderDays(scope);
+    const overdueBefore = new Date(this.now().getTime() - reminderDays * DAY_MS);
+    const result = await this.repository.queue(scope, {
       ...filter,
       overdueBefore,
       limit: pageSize,
@@ -207,7 +209,7 @@ export class ReviewService {
       pageSize,
       total: result.total,
       counts: result.counts,
-      reminderDays: REVIEW_REMINDER_DAYS,
+      reminderDays,
       items: result.items.map((item) => toQueueItem(item, overdueBefore)),
     };
   }

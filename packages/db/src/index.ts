@@ -125,3 +125,25 @@ export {
   type ReportLineRecord,
   type ReportRepository,
 } from './reports.js';
+export {
+  createSettingsRepository,
+  queueReminders,
+  REMINDER_KINDS,
+  SettingsDataError,
+  type ActiveCriteriaRecord,
+  type CriterionEdit,
+  type ReminderKind,
+  type ReminderRuleRecord,
+  type SettingsErrorReason,
+  type SettingsRepository,
+} from './settings.js';
+export {
+  createAnalyticsRepository,
+  type AnalyticsFacts,
+  type AnalyticsFilter,
+  type AnalyticsRepository,
+  type AnalyticsRequestFact,
+  type MessageFact,
+  type ReturnFact,
+  type VerificationFact,
+} from './analytics.js';

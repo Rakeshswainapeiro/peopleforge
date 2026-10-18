@@ -14,7 +14,9 @@
     "requests": "Request Tracker",
     "reviewQueue": "Review Queue",
     "conversations": "Conversations",
-    "audit": "Audit trail"
+    "audit": "Audit trail",
+    "settings": "Settings",
+    "analytics": "Analytics"
   },
   "home": {
     "heading": "Welcome",
@@ -175,6 +177,18 @@
       "question_answered": {
         "one": "{entity} answered about {employee} ({actor}).",
         "other": "{entity} answered about {employee} ({actor})."
+      },
+      "review_overdue": {
+        "one": "{count} employee from {entity} has waited more than {days} days for review.",
+        "other": "{count} employees from {entity} have waited more than {days} days for review."
+      },
+      "return_overdue": {
+        "one": "{count} returned employee is waiting for your update for more than {days} days.",
+        "other": "{count} returned employees are waiting for your update for more than {days} days."
+      },
+      "deadline_approaching": {
+        "one": "Draft with {count} employee not submitted yet. Deadline: {deadline}.",
+        "other": "Draft with {count} employees not submitted yet. Deadline: {deadline}."
       }
     },
     "pagination": {
@@ -789,7 +803,7 @@
     "someone": "Unknown user",
     "empty": "Nothing recorded yet.",
     "actions": {
-      "increment_request.created": "Request created with {count} employees",
+      "increment_request.created": "Request created ({count} employees)",
       "request_line.added": "{employee} added",
       "request_line.removed": "An employee was removed",
       "increment_request.discarded": "Draft discarded",
@@ -804,7 +818,7 @@
       "request_line.approved": "{employee} approved",
       "request_line.rejected": "{employee} rejected",
       "request_line.returned": "{employee} returned to the subsidiary",
-      "increment_request.resubmitted": "{count} returned employees resubmitted",
+      "increment_request.resubmitted": "Returned employees resubmitted ({count})",
       "message.posted": "Message about {employee}",
       "report.downloaded": "Report {report} downloaded ({format})"
     },
@@ -860,5 +874,121 @@
       "message.posted": "Message posted",
       "report.downloaded": "Report downloaded"
     }
+  },
+  "settings": {
+    "heading": "Settings",
+    "intro": "How the increment portal works: the eligibility criteria and the reminders. Every change is recorded in the audit trail.",
+    "criteriaTitle": "Eligibility criteria",
+    "criteriaIntro": "Version {version}, active since {date}. Requests already created keep the criteria they started with.",
+    "criteriaIntroNoDate": "Version {version}. Requests already created keep the criteria they started with.",
+    "nameEn": "Name (English)",
+    "nameAr": "Name (Arabic)",
+    "descriptionEn": "Description (English)",
+    "descriptionAr": "Description (Arabic)",
+    "arabicHint": "Optional until Arabic translations are provided.",
+    "justificationRequired": "A justification is required",
+    "evidence": "Evidence",
+    "maxFileMb": "Largest file (MB)",
+    "maxFileHint": "1 to {max} MB per file.",
+    "evidencePolicies": {
+      "required": "Required",
+      "optional": "Optional",
+      "none": "Not needed"
+    },
+    "publishNote": "Publishing creates version {next}. New requests use it; requests already created keep version {version}.",
+    "publish": "Publish version {next}",
+    "publishing": "Publishing…",
+    "published": "Version {version} published.",
+    "remindersTitle": "Reminders",
+    "remindersIntro": "Sent in PeopleForge and by email when a trigger is reached, once each time.",
+    "reminderOn": "On",
+    "days": "Days",
+    "save": "Save",
+    "saving": "Saving…",
+    "saved": "Saved.",
+    "lastChanged": "Changed by {name} on {date}",
+    "defaultValue": "Default setting",
+    "reminders": {
+      "review_overdue": {
+        "title": "Waiting for Sirius HR's review",
+        "body": "Reminds the Sirius HR reviewers when employees have waited this many days. The Review queue's \"Past reminder\" uses the same days."
+      },
+      "return_overdue": {
+        "title": "Returned and not resubmitted",
+        "body": "Reminds the subsidiary user who submitted when returned employees haven't been resubmitted after this many days."
+      },
+      "deadline_approaching": {
+        "title": "Submission deadline approaching",
+        "body": "Reminds whoever prepares a draft this many days before the cycle's submission deadline."
+      }
+    },
+    "errors": {
+      "invalid": "Check the highlighted values: names and descriptions are required, days are 1 to 30, files 1 to 10 MB.",
+      "stale": "Someone published other criteria meanwhile. Reload the page to see them.",
+      "generic": "That didn't work. Try again in a moment."
+    }
+  },
+  "analytics": {
+    "heading": "TAT and back-and-forth",
+    "intro": "How long requests take with Sirius HR and how much goes back to subsidiaries (R1-11, R1-12). Days are elapsed days, one decimal.",
+    "views": "Measure",
+    "viewTat": "Turnaround time",
+    "viewFlow": "Back-and-forth",
+    "filters": "Filter the analytics",
+    "download": "Download RP-02 (Excel)",
+    "logged": "The download is recorded in the audit trail.",
+    "days": "{days} days",
+    "none": "—",
+    "open": "Open",
+    "yes": "Yes",
+    "no": "No",
+    "cards": {
+      "label": "Key figures",
+      "averageTat": "Average TAT",
+      "averageTatHint": "{count} decided",
+      "openAge": "Open requests",
+      "openAgeHint": "Average age: {days}",
+      "longest": "Longest open",
+      "longestHint": "{reference} · {entity}",
+      "longestNone": "Nothing open",
+      "returns": "Employees returned",
+      "returnsHint": "{count} still with subsidiaries",
+      "averageReturn": "Average return",
+      "averageReturnHint": "Days with the subsidiary",
+      "questions": "Questions asked",
+      "averageAnswer": "Average answer",
+      "averageAnswerHint": "Days from question to answer"
+    },
+    "criteriaTitle": "TAT by criterion",
+    "criteriaIntro": "From when a criterion started waiting for Sirius HR (submission or resubmission) to its verification.",
+    "entitiesTitle": "By subsidiary",
+    "requestsTitle": "Requests, longest first",
+    "flowRequestsTitle": "Requests with back-and-forth, most time with the subsidiary first",
+    "col": {
+      "criterion": "Criterion",
+      "verified": "Verified",
+      "average": "Average",
+      "longest": "Longest",
+      "subsidiary": "Subsidiary",
+      "requests": "Requests",
+      "decided": "Decided",
+      "averageTat": "Average TAT",
+      "openAverage": "Open: average age",
+      "request": "Request",
+      "status": "Status",
+      "submitted": "Submitted",
+      "tat": "TAT",
+      "returns": "Returns",
+      "openReturns": "Still returned",
+      "daysWithSubsidiary": "With the subsidiary",
+      "questions": "Questions",
+      "answers": "Answered",
+      "averageAnswer": "Average answer",
+      "averageReturn": "Average return"
+    },
+    "emptyTitle": "Nothing to measure yet",
+    "emptyBody": "No submitted requests match these filters.",
+    "emptyCriteria": "No criteria verified yet.",
+    "emptyFlow": "No returns or questions yet."
   }
 }

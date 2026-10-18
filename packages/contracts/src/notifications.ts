@@ -24,6 +24,10 @@ export const NotificationKindSchema = z.enum([
   'question_asked',
   /** To Sirius HR reviewers, action needed: the subsidiary answered. */
   'question_answered',
+  /** Reminders on configured triggers (R1-13, settings): see `ReminderKindSchema`. */
+  'review_overdue',
+  'return_overdue',
+  'deadline_approaching',
 ]);
 export type NotificationKind = z.infer<typeof NotificationKindSchema>;
 

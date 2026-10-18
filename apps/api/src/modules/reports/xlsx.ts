@@ -18,7 +18,8 @@ function amount(value: string | null): number | null {
   return value === null ? null : Number(value);
 }
 
-function sheet(
+/** A data sheet: bold frozen header, filters, every text cell neutralised. */
+export function sheet(
   workbook: ExcelJS.Workbook,
   name: string,
   columns: readonly { header: string; width: number; numFmt?: string }[],

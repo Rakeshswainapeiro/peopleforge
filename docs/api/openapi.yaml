@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: PeopleForge API
-  version: 0.11.0
+  version: 0.12.0
   description: >
     Phase 1 API (BRD SIRIUS-HR-BRD-001). Every /api/v1 route requires an access token from the
     Sirius identity provider (Microsoft Entra ID; Keycloak locally) sent as
@@ -20,6 +20,10 @@ tags:
     description: Increment reports as Excel and PDF (R1-14)
   - name: audit
     description: The audit trail (R1-15, NFR-AUD-01)
+  - name: settings
+    description: Criteria and reminder triggers (R1-05, R1-13, NFR-CFG-01)
+  - name: analytics
+    description: TAT and back-and-forth for Sirius HR (R1-11, R1-12; DASH-D3, DASH-D4)
   - name: health
   - name: identity
 paths:
@@ -754,6 +758,162 @@ paths:
         '400': { $ref: '#/components/responses/ValidationFailed' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
+  /api/v1/settings/reminders:
+    get:
+      tags: [settings]
+      summary: The reminder triggers (R1-13)
+      description: Needs `criteria:configure` (admins). In screen order.
+      responses:
+        '200':
+          description: The triggers
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/ReminderRule' } }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/v1/settings/reminders/{kind}:
+    put:
+      tags: [settings]
+      summary: Changes one trigger's days and on/off (R1-13)
+      description: Needs `criteria:configure`. Audited (`reminder_rule.updated`) with the admin's name.
+      parameters:
+        - name: kind
+          in: path
+          required: true
+          schema: { type: string, enum: [review_overdue, return_overdue, deadline_approaching] }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [days, enabled]
+              properties:
+                days: { type: integer, minimum: 1, maximum: 30 }
+                enabled: { type: boolean }
+      responses:
+        '200':
+          description: The trigger as saved
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReminderRule' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/settings/criteria:
+    get:
+      tags: [settings]
+      summary: The active criteria version (R1-05)
+      description: Needs `criteria:configure`.
+      responses:
+        '200':
+          description: The active version
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CriteriaSettings' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [settings]
+      summary: Publishes the edited criteria as the next version (R1-05)
+      description: >
+        Needs `criteria:configure`. `version` is the active version that was edited (409 `version`
+        `stale` otherwise); the criteria keep their codes and order (400 `criteria` `mismatch`).
+        File types carry over. Requests already created keep their version. Audited
+        (`criteria_set.published`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [version, criteria]
+              properties:
+                version: { type: integer, minimum: 1 }
+                criteria:
+                  type: array
+                  minItems: 1
+                  maxItems: 10
+                  items:
+                    type: object
+                    additionalProperties: false
+                    required:
+                      [code, name, description, justificationRequired, evidencePolicy, maxFileMb]
+                    properties:
+                      code: { type: string, pattern: '^C[0-9]{1,2}$' }
+                      name:
+                        type: object
+                        required: [en]
+                        properties:
+                          en: { type: string, minLength: 1, maxLength: 120 }
+                          ar: { type: string, maxLength: 120 }
+                      description:
+                        type: object
+                        required: [en]
+                        properties:
+                          en: { type: string, minLength: 1, maxLength: 1000 }
+                          ar: { type: string, maxLength: 1000 }
+                      justificationRequired: { type: boolean }
+                      evidencePolicy: { type: string, enum: [required, optional, none] }
+                      maxFileMb: { type: integer, minimum: 1, maximum: 10 }
+      responses:
+        '200':
+          description: The new active version
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CriteriaSettings' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/analytics/increments:
+    get:
+      tags: [analytics]
+      summary: TAT and back-and-forth by period and subsidiary (R1-11, R1-12)
+      description: >
+        Needs `report:read_operational` in group scope (Sirius HR); a subsidiary is 403. Elapsed
+        days with one decimal, open items measured to now (ADR-006). No pay, no employee names.
+      parameters:
+        - { $ref: '#/components/parameters/CycleFilter' }
+        - { name: entityId, in: query, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: The measures
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/IncrementAnalytics' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/v1/reports/tat-back-and-forth:
+    get:
+      tags: [reports, analytics]
+      summary: RP-02, TAT and back-and-forth, as Excel (R1-11, R1-12, R1-14)
+      description: >
+        As `/analytics/increments`, as a workbook (Summary with the definitions; TAT by request,
+        criterion and subsidiary; back-and-forth by request and subsidiary) in `locale`. Audited
+        (`report.downloaded`, subject `RP-02`). Never cached.
+      parameters:
+        - { name: format, in: query, required: true, schema: { type: string, enum: [xlsx] } }
+        - { name: locale, in: query, schema: { type: string, enum: [en, ar], default: en } }
+        - { $ref: '#/components/parameters/CycleFilter' }
+        - { name: entityId, in: query, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: The file, as an attachment named `PeopleForge-RP-02-YYYY-MM-DD.xlsx`
+          headers:
+            Content-Disposition: { schema: { type: string } }
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: { type: string, format: binary }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
   /api/v1/notifications:
     get:
       tags: [notifications]
@@ -1475,6 +1635,61 @@ components:
         page: { type: integer, minimum: 1 }
         pageSize: { type: integer, minimum: 1 }
         total: { type: integer, minimum: 0 }
+    ReminderRule:
+      type: object
+      required: [kind, days, enabled, updatedAt, updatedByName]
+      properties:
+        kind: { type: string, enum: [review_overdue, return_overdue, deadline_approaching] }
+        days: { type: integer, minimum: 1, maximum: 30 }
+        enabled: { type: boolean }
+        updatedAt: { type: string, format: date-time }
+        updatedByName: { type: [string, 'null'] }
+    CriteriaSettings:
+      type: object
+      required: [id, version, activatedAt, criteria]
+      properties:
+        id: { type: string, format: uuid }
+        version: { type: integer, minimum: 1 }
+        activatedAt: { type: [string, 'null'], format: date-time }
+        criteria: { type: array, items: { $ref: '#/components/schemas/Criterion' } }
+    Days:
+      type: string
+      pattern: '^\d+\.\d$'
+      description: Elapsed days with one decimal (ADR-006)
+      example: '2.5'
+    IncrementAnalytics:
+      type: object
+      required: [generatedAt, tat, backAndForth]
+      properties:
+        generatedAt: { type: string, format: date-time }
+        tat:
+          type: object
+          description: >
+            Request TAT (submission → decision, or now), criterion TAT (waiting since submission
+            or resubmission → verification), by criterion, subsidiary and request (longest first).
+          properties:
+            requests: { type: integer }
+            decided: { type: integer }
+            averageDays: { oneOf: [{ $ref: '#/components/schemas/Days' }, { type: 'null' }] }
+            open: { type: integer }
+            openAverageDays: { oneOf: [{ $ref: '#/components/schemas/Days' }, { type: 'null' }] }
+            longestOpen: { type: [object, 'null'] }
+            byCriterion: { type: array, items: { type: object } }
+            byEntity: { type: array, items: { type: object } }
+            byRequest: { type: array, items: { type: object } }
+        backAndForth:
+          type: object
+          description: >
+            Returns (time with the subsidiary until resubmission, or now) and questions (to the
+            subsidiary's next message), by subsidiary and request.
+          properties:
+            returns: { type: integer }
+            openReturns: { type: integer }
+            averageReturnDays: { oneOf: [{ $ref: '#/components/schemas/Days' }, { type: 'null' }] }
+            questions: { type: integer }
+            averageAnswerDays: { oneOf: [{ $ref: '#/components/schemas/Days' }, { type: 'null' }] }
+            byEntity: { type: array, items: { type: object } }
+            byRequest: { type: array, items: { type: object } }
     Notification:
       type: object
       required: [id, kind, requestId, params, actionNeeded, createdAt, read]
@@ -1494,8 +1709,11 @@ components:
               request_resubmitted,
               question_asked,
               question_answered,
+              review_overdue,
+              return_overdue,
+              deadline_approaching,
             ]
-          description: What happened; clients word it in the reader's language
+          description: What happened (the last three are reminders, R1-13); clients word it in the reader's language
         requestId: { type: [string, 'null'], format: uuid }
         params:
           type: object

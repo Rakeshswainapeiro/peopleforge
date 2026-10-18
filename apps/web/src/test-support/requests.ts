@@ -1,5 +1,7 @@
 import type {
   AuditEvent,
+  CriteriaSettings,
+  IncrementAnalytics,
   ConversationPage,
   CriterionAssessment,
   Cycle,
@@ -414,6 +416,102 @@ export function auditEvent(overrides: Partial<AuditEvent> = {}): AuditEvent {
     subjectType: 'increment_request',
     subjectId: REQUEST_ID,
     details: { reference: 'INC-2026-0152', from: 'draft', to: 'submitted' },
+    ...overrides,
+  };
+}
+
+/** The active criteria as the settings API returns them (R1-05). */
+export function criteriaSettings(overrides: Partial<CriteriaSettings> = {}): CriteriaSettings {
+  return {
+    id: '00000000-0000-4000-8000-0000000c5e71',
+    version: 1,
+    activatedAt: '2026-10-01T06:00:00.000Z',
+    criteria: draftRequest().criteria,
+    ...overrides,
+  };
+}
+
+/** TAT and back-and-forth as the analytics API returns them (R1-11, R1-12). */
+export function incrementAnalytics(
+  overrides: Partial<IncrementAnalytics> = {},
+): IncrementAnalytics {
+  const longest = {
+    id: REQUEST_ID,
+    reference: 'INC-2026-0152',
+    entityCode: 'SUB-A',
+    status: 'returned' as const,
+    employees: 2,
+    submittedAt: '2026-10-15T07:14:00.000Z',
+    decidedAt: null,
+    days: '2.5',
+    open: true,
+  };
+  return {
+    generatedAt: '2026-10-18T06:00:00.000Z',
+    tat: {
+      requests: 2,
+      decided: 1,
+      averageDays: '4.5',
+      open: 1,
+      openAverageDays: '2.5',
+      longestOpen: longest,
+      byCriterion: [
+        { code: 'C1', verified: 3, averageDays: '0.8', maxDays: '1.0' },
+        { code: 'C2', verified: 1, averageDays: '2.0', maxDays: '2.0' },
+      ],
+      byEntity: [
+        {
+          entityCode: 'SUB-A',
+          requests: 2,
+          decided: 1,
+          averageDays: '4.5',
+          openAverageDays: '2.5',
+        },
+      ],
+      byRequest: [
+        {
+          ...longest,
+          id: '11111111-1111-4111-8111-111111111119',
+          reference: 'INC-2026-0150',
+          status: 'approved',
+          decidedAt: '2026-10-14T16:00:00.000Z',
+          days: '4.5',
+          open: false,
+        },
+        longest,
+      ],
+    },
+    backAndForth: {
+      returns: 1,
+      openReturns: 1,
+      averageReturnDays: '1.0',
+      questions: 2,
+      averageAnswerDays: null,
+      byEntity: [
+        {
+          entityCode: 'SUB-A',
+          requests: 2,
+          returns: 1,
+          averageReturnDays: '1.0',
+          questions: 2,
+          averageAnswerDays: null,
+        },
+      ],
+      byRequest: [
+        {
+          id: REQUEST_ID,
+          reference: 'INC-2026-0152',
+          entityCode: 'SUB-A',
+          status: 'returned',
+          returns: 1,
+          openReturns: 1,
+          daysWithSubsidiary: '1.0',
+          questions: 2,
+          answers: 0,
+          averageAnswerDays: null,
+        },
+      ],
+    },
     ...overrides,
   };
 }

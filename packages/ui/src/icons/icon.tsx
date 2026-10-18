@@ -34,6 +34,8 @@ const PATHS = new Map<IconName, string>([
   ['clipboard', 'M9 4h6v3H9zM7 5H5v16h14V5h-2M8 12l2.5 2.5L16 9'],
   ['clock', 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7v5l3 2'],
   ['sliders', 'M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0M14 4v4M8 10v4M16 16v4'],
+  // A rising line: analytics (TAT, back-and-forth). Not mirrored: charts read left to right.
+  ['trend', 'M4 17l5-5 4 4 7-7M15 9h5v5'],
 ]);
 
 export type IconName =
@@ -62,7 +64,8 @@ export type IconName =
   | 'message'
   | 'clipboard'
   | 'clock'
-  | 'sliders';
+  | 'sliders'
+  | 'trend';
 
 const DIRECTIONAL: ReadonlySet<IconName> = new Set([
   'chevron-start',

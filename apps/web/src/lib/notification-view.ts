@@ -9,10 +9,11 @@ import { statusBadge } from './request-status';
 import type { BadgeTone } from '@peopleforge/ui';
 import type { Locale } from '@sirius/shared-types';
 import type { MessageKey, Translate } from '@/i18n/translator';
-import { formatDateTime } from './format';
+import { formatDate, formatDateTime } from './format';
 import { pluralForm } from '@peopleforge/i18n';
 
 const LineId = z.uuid();
+const Day = z.iso.date();
 
 /** One row of the notifications list (Figma "Notifications"), worded for the reader. */
 export interface NotificationRowView {
@@ -50,6 +51,10 @@ function messageOf(notification: Notification, locale: Locale, t: Translate): st
     done: number.format(Math.max(criterion - 1, 0)),
     of: number.format(Number(params.of ?? 0)),
     status: status.success ? statusBadge(status.data, t).label : '',
+    days: number.format(Number(params.days ?? 0)),
+    deadline: Day.safeParse(params.deadline).success
+      ? formatDate(`${String(params.deadline)}T12:00:00Z`, locale)
+      : '',
   };
   const key: MessageKey = `notifications.kinds.${notification.kind}.${pluralForm(count, locale)}`;
   return t(key, values);

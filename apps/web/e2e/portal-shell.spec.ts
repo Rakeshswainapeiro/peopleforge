@@ -15,6 +15,7 @@ test.describe('portal shell', () => {
       'Conversations',
       /^Notifications/u,
       'Audit trail',
+      'Analytics',
       'Reports',
     ]);
     await expect(nav.getByRole('link', { name: 'Request Tracker' })).toHaveAttribute(

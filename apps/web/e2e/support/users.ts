@@ -25,6 +25,14 @@ export const USERS = {
     name: 'Beta HR Test',
     roles: ['PeopleForge.SubsidiaryHR'],
   },
+  /** Configures the portal (criteria, reminders); decides nothing (separation of duties). */
+  admin: {
+    id: '7d6a1c3e-2b4f-4c8a-9e10-000000000003',
+    email: 'pf.admin@sirius.local',
+    username: 'pf.admin',
+    name: 'Admin Test',
+    roles: ['PeopleForge.Admin'],
+  },
   noRole: {
     id: '7d6a1c3e-2b4f-4c8a-9e10-000000000006',
     email: 'pf.norole@sirius.local',

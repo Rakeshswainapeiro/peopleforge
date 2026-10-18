@@ -7,7 +7,7 @@ Sirius Group HR Digital Transformation Programme — Phase 1, delivered by Infin
 
 Requirements: BRD `SIRIUS-HR-BRD-001` · Scope: SOW `SIRIUS-HR-SOW-P1-001` · Progress: [docs/traceability.md](docs/traceability.md)
 
-> **Current state:** sign-in and R1 up to submission: subsidiary HR raises a draft increment request, adds employees with a % or amount proposal (S2), assesses each employee against the eligibility criteria with a justification and evidence files that are type-checked and malware-scanned (S3), and submits it to Sirius HR with an audit trail, in-app notifications and emails (S4a, S4b). "My increment requests" tracks requests and employees; each request has a detail page (S4c). Sirius HR's review comes next (S5). The 5 criteria are placeholders until Sirius HR defines them (A1).
+> **Current state:** Requirement 1 (Increment Request Portal) is complete for UAT: drafts with % or amount proposals (S2), criteria with justification and scanned evidence (S3), submission with audit trail, notifications and emails (S4), Sirius HR's review with per-criterion verification, decisions, returns, questions and resubmission (S5), RP-01 reports in Excel/PDF, request history and the audit trail (S6), settings for criteria versions and reminder triggers, reminders, and TAT / back-and-forth analytics with RP-02 (S7). The 5 criteria are placeholders until Sirius HR defines them (A1). A full manual walk-through with accounts and values is in [`docs/runbooks/r1-manual-test-flow.md`](docs/runbooks/r1-manual-test-flow.md).
 
 ## Local setup (under 10 minutes)
 
@@ -44,7 +44,7 @@ TOKEN=$(~/sirius/local-infra/scripts/token.sh pf.reviewer --raw)
 curl -H "Authorization: Bearer $TOKEN" localhost:4000/api/v1/me   # 200, reviewer permissions, all entities
 ```
 
-Open http://localhost:3000: you are sent to the sign-in screen. Sign in as `pf.reviewer` / `LocalDev-2026` at Keycloak; you come back signed in. `pf.alpha.hr` sees only Subsidiary A and the New Request item; `pf.norole` shows the "no access" screen. Switch the language to العربية to see the RTL layout.
+Open http://localhost:3000: you are sent to the sign-in screen. Sign in as `pf.reviewer` / `LocalDev-2026` at Keycloak; you come back signed in. `pf.alpha.hr` sees only Subsidiary A and the New Request item; `pf.norole` shows the "no access" screen; `pf.admin` (create it in Keycloak if missing: see the test flow) opens Settings. Switch the language to العربية to see the RTL layout.
 
 ### Evidence files locally
 

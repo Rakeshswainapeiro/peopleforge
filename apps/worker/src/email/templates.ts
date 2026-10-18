@@ -29,6 +29,19 @@ const line = (max: number) =>
     .regex(/^[^\u0000-\u001f\u007f]+$/u);
 const reference = line(40);
 const employees = z.number().int().min(0).max(10_000);
+const days = z.number().int().min(1).max(30);
+/** Days left before a deadline: 0 is the deadline day itself. */
+const dayCount = z.number().int().min(0).max(30);
+
+/** A date as Sirius HR reads it ("30 Nov 2026"), in the reader's language. */
+export function formatDay(isoDate: string, locale: Locale): string {
+  return new Intl.DateTimeFormat(locale === 'en' ? 'en-GB' : locale, {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(new Date(`${isoDate}T00:00:00Z`));
+}
 const PARAMS = {
   request_submitted: z.object({ reference, employees }),
   request_received: z.object({ reference, employees, entity: line(50), actor: line(200) }),
@@ -54,6 +67,10 @@ const PARAMS = {
     entity: line(50),
     actor: line(200),
   }),
+  // Reminders on configured triggers (R1-13), queued by notify.queue_reminders().
+  review_overdue: z.object({ reference, employees, entity: line(50), days }),
+  return_overdue: z.object({ reference, employees, days }),
+  deadline_approaching: z.object({ reference, employees, deadline: z.iso.date(), days: dayCount }),
 } as const;
 
 type Kind = keyof typeof PARAMS;
@@ -101,11 +118,15 @@ export function renderEmail(job: OutboxJob, options: RenderOptions): Rendered {
   if (!parsed.success) return { ok: false, reason: 'invalid_params' };
   const t = catalogues.translator(options.locale);
   const number = new Intl.NumberFormat(options.locale);
-  // Display values only: numbers in the reader's locale, a final status in their words.
+  // Display values only: numbers and dates in the reader's locale, a final status in words.
   const values: Record<string, string> = Object.fromEntries(
     Object.entries(parsed.data).map(([key, value]: [string, string | number]) => [
       key,
-      typeof value === 'number' ? number.format(value) : value,
+      typeof value === 'number'
+        ? number.format(value)
+        : key === 'deadline'
+          ? formatDay(value, options.locale)
+          : value,
     ]),
   );
   if ('status' in parsed.data) values.status = t(`statuses.${parsed.data.status}`);

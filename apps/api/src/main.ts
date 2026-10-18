@@ -7,6 +7,8 @@ import {
   createConversationRepository,
   createReportRepository,
   createAuditTrailRepository,
+  createSettingsRepository,
+  createAnalyticsRepository,
   createIncrementRequestRepository,
   createNotificationRepository,
   type FieldCipher,
@@ -58,6 +60,8 @@ async function start(): Promise<void> {
     conversations: createConversationRepository(database.db, cipher),
     reports: createReportRepository(database.db, cipher),
     auditTrail: createAuditTrailRepository(database.db),
+    settings: createSettingsRepository(database.db),
+    analytics: createAnalyticsRepository(database.db),
     notifications: createNotificationRepository(database.db),
     // Uploads need both: without them the API is not ready to serve R1-04.
     readinessChecks: [

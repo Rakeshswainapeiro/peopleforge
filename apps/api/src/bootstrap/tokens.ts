@@ -21,3 +21,5 @@ export const REVIEW_SERVICE = Symbol('REVIEW_SERVICE');
 export const CONVERSATION_SERVICE = Symbol('CONVERSATION_SERVICE');
 export const REPORT_SERVICE = Symbol('REPORT_SERVICE');
 export const AUDIT_SERVICE = Symbol('AUDIT_SERVICE');
+export const SETTINGS_SERVICE = Symbol('SETTINGS_SERVICE');
+export const ANALYTICS_SERVICE = Symbol('ANALYTICS_SERVICE');

@@ -49,12 +49,8 @@ export interface ReportLabels {
   dateTime: (value: Date | null) => string;
 }
 
-export function reportLabels(
-  t: ApiTranslate,
-  locale: Locale,
-  meta: { generatedAt: Date; by: string; filters: string; truncatedAt: number | null },
-): ReportLabels {
-  // As the portal shows dates: "17 Oct 2026, 12:00", Asia/Dubai.
+/** Dates as the portal shows them: "17 Oct 2026, 12:00", Asia/Dubai; `none` for no date. */
+export function dateTimeIn(locale: Locale, none: string): (value: Date | null) => string {
   const format = new Intl.DateTimeFormat(locale === 'en' ? 'en-GB' : locale, {
     day: '2-digit',
     month: 'short',
@@ -64,8 +60,16 @@ export function reportLabels(
     hourCycle: 'h23',
     timeZone: BUSINESS_TIME_ZONE,
   });
+  return (value) => (value === null ? none : format.format(value));
+}
+
+export function reportLabels(
+  t: ApiTranslate,
+  locale: Locale,
+  meta: { generatedAt: Date; by: string; filters: string; truncatedAt: number | null },
+): ReportLabels {
   const none = t('reports.none');
-  const dateTime = (value: Date | null) => (value === null ? none : format.format(value));
+  const dateTime = dateTimeIn(locale, none);
   return {
     locale,
     title: t('reports.title'),

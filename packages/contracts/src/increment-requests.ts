@@ -74,12 +74,6 @@ export const DecisionReasonSchema = z.union([
 ]);
 export type DecisionReason = z.infer<typeof DecisionReasonSchema>;
 
-/**
- * Calendar days an employee may wait in Sirius HR's queue before it is past reminder time and
- * the reviewers are reminded (S5a default, R1-13; to confirm with Sirius HR).
- */
-export const REVIEW_REMINDER_DAYS = 2;
-
 /** Longest decision comment or resubmission note. */
 export const MAX_COMMENT_LENGTH = 2000;
 

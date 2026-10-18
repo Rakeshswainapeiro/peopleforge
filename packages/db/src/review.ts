@@ -154,6 +154,8 @@ export interface ReviewRepository {
     scope: Scope,
     query: QueueQuery,
   ) => Promise<{ items: QueueLineRecord[]; total: number; counts: QueueCounts }>;
+  /** Days before a pending employee is past reminder time: the configured trigger (R1-13). */
+  reminderDays: (scope: Scope) => Promise<number>;
 }
 
 type Trx = Transaction<Database>;
@@ -533,6 +535,16 @@ export function createReviewRepository(
           }),
         );
         return { replayed: false };
+      }),
+
+    reminderDays: (scope) =>
+      withScope(db, scope, async (trx) => {
+        const rule = await trx
+          .selectFrom('notify.reminder_rule')
+          .select('days')
+          .where('kind', '=', 'review_overdue')
+          .executeTakeFirstOrThrow();
+        return rule.days;
       }),
 
     queue: (scope, query) =>

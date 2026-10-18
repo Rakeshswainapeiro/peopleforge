@@ -17,7 +17,7 @@ const say = (overrides: Parameters<typeof auditEvent>[0]) =>
 describe('history views [R1-15]', () => {
   it('words every recorded action, naming employees and criteria from the request', () => {
     expect(say({ action: 'increment_request.created', details: { employees: 2 } })).toBe(
-      'Request created with 2 employees',
+      'Request created (2 employees)',
     );
     expect(say({ action: 'request_line.added', details: { employeeId: LINE_2 } })).toBe(
       'Neha Iyer added',
@@ -69,7 +69,7 @@ describe('history views [R1-15]', () => {
     ).toBe('Status changed: odd → ');
     expect(say({ action: 'report.downloaded', details: {} })).toBe('Report  downloaded ()');
     expect(say({ action: 'increment_request.created', details: { employees: 'x' } })).toBe(
-      'Request created with  employees',
+      'Request created ( employees)',
     );
     expect(say({ action: 'something.new' })).toBe('something.new');
     expect(isWorded('message.posted')).toBe(true);

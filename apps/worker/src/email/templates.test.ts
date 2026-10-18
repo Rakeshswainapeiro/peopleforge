@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { receivedJob, REQUEST_ID, submittedJob } from '../test-support/jobs.js';
-import { escapeHtml, linkFor, renderEmail, unknownKeys, type RenderOptions } from './templates.js';
+import {
+  escapeHtml,
+  formatDay,
+  linkFor,
+  renderEmail,
+  unknownKeys,
+  type RenderOptions,
+} from './templates.js';
 
 const OPTIONS: RenderOptions = { portalUrl: 'https://hr.example.ae', locale: 'en' };
 
@@ -153,6 +160,56 @@ describe('question emails [R1-08]', () => {
         OPTIONS,
       ),
     ).toEqual({ ok: false, reason: 'invalid_params' });
+  });
+});
+
+describe('reminder emails [R1-13]', () => {
+  it('reminds reviewers of employees waiting past the configured days', () => {
+    const email = rendered(
+      receivedJob({
+        kind: 'review_overdue',
+        params: { reference: 'INC-2026-0152', employees: 1, entity: 'SUB-A', days: 2 },
+      }),
+    );
+    expect(email.subject).toBe('Reminder: INC-2026-0152 from SUB-A is waiting for review');
+    expect(email.text).toContain(
+      '1 employee in increment request INC-2026-0152 from SUB-A has waited more than 2 days',
+    );
+  });
+
+  it('reminds the submitter of returned employees and of the deadline, as a date in words', () => {
+    const returned = rendered(
+      submittedJob({
+        kind: 'return_overdue',
+        params: { reference: 'INC-2026-0152', employees: 2, days: 3 },
+      }),
+    );
+    expect(returned.subject).toBe('Reminder: INC-2026-0152 is waiting for your update');
+    expect(returned.text).toContain(
+      'returned 2 employees in increment request INC-2026-0152 more than 3 days ago',
+    );
+    const deadline = rendered(
+      submittedJob({
+        kind: 'deadline_approaching',
+        params: { reference: 'INC-2026-0160', employees: 4, deadline: '2026-11-30', days: 2 },
+      }),
+    );
+    expect(deadline.subject).toBe('Reminder: submit INC-2026-0160 by 30 Nov 2026');
+    expect(deadline.text).toContain('The submission deadline is 30 Nov 2026.');
+    expect(
+      renderEmail(
+        submittedJob({
+          kind: 'deadline_approaching',
+          params: { reference: 'X', employees: 1, deadline: '30/11/2026', days: 2 },
+        }),
+        OPTIONS,
+      ),
+    ).toEqual({ ok: false, reason: 'invalid_params' });
+  });
+
+  it('formats a date in the reader’s language, whatever the server’s time zone', () => {
+    expect(formatDay('2026-11-30', 'en')).toBe('30 Nov 2026');
+    expect(formatDay('2026-11-30', 'ar')).not.toBe('30 Nov 2026');
   });
 });
 

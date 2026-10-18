@@ -30,6 +30,7 @@ function fakeReview(): FakeReview {
     verify: vi.fn<ReviewRepository['verify']>(() => Promise.resolve()),
     decide: vi.fn<ReviewRepository['decide']>(() => Promise.resolve({ replayed: false })),
     resubmit: vi.fn<ReviewRepository['resubmit']>(() => Promise.resolve({ replayed: false })),
+    reminderDays: vi.fn<ReviewRepository['reminderDays']>(() => Promise.resolve(2)),
     queue: vi.fn<ReviewRepository['queue']>(() =>
       Promise.resolve({
         items: [],
@@ -347,6 +348,17 @@ describe('ReviewService.queue [R1-07]', () => {
     });
     expect(page).toMatchObject({ page: 2, pageSize: 10, total: 3, reminderDays: 2 });
     expect(page.counts.openEntities).toBe(1);
+    // The configured trigger decides "past reminder" (settings, R1-13).
+    review.reminderDays.mockResolvedValueOnce(5);
+    const later = await service(review).queue(reviewer, {
+      filter: 'overdue',
+      page: 1,
+      pageSize: 10,
+    });
+    expect(later.reminderDays).toBe(5);
+    expect(review.queue.mock.calls[1]?.[1]).toMatchObject({
+      overdueBefore: new Date('2026-10-12T08:00:00Z'),
+    });
     const [omar, returned, recent] = page.items;
     expect(omar).toEqual({
       lineId: LINE_1,

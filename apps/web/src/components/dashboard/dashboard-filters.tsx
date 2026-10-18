@@ -29,7 +29,8 @@ export interface DashboardFiltersProps {
   path?: string;
   /** Values carried over from the URL that the filters don't change (view, request, size). */
   hidden: Readonly<Record<string, string>>;
-  search: string;
+  /** The search box's text; left out, the page has no search (Analytics). */
+  search?: string | undefined;
   /** Period, Status, Subsidiary…: in this order after the search box. */
   selects: readonly FilterSelect[];
   labels: DashboardFiltersLabels;
@@ -99,41 +100,48 @@ export function DashboardFilters({
       aria-label={labels.filters}
       aria-busy={pending || undefined}
       onSubmit={onSubmit}
-      className={cn('grid gap-4', COLUMNS.get(Math.min(selects.length, 3)))}
+      className={cn(
+        'grid gap-4',
+        search === undefined
+          ? 'sm:grid-cols-2 lg:grid-cols-3'
+          : COLUMNS.get(Math.min(selects.length, 3)),
+      )}
     >
       {Object.entries(hidden).map(([name, value]) => (
         <input key={name} type="hidden" name={name} value={value} />
       ))}
-      <Field label={labels.search}>
-        {(ids) => (
-          <div className="relative">
-            <Input
-              id={ids.id}
-              aria-describedby={ids.describedBy}
-              type="search"
-              name="q"
-              icon="search"
-              defaultValue={search}
-              placeholder={labels.searchPlaceholder}
-              autoComplete="off"
-              maxLength={100}
-              onChange={(event) => {
-                const target = event.currentTarget.form;
-                clearTimeout(timer.current);
-                timer.current = setTimeout(() => {
-                  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- an <input> inside this <form> always has it
-                  apply(target!);
-                }, SEARCH_DELAY_MS);
-              }}
-            />
-            {pending ? (
-              <span className="pointer-events-none absolute end-3 top-1/2 -translate-y-1/2 text-ink-muted">
-                <Spinner />
-              </span>
-            ) : null}
-          </div>
-        )}
-      </Field>
+      {search === undefined ? null : (
+        <Field label={labels.search}>
+          {(ids) => (
+            <div className="relative">
+              <Input
+                id={ids.id}
+                aria-describedby={ids.describedBy}
+                type="search"
+                name="q"
+                icon="search"
+                defaultValue={search}
+                placeholder={labels.searchPlaceholder}
+                autoComplete="off"
+                maxLength={100}
+                onChange={(event) => {
+                  const target = event.currentTarget.form;
+                  clearTimeout(timer.current);
+                  timer.current = setTimeout(() => {
+                    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- an <input> inside this <form> always has it
+                    apply(target!);
+                  }, SEARCH_DELAY_MS);
+                }}
+              />
+              {pending ? (
+                <span className="pointer-events-none absolute end-3 top-1/2 -translate-y-1/2 text-ink-muted">
+                  <Spinner />
+                </span>
+              ) : null}
+            </div>
+          )}
+        </Field>
+      )}
       {selects.map((select) => (
         <Field key={select.name} label={select.label}>
           {(ids) => (

@@ -27,6 +27,7 @@ function review(): ReviewRepository {
     verify: vi.fn(() => Promise.resolve()),
     decide: vi.fn(() => Promise.resolve({ replayed: false })),
     resubmit: vi.fn(() => Promise.resolve({ replayed: false })),
+    reminderDays: vi.fn(() => Promise.resolve(2)),
     queue: vi.fn(() =>
       Promise.resolve({
         items: [],

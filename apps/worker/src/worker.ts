@@ -1,4 +1,4 @@
-import { createEmailOutbox, type DatabaseHandle } from '@peopleforge/db';
+import { createEmailOutbox, queueReminders, type DatabaseHandle } from '@peopleforge/db';
 import type { EmailSender } from '@peopleforge/integrations';
 import { DEFAULT_LOCALE } from '@sirius/shared-types';
 import type { Server } from 'node:http';
@@ -9,6 +9,7 @@ import { createHealthServer } from './health/server.js';
 import { startLoop } from './outbox/loop.js';
 import { startMonitor } from './outbox/monitor.js';
 import { processBatch } from './outbox/processor.js';
+import { startReminders, type ReminderScheduler } from './reminders/scheduler.js';
 
 export interface WorkerDependencies {
   env: Env;
@@ -26,7 +27,8 @@ export interface Worker {
 }
 
 /**
- * The email worker (ADR-012): the outbox loop, its monitor and the probe port. Liveness fails
+ * The worker (ADR-012, ADR-014): the email outbox loop and its monitor, the reminder checks on
+ * configured triggers, and the probe port. Liveness fails
  * when no batch has succeeded for three lease periods, so a stuck worker gets restarted.
  */
 export function createWorker({
@@ -43,6 +45,7 @@ export function createWorker({
   const startedAt = now();
   let loop: ReturnType<typeof startLoop> | undefined;
   let stopMonitor: (() => void) | undefined;
+  let reminders: ReminderScheduler | undefined;
   const health = createHealthServer({
     isLive: () => now() - (loop?.lastSuccessAt() ?? startedAt) < env.OUTBOX_LEASE_MS * 3,
     checks: [
@@ -77,6 +80,11 @@ export function createWorker({
         alertAfterSeconds: env.OUTBOX_ALERT_AFTER_S,
         logger,
       });
+      reminders = startReminders({
+        run: () => queueReminders(database.db),
+        intervalMs: env.REMINDER_INTERVAL_MS,
+        logger,
+      });
       logger.info(
         { port: env.HEALTH_PORT, transport: sender.transport, appEnv: env.APP_ENV },
         'Worker started',
@@ -85,6 +93,7 @@ export function createWorker({
     },
     stop: async () => {
       stopMonitor?.();
+      await reminders?.stop();
       await loop?.stop();
       await new Promise<void>((resolve) => {
         health.close(() => {

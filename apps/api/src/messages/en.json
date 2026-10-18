@@ -55,5 +55,55 @@
     "approved": "Approved",
     "rejected": "Rejected",
     "returned": "Returned"
+  },
+  "analytics": {
+    "title": "Turnaround time and back-and-forth",
+    "code": "RP-02",
+    "notes": {
+      "tat": "TAT: elapsed days (24 hours each) from submission to the final decision, or to now while open.",
+      "criterion": "Criterion TAT: from when a criterion started waiting for Sirius HR (submission, or the employee's resubmission after a return) to its verification.",
+      "backAndForth": "Back-and-forth: time employees spent returned to the subsidiary, and the time from a Sirius HR question to the subsidiary's answer."
+    },
+    "figures": {
+      "requests": "Requests submitted",
+      "decided": "Decided",
+      "averageTat": "Average TAT (days), decided",
+      "open": "Open",
+      "openAverage": "Average age (days), open",
+      "returns": "Employees returned",
+      "openReturns": "Returns still with the subsidiary",
+      "averageReturn": "Average days with the subsidiary per return",
+      "questions": "Questions asked",
+      "averageAnswer": "Average days to answer a question"
+    },
+    "sheets": {
+      "summary": "Summary",
+      "tatRequests": "TAT by request",
+      "tatCriteria": "TAT by criterion",
+      "tatEntities": "TAT by subsidiary",
+      "flowRequests": "Back-and-forth",
+      "flowEntities": "Back-and-forth by subsidiary"
+    },
+    "columns": {
+      "criterion": "Criterion",
+      "verified": "Verified",
+      "average": "Average (days)",
+      "longest": "Longest (days)",
+      "requests": "Requests",
+      "decided": "Decided",
+      "averageTat": "Average TAT (days)",
+      "openAverage": "Open: average age (days)",
+      "open": "Open",
+      "yes": "Yes",
+      "no": "No",
+      "returns": "Returns",
+      "openReturns": "Open returns",
+      "daysWithSubsidiary": "Days with the subsidiary",
+      "questions": "Questions",
+      "answers": "Answered",
+      "averageAnswer": "Average answer (days)",
+      "averageReturn": "Average return (days)"
+    },
+    "filterNone": "none (every subsidiary, every period)"
   }
 }

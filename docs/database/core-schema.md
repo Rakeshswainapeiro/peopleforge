@@ -260,7 +260,7 @@ A thread is one employee's messages; whoever didn't write the latest one has to 
 | `details`        | `jsonb`       | No   | What changed (e.g. version, employee count, criterion ID). **Never** salaries, justifications or file data | Internal    |
 | `correlation_id` | `text`        | Yes  | Request ID, to join with logs                                                                              | Internal    |
 
-Actions recorded: `increment_request.created`, `.draft_saved`, `.submitted`, `.discarded`, `.status_changed`, `.resubmitted`; `request_line.added`, `.removed`, `.approved`, `.rejected`, `.returned`; `criterion.verified`, `.unverified`; `evidence.uploaded`, `.removed`, `.downloaded`; `message.posted` (never the text); `report.downloaded` (S6: subject `report`/`RP-01`, details format, row count and filters — never the rows). Each is written in the same transaction as the change (downloads: before the file is streamed). Append-only like `status_event`.
+Actions recorded: `increment_request.created`, `.draft_saved`, `.submitted`, `.discarded`, `.status_changed`, `.resubmitted`; `request_line.added`, `.removed`, `.approved`, `.rejected`, `.returned`; `criterion.verified`, `.unverified`; `evidence.uploaded`, `.removed`, `.downloaded`; `message.posted` (never the text); `report.downloaded` (S6: subject `report`/`RP-01`, details format, row count and filters — never the rows); `criteria_set.published`, `reminder_rule.updated` (S7a, entity null). Each is written in the same transaction as the change (downloads: before the file is streamed). Append-only like `status_event`.
 
 **0011 (S6):** `actor_name` is filled by a column default from the session setting `app.user_name` (set by `withScope` from the signed-in user's name), so every writer records it without code changes; the name is kept as it was then, which an audit needs. Reading: group scope reads everything (`audit:read` in the API); **entity scope now reads its own subsidiary's rows** (`audit_read_entity`), so a request's History works for the subsidiary — the API shows it only to callers who can see the request. The Audit trail page (`GET /audit`) stays `audit:read`.
 
@@ -304,6 +304,29 @@ No addresses are stored on the outbox: the worker looks them up when it sends (A
 | `updated_by` | `text`        | No   | Who set it (the DBA until the admin screen exists, S7)                                                | Internal    |
 
 No row for a role: its emails are skipped (`no_address`), the in-app notification is unaffected. The dev/test seed sets `PeopleForge.Reviewer → pf.reviewers@sirius.local`.
+
+### `notify.reminder_rule` — reminder triggers (R1-13, NFR-CFG-01, 0012, configuration)
+
+| Column            | Type          | Null | Meaning                                                                                | Sensitivity |
+| ----------------- | ------------- | ---- | -------------------------------------------------------------------------------------- | ----------- |
+| `kind`            | `text`        | No   | Primary key: `review_overdue`, `return_overdue`, `deadline_approaching` (CHECK)        | Internal    |
+| `days`            | `smallint`    | No   | After how many days (1–30); defaults 2, 2, 3 (ADR-014, to confirm with Sirius HR)      | Internal    |
+| `enabled`         | `boolean`     | No   | Off: no reminders of this kind                                                         | Internal    |
+| `recipient_role`  | `text`        | Yes  | For role-addressed reminders (`review_overdue` → `PeopleForge.Reviewer`); not editable | Internal    |
+| `updated_at`      | `timestamptz` | No   | Last change                                                                            | Internal    |
+| `updated_by`      | `text`        | No   | User ID of the admin (or `migration:0012`)                                             | Internal    |
+| `updated_by_name` | `text`        | Yes  | Their name as shown on Settings; null for the defaults                                 | Personal    |
+
+The app role may read it (the Review queue's "Past reminder" uses `review_overdue.days`) and update `days`, `enabled` and the `updated_*` columns only (Settings, `criteria:configure` in the API; audited `reminder_rule.updated`).
+
+### `notify.reminder_log` and `notify.queue_reminders()` — each reminder once (R1-13, 0012)
+
+- `reminder_log (kind, subject_id, due_key)` primary key, `queued_at`: one row per reminder queued. `subject_id` is the request; `due_key` the episode (epoch of the time waiting started, of the return, or the deadline date). No grants: only the function writes it.
+- `notify.queue_reminders() → integer` (`SECURITY DEFINER`, owner, `search_path = pg_catalog, pg_temp`, no arguments): for each enabled rule, claims due episodes in the log (`ON CONFLICT DO NOTHING`) and inserts a notification (action needed) and an outbox row for each claimed one, in group scope as `system:reminders`. `EXECUTE` is granted to the worker role only (revoked from `PUBLIC`). Params: `reference`, `employees`, `days`, plus `entity` (review) or `deadline` (`YYYY-MM-DD`, deadline). Never pay or text.
+
+### `increments.criteria_set` publishing (R1-05, S7a)
+
+Settings publishes a new set (`version` = max + 1, `status = 'active'`, `activated_at = now()`) and retires the active one in one transaction, with the active row locked (`FOR UPDATE`); the unique partial index keeps one active set. Criteria copy the codes, positions, accepted file types and pass rule of the previous version; names, descriptions, justification, evidence policy and the file limit come from the admin. Requests keep their pinned `criteria_set_id`. Audited `criteria_set.published` (version, previous version, count).
 
 ### `increments.idempotency_key` and `increments.request_sequence`
 
@@ -389,6 +412,10 @@ RLS is `FORCE`d, so the owner is bound too (the seed sets group scope explicitly
 ## Review queries (S5a, `packages/db/src/review.ts`)
 
 The review queue lists live lines of non-draft requests with their review status, filtered by chip (`pending`, `returned`, `overdue` = pending since before the reminder cut-off, `open` = pending or returned, `all`), oldest waiting first, with the counts per chip in one aggregate query. It decrypts the salary only to derive a proposal's percentage; it never returns salaries, justifications or comments. Verifying, deciding and resubmitting lock the request row (`FOR UPDATE`), so two reviewers can't decide the same employee twice; decisions are idempotent per user and key.
+
+## Analytics queries (S7b, `packages/db/src/analytics.ts`)
+
+Four reads per request for `/analytics` and RP-02 (ADR-006), all under Row-Level Security and limited to submitted requests matching the period and subsidiary: the requests (`increment_request_cycle_idx`), current verifications with the time each started waiting (the latest resubmission after a return of that employee, from `status_event` and `line_decision`, else submission), returns with their resubmission (`line_decision_request_idx`, `status_event_request_idx`), and message times and sides (`line_message_request_idx`). Times only: no amounts, no text. An RP-02 download records `report.downloaded` (subject `RP-02`) in the same transaction.
 
 ## Retention (proposal, confirm with Sirius under NFR-PRIV-01)
 

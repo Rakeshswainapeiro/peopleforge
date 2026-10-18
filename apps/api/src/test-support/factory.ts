@@ -11,6 +11,8 @@ import type {
   ConversationRepository,
   ReportRepository,
   AuditTrailRepository,
+  SettingsRepository,
+  AnalyticsRepository,
 } from '@peopleforge/db';
 import type { MalwareScanner, ObjectStore } from '@peopleforge/integrations';
 import type { Principal } from '../auth/principal.js';
@@ -130,6 +132,7 @@ export const unusedReview: ReviewRepository = {
   decide: unexpected,
   resubmit: unexpected,
   queue: unexpected,
+  reminderDays: unexpected,
 };
 
 export const unusedConversations: ConversationRepository = {
@@ -144,6 +147,15 @@ export const unusedAuditTrail: AuditTrailRepository = {
   requestHistory: unexpected,
   trail: unexpected,
 };
+
+export const unusedSettings: SettingsRepository = {
+  reminderRules: unexpected,
+  updateReminderRule: unexpected,
+  activeCriteria: unexpected,
+  publishCriteria: unexpected,
+};
+
+export const unusedAnalytics: AnalyticsRepository = { facts: unexpected };
 
 export const unusedNotifications: NotificationRepository = {
   list: unexpected,
@@ -186,6 +198,8 @@ export async function buildApp(
       conversations: unusedConversations,
       reports: unusedReports,
       auditTrail: unusedAuditTrail,
+      settings: unusedSettings,
+      analytics: unusedAnalytics,
       notifications: unusedNotifications,
       readinessChecks: [],
       isShuttingDown: () => false,

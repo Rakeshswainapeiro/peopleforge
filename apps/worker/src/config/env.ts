@@ -25,6 +25,8 @@ const EnvSchema = z
     OUTBOX_STATS_INTERVAL_MS: z.coerce.number().int().min(5_000).max(3_600_000).default(60_000),
     /** Alert when the oldest due email has waited longer than this. */
     OUTBOX_ALERT_AFTER_S: z.coerce.number().int().min(60).max(86_400).default(900),
+    /** How often the configured reminder triggers are checked (R1-13). */
+    REMINDER_INTERVAL_MS: z.coerce.number().int().min(60_000).max(86_400_000).default(900_000),
     READINESS_CHECK_TIMEOUT_MS: z.coerce.number().int().min(100).max(30_000).default(2_000),
     SHUTDOWN_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(120_000).default(25_000),
   })

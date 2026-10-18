@@ -4,6 +4,18 @@ All notable changes are recorded here. Format: [Keep a Changelog](https://keepac
 
 ## [Unreleased]
 
+### Added — slice S7b: TAT and back-and-forth analytics, RP-02 (R1-10 … R1-12, R1-14)
+
+- **Analytics** (`/analytics`, Sirius HR): **Turnaround time** — average TAT of decided requests, open requests and their age, the longest open one; TAT by criterion (from when it started waiting for Sirius HR to its verification), by subsidiary and by request — and **Back-and-forth** — employees returned and how long they stayed with the subsidiary, questions and how long answers took, by subsidiary and by request. Filters: period and subsidiary.
+- **RP-02** as Excel ("Download RP-02"): the same figures on six sheets with the definitions on the Summary, in the reader's language; every download is audited.
+- Elapsed days with one decimal, open items measured to now (ADR-006; working hours once Sirius HR confirms a calendar). API: `GET /analytics/increments`, `GET /reports/tat-back-and-forth`. No migration.
+
+### Added — slice S7a: settings and reminders (R1-05, R1-13, NFR-CFG-01)
+
+- **Settings** (`/settings`, admins): the **eligibility criteria** — English and Arabic name and description, justification required, evidence policy, largest file — saved as a **new version** ("Publish version 2"). Requests already created keep the criteria they started with; new requests use the new version. A stale edit (someone published meanwhile) is refused with a clear message.
+- **Reminders on configured triggers** (same page): _Waiting for Sirius HR's review_ (default 2 days, to reviewers), _Returned and not resubmitted_ (2 days, to the submitter) and _Submission deadline approaching_ (3 days before, to whoever prepares the draft). Each can be turned off or given other days; the Review queue's "Past reminder" follows the same setting. Reminders arrive in PeopleForge (action needed) and by email, once per occasion.
+- The worker checks the triggers every 15 minutes (`REMINDER_INTERVAL_MS`) through `notify.queue_reminders()`, so its database role still can't read requests (ADR-014). Migration `0012_settings_reminders`. API: `GET`/`PUT /settings/criteria`, `GET /settings/reminders`, `PUT /settings/reminders/{kind}`. OpenAPI 0.12.0. Every change is in the audit trail with the admin's name.
+
 ### Added — slice S6: reports, request history and the audit trail (R1-14, R1-15)
 
 - **Reports** (`/reports`): RP-01, the increment status report, with the dashboard's filters (period, subsidiary for Sirius HR, status, search), a preview and **Download Excel** / **Download PDF**. The Excel file has Summary, Requests and Employees sheets (status, proposed and approved %, increase, turnaround time in calendar days) and opens cleanly in Excel; the PDF is A4 landscape with page numbers and Arabic-capable fonts. Files are in the reader's language with dates in Dubai time; text cells are protected against formula injection. Every download is recorded in the audit trail with the filters (never the rows).

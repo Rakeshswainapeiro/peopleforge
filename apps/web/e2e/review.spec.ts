@@ -331,7 +331,7 @@ test('the history tells the whole story, and RP-01 downloads in Excel and PDF [R
   const history = page.getByRole('table', { name: `History of ${reference}` });
   await expect(history).toContainText('Submitted to Sirius HR');
   await expect(history).toContainText('Yusuf Karim returned to the subsidiary');
-  await expect(history).toContainText('returned employees resubmitted');
+  await expect(history).toContainText('Returned employees resubmitted (1)');
   await expect(history).toContainText('Aisha Rahman approved');
   await page.goto(`/reports?cycle=all&q=${reference}`);
   await expect(page.getByText('1 request · 2 employees match')).toBeVisible();
@@ -363,13 +363,46 @@ test('Sirius HR finds the downloads in the audit trail [R1-15]', async ({ page }
   await expect(page.getByRole('link', { name: 'Show everyone' })).toBeVisible();
 });
 
+test('Sirius HR sees TAT and back-and-forth, and downloads RP-02 [R1-11, R1-12]', async ({
+  page,
+}) => {
+  const errors = watchForErrors(page);
+  await signIn(page, 'reviewer');
+  await page
+    .getByRole('navigation', { name: 'Main' })
+    .getByRole('link', { name: 'Analytics' })
+    .click();
+  await expect(
+    page.getByRole('heading', { level: 1, name: 'TAT and back-and-forth' }),
+  ).toBeVisible();
+  await expect(page.getByRole('table', { name: 'Requests, longest first' })).toContainText(
+    reference,
+  );
+  await expect(page.getByRole('table', { name: 'TAT by criterion' })).toContainText('C1');
+  await page.getByRole('link', { name: 'Back-and-forth' }).click();
+  await page.waitForURL(/view=flow/u);
+  const flows = page.getByRole('table', {
+    name: 'Requests with back-and-forth, most time with the subsidiary first',
+  });
+  // Yusuf was returned once and asked about once.
+  await expect(flows.getByRole('row').filter({ hasText: reference })).toContainText('Approved');
+  const download = page.waitForEvent('download');
+  await page.getByRole('link', { name: 'Download RP-02 (Excel)' }).click();
+  expect((await download).suggestedFilename()).toMatch(
+    /^PeopleForge-RP-02-\d{4}-\d{2}-\d{2}\.xlsx$/u,
+  );
+  expect(errors).toEqual([]);
+});
+
 test('another subsidiary can’t review or see any of it', async ({ page }) => {
   await signIn(page, 'betaHr');
   await page.goto('/review');
   await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible();
   await page.goto(detailUrl);
   await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible();
-  // Nor the audit trail (Sirius HR only).
-  await page.goto('/audit');
-  await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible();
+  // Nor the audit trail or the analytics (Sirius HR only).
+  for (const path of ['/audit', '/analytics']) {
+    await page.goto(path);
+    await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible();
+  }
 });

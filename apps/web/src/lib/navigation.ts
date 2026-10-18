@@ -79,6 +79,19 @@ export const NAV_ITEMS: readonly NavItem[] = [
     anyOf: ['audit:read'],
   },
   {
+    href: '/analytics',
+    label: 'nav.analytics',
+    icon: 'trend',
+    // Comparing subsidiaries: Sirius HR only (the page and the API check group scope too).
+    anyOf: ['increment_request:review'],
+  },
+  {
+    href: '/settings',
+    label: 'nav.settings',
+    icon: 'sliders',
+    anyOf: ['criteria:configure'],
+  },
+  {
     href: '/reports',
     label: 'nav.reports',
     icon: 'chart',

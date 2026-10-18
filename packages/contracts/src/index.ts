@@ -74,7 +74,6 @@ export {
   ProposalInputSchema,
   ProposedKindSchema,
   RemoveLineResultSchema,
-  REVIEW_REMINDER_DAYS,
   RequestLinePageSchema,
   RequestLineSchema,
   RequestLineSummarySchema,
@@ -164,3 +163,26 @@ export {
   type IncrementReportQuery,
   type ReportFormat,
 } from './reports.js';
+export {
+  CriteriaSettingsSchema,
+  CriterionSettingsInputSchema,
+  MAX_REMINDER_DAYS,
+  PublishCriteriaSchema,
+  ReminderKindSchema,
+  ReminderRuleSchema,
+  UpdateReminderRuleSchema,
+  type CriteriaSettings,
+  type CriterionSettingsInput,
+  type PublishCriteria,
+  type ReminderKind,
+  type ReminderRule,
+  type UpdateReminderRule,
+} from './settings.js';
+export {
+  AnalyticsQuerySchema,
+  IncrementAnalyticsSchema,
+  TatReportQuerySchema,
+  type AnalyticsQuery,
+  type IncrementAnalytics,
+  type TatReportQuery,
+} from './analytics.js';

@@ -108,7 +108,7 @@ export function dashboardHref(
 
 /** The cycle to filter by: the chosen one, none for "All periods", else the first open cycle. */
 export function cycleFilter(
-  state: DashboardState,
+  state: Pick<DashboardState, 'cycle'>,
   openCycles: readonly Cycle[],
 ): string | undefined {
   if (state.cycle === ALL_PERIODS) return undefined;

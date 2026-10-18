@@ -201,6 +201,16 @@ export interface StatusEventTable {
   reason: string | null;
 }
 
+export interface ReminderRuleTable {
+  kind: string;
+  days: number;
+  enabled: boolean;
+  recipient_role: string | null;
+  updated_at: Generated<Date>;
+  updated_by: string;
+  updated_by_name: string | null;
+}
+
 export interface AuditLogTable {
   id: Generated<string>;
   at: Generated<Date>;
@@ -322,6 +332,7 @@ export interface Database {
   'notify.notification': NotificationTable;
   'notify.notification_read': NotificationReadTable;
   'notify.email_outbox': EmailOutboxTable;
+  'notify.reminder_rule': ReminderRuleTable;
   'notify.role_mailbox': RoleMailboxTable;
   'increments.criterion_verification': CriterionVerificationTable;
   'increments.line_decision': LineDecisionTable;

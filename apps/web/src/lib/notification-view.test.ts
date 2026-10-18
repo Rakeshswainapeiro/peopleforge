@@ -122,6 +122,38 @@ describe('review notifications [R1-08 … R1-10]', () => {
 });
 
 describe('question notifications [R1-08]', () => {
+  it('words reminders on configured triggers, the deadline as a date [R1-13]', () => {
+    const rows = notificationRows(
+      page([
+        {
+          ...base,
+          kind: 'review_overdue',
+          params: { reference: 'INC-2026-0152', entity: 'SUB-A', employees: 1, days: 2 },
+          actionNeeded: true,
+        },
+        {
+          ...base,
+          kind: 'return_overdue',
+          params: { reference: 'INC-2026-0152', employees: 2, days: 3 },
+        },
+        {
+          ...base,
+          kind: 'deadline_approaching',
+          params: { reference: 'INC-2026-0160', employees: 4, deadline: '2026-11-30', days: 2 },
+        },
+        { ...base, kind: 'deadline_approaching', params: { deadline: '30/11/2026' } },
+      ]),
+      'en',
+      t,
+    );
+    expect(rows.map((row) => row.message)).toEqual([
+      '1 employee from SUB-A has waited more than 2 days for review.',
+      '2 returned employees are waiting for your update for more than 3 days.',
+      'Draft with 4 employees not submitted yet. Deadline: 30 Nov 2026.',
+      'Draft with 0 employees not submitted yet. Deadline: .',
+    ]);
+  });
+
   it('word the question and answer, and point at the employee', () => {
     const LINE = '22222222-2222-4222-8222-222222222221';
     const [asked, answered, broken] = notificationRows(

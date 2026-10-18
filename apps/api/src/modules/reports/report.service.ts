@@ -23,10 +23,10 @@ export interface ReportFile {
   body: Buffer;
 }
 
-const XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+export const XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
 /** "2026-10-17" in Asia/Dubai, for file names. */
-function businessDate(at: Date): string {
+export function businessDate(at: Date): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: BUSINESS_TIME_ZONE }).format(at);
 }
 

@@ -12,7 +12,9 @@ const outbox: EmailOutbox = {
   stats: vi.fn(() => Promise.resolve({ pending: 0, due: 0, dead: 0, oldestDueSeconds: 0 })),
 };
 
-vi.mock('@peopleforge/db', () => ({ createEmailOutbox: () => outbox }));
+const queueReminders = vi.fn(() => Promise.resolve(1));
+
+vi.mock('@peopleforge/db', () => ({ createEmailOutbox: () => outbox, queueReminders }));
 
 const { createWorker } = await import('./worker.js');
 
@@ -64,6 +66,8 @@ describe('createWorker', () => {
       'https://hr.example.ae/requests/',
     );
     expect(outbox.claim).toHaveBeenCalledWith({ limit: 10, leaseMs: 200_000 });
+    // The configured reminder triggers are checked at start, on the worker's database (R1-13).
+    expect(queueReminders).toHaveBeenCalledWith(database.db);
     expect((await fetch(`${base}/health/live`)).status).toBe(200);
     await expect((await fetch(`${base}/health/ready`)).json()).resolves.toEqual({
       status: 'ready',

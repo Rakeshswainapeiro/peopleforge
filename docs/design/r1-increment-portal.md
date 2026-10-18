@@ -1,6 +1,6 @@
 # R1 — Increment Request Portal: design proposal (for go-ahead)
 
-- **Status (2026-10-18):** Part of SOW-D2. Slices S1–S6 built (S5a: Sirius HR review, decisions per employee, returns and resubmission, Review queue and Request Tracker, ADR-013; S5b: questions and answers per employee, Conversations; S6: RP-01 reports, request History, Audit trail). S7 in progress. Keep in sync with the code; the project copy is `claude/r1-increment-portal-design.md`.
+- **Status (2026-10-18):** Part of SOW-D2. Slices S1–S7 built (S5a: Sirius HR review, decisions per employee, returns and resubmission, Review queue and Request Tracker, ADR-013; S5b: questions and answers per employee, Conversations; S6: RP-01 reports, request History, Audit trail; S7a: Settings for criteria versions and reminder triggers, ADR-014; S7b: TAT and back-and-forth analytics with RP-02, ADR-006). R1 complete for UAT. Keep in sync with the code; the project copy is `claude/r1-increment-portal-design.md`.
 
 - **Source:** BRD `SIRIUS-HR-BRD-001`, tab **"2. Req1 Increment Portal"** (sections A–D) and tab **"8. Assumptions & Open Items"**; Figma "Dashboard – By request / By employee / New increment request / Notifications / Reports / Employee status" (received 2026-10-13).
 
@@ -174,10 +174,10 @@ draft ──submit──▶ submitted ──Sirius opens──▶ under_review �
 | `POST …/{id}/lines/{lineId}/decision` (Idempotency-Key; approve / reject / return + reason + comment; built S5a)                                                     | `increment_request:decide`                       | R1-09           |
 | `GET /review-queue?filter&entityId&search&page` (built S5a)                                                                                                          | `increment_request:review`                       | R1-07           |
 | `GET …/{id}/history` (built S6) · `GET /audit?actor&search&from&to&page` (built S6)                                                                                  | `increment_request:read` (scoped) · `audit:read` | R1-15           |
-| `GET /criteria` · `PUT /admin/criteria-sets/{id}`                                                                                                                    | read: any · `criteria:configure`                 | R1-05           |
+| `GET`/`PUT /settings/criteria` · `GET /settings/reminders` · `PUT …/reminders/{kind}` (built S7a)                                                                    | read: any · `criteria:configure`                 | R1-05           |
 | `GET /notifications` · `POST /notifications/read`                                                                                                                    | `@Authenticated` (own)                           | R1-07, R1-13    |
 | `GET /reports/increment-requests?format=xlsx\|pdf&locale&filters` (audited; built S6)                                                                                | `report:read_operational` + request and pay read | R1-14, RP-01    |
-| `GET /analytics/increments/{stage,tat,back-and-forth}`                                                                                                               | `report:read_operational` (Sirius)               | R1-10–12, D2–D4 |
+| `GET /analytics/increments?cycleId&entityId` · `GET /reports/tat-back-and-forth` (built S7b)                                                                         | `report:read_operational` (Sirius)               | R1-10–12, D2–D4 |
 
 Every endpoint gets 401/403/cross-entity tests (NFR-SEC-01).
 
@@ -194,8 +194,8 @@ Every endpoint gets 401/403/cross-entity tests (NFR-SEC-01).
 | Notifications                                                  | ✓                                        | both          | R1-07, R1-13 |
 | Reports (RP-01)                                                | ✓ (fix I9; built S6)                     | both          | R1-14        |
 | Sirius HR review queue, review & decide; Request Tracker       | ✓ (built S5a; Figma errors fixed, below) | Sirius HR     | R1-07–R1-10  |
-| D2–D4 analytics, RP-02                                         | **missing (M6)**                         | Sirius HR     | R1-10–R1-12  |
-| Criteria settings                                              | **missing (M5)**                         | Admin         | R1-05        |
+| D3 TAT and D4 back-and-forth analytics, RP-02                  | built S7b (no Figma: M6)                 | Sirius HR     | R1-10–R1-12  |
+| Criteria settings; reminder settings                           | built S7a (no Figma: M5, M8)             | Admin         | R1-05, R1-13 |
 | Request history; Audit trail page                              | built S6 (no Figma: M7)                  | both · Sirius | R1-15        |
 
 ## 7. Assets needed (placeholders until provided)
@@ -227,7 +227,8 @@ Every endpoint gets 401/403/cross-entity tests (NFR-SEC-01).
 | S5a   | Sirius HR review: Review queue, Request Tracker, Mark verified per criterion, decisions per employee (approve / at another % / reject / return), returns fixed and resubmitted, statuses everywhere (done 2026-10-17, ADR-013) | R1-07–R1-10                 |
 | S5b   | Q&A threads per employee both ways (append-only, encrypted), Conversations page with Waiting for you, Respond from notifications (done 2026-10-17)                                                                             | R1-08                       |
 | S6    | History card on the request detail, Audit trail page with person and date filters, RP-01 as Excel and PDF in the reader's language with the dashboard's filters, every download audited (done 2026-10-18)                      | R1-14, R1-15                |
-| S7    | D2–D4 analytics, RP-02, reminders on triggers, criteria settings screen                                                                                                                                                        | R1-05 (UI), R1-11–R1-13     |
+| S7a   | Settings: criteria published as versions, reminder triggers (review, return, deadline) configurable, reminders queued by the worker once each, in-app and email (done 2026-10-18, ADR-014)                                     | R1-05 (UI), R1-13           |
+| S7b   | D3 TAT and D4 back-and-forth analytics by period and subsidiary, RP-02 Excel (done 2026-10-18, ADR-006)                                                                                                                        | R1-11, R1-12                |
 
 **Figma corrections applied in S5a** (fixed, not copied): the Sirius reviewer is no longer labelled "HR Subsidiary C"; "Waiting 14 d Across 5 subsidiaries" uses the real counts; tab and banner texts name the right employee; a rejection shows no "AED 0" increase; each queue row shows its own criteria marks (not "C1" everywhere).
 

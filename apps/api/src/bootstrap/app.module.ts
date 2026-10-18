@@ -15,6 +15,8 @@ import type {
   ConversationRepository,
   ReportRepository,
   AuditTrailRepository,
+  SettingsRepository,
+  AnalyticsRepository,
 } from '@peopleforge/db';
 import type { MalwareScanner, ObjectStore } from '@peopleforge/integrations';
 import { AuthenticateMiddleware, SiriusAuthModule } from '@sirius/auth-nest';
@@ -47,6 +49,13 @@ import { ConversationService } from '../modules/conversations/conversation.servi
 import { ReportService } from '../modules/reports/report.service.js';
 import { ReportsController } from '../modules/reports/reports.controller.js';
 import { AuditService } from '../modules/audit/audit.service.js';
+import { SettingsController } from '../modules/settings/settings.controller.js';
+import {
+  AnalyticsController,
+  TatReportController,
+} from '../modules/analytics/analytics.controller.js';
+import { AnalyticsService } from '../modules/analytics/analytics.service.js';
+import { SettingsService } from '../modules/settings/settings.service.js';
 import {
   AuditTrailController,
   RequestHistoryController,
@@ -57,6 +66,8 @@ import {
 } from '../modules/conversations/conversations.controller.js';
 import {
   AUDIT_SERVICE,
+  SETTINGS_SERVICE,
+  ANALYTICS_SERVICE,
   CONVERSATION_SERVICE,
   ENTITY_DIRECTORY,
   ENV,
@@ -96,6 +107,10 @@ export interface AppDependencies {
   reports: ReportRepository;
   /** The audit trail, read side (R1-15). */
   auditTrail: AuditTrailRepository;
+  /** Criteria and reminder triggers (R1-05, R1-13). */
+  settings: SettingsRepository;
+  /** TAT and back-and-forth facts (R1-11, R1-12). */
+  analytics: AnalyticsRepository;
   /** The caller's in-app notifications (R1-07, R1-13). */
   notifications: NotificationRepository;
   readinessChecks: readonly ReadinessCheck[];
@@ -133,6 +148,9 @@ export class AppModule implements NestModule {
         ReportsController,
         RequestHistoryController,
         AuditTrailController,
+        SettingsController,
+        AnalyticsController,
+        TatReportController,
         EvidenceController,
         NotificationsController,
       ],
@@ -145,6 +163,8 @@ export class AppModule implements NestModule {
         { provide: REVIEW_SERVICE, useValue: new ReviewService(requests, deps.review) },
         { provide: REPORT_SERVICE, useValue: new ReportService(requests, deps.reports) },
         { provide: AUDIT_SERVICE, useValue: new AuditService(requests, deps.auditTrail) },
+        { provide: SETTINGS_SERVICE, useValue: new SettingsService(deps.settings) },
+        { provide: ANALYTICS_SERVICE, useValue: new AnalyticsService(requests, deps.analytics) },
         {
           provide: CONVERSATION_SERVICE,
           useValue: new ConversationService(requests, deps.conversations),
