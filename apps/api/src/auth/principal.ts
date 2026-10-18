@@ -49,11 +49,23 @@ export function principalFromIdentity(
     : { ...base, scope: 'entity', entityIds: [...assignedEntityIds] };
 }
 
-/** The Row-Level Security scope every query of this caller runs under (ADR-002). */
+/**
+ * How people read who acted: the identity provider's display name, else the username, else the
+ * ID; at most 200 characters (what the database keeps).
+ */
+export function displayNameOf(caller: Principal): string {
+  return (caller.name ?? caller.username ?? caller.userId).slice(0, 200);
+}
+
+/**
+ * The Row-Level Security scope every query of this caller runs under (ADR-002), with their name
+ * for the audit trail (R1-15).
+ */
 export function scopeOf(caller: Principal): Scope {
+  const userName = displayNameOf(caller);
   return caller.scope === 'group'
-    ? { userId: caller.userId, kind: 'group' }
-    : { userId: caller.userId, kind: 'entity', entityIds: caller.entityIds };
+    ? { userId: caller.userId, userName, kind: 'group' }
+    : { userId: caller.userId, userName, kind: 'entity', entityIds: caller.entityIds };
 }
 
 /** Effective permissions of a caller: the union over their roles; unknown roles grant nothing. */

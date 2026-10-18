@@ -24,7 +24,6 @@ import { requireViewer } from '@/server/session';
 import PortalLayout from './layout';
 import PortalLoading from './loading';
 import HomePage from './page';
-import ReportsPage from './reports/page';
 
 vi.mock('@/i18n/request-locale', () => ({ getRequestLocale: vi.fn() }));
 vi.mock('@/app/actions/set-locale', () => ({ setLocale: vi.fn() }));
@@ -117,7 +116,7 @@ describe('portal shell', () => {
   it('shows subsidiary HR its subsidiary and New Request, marking the current page', async () => {
     vi.mocked(requireViewer).mockResolvedValue(ALPHA_HR);
     vi.mocked(usePathname).mockReturnValue('/requests/new');
-    await renderPortal(ReportsPage);
+    await renderPortal(() => Promise.resolve(null));
     expect(screen.getByText('Subsidiary HR · Subsidiary A')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'New Request' })).toHaveAttribute(
       'aria-current',
@@ -421,28 +420,10 @@ describe('HomePage: My increment requests [R1-10, DASH-D1]', () => {
   });
 });
 
-describe('placeholder pages', () => {
-  it.each([
-    ['Reports', ReportsPage, REVIEWER],
-    ['Reports', ReportsPage, ALPHA_HR],
-  ])('renders %s for a permitted viewer', async (heading, Page, viewer) => {
-    vi.mocked(requireViewer).mockResolvedValue(viewer);
-    render(await Page());
-    expect(screen.getByRole('heading', { level: 1, name: heading })).toBeInTheDocument();
-    expect(screen.getByRole('status')).toHaveTextContent('Coming in a later release.');
-  });
-
-  it.each([['Reports without a report permission', ReportsPage, { ...ALPHA_HR, permissions: [] }]])(
-    'answers not found for %s',
-    async (_label, Page, viewer) => {
-      vi.mocked(requireViewer).mockResolvedValue(viewer);
-      await expect(Page()).rejects.toThrow('NEXT_NOT_FOUND');
-    },
-  );
-
-  it.each([HomePage, ReportsPage])('renders nothing while the API is unavailable', async (Page) => {
+describe('HomePage without the API', () => {
+  it('renders nothing while the API is unavailable', async () => {
     vi.mocked(requireViewer).mockResolvedValue(null);
-    await expect(Page()).resolves.toBeNull();
+    await expect(HomePage()).resolves.toBeNull();
   });
 });
 

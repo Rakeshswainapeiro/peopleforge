@@ -111,3 +111,17 @@ export {
   type ThreadRecord,
 } from './conversations.js';
 export type { MessageSide } from './schema.js';
+export {
+  createAuditTrailRepository,
+  HISTORY_LIMIT,
+  type AuditEventRecord,
+  type AuditTrailRepository,
+  type TrailQuery,
+} from './audit-trail.js';
+export {
+  createReportRepository,
+  REPORT_ROW_LIMIT,
+  type ReportDownload,
+  type ReportLineRecord,
+  type ReportRepository,
+} from './reports.js';

@@ -5,9 +5,13 @@ import type { Database } from './schema.js';
  * Who the queries run for. Row-Level Security reads this (ADR-002): `group` sees every entity,
  * `entity` only the listed ones. An entity scope with no entities sees no entity data.
  */
-export type Scope =
+export type Scope = (
   | { userId: string; kind: 'group' }
-  | { userId: string; kind: 'entity'; entityIds: readonly string[] };
+  | { userId: string; kind: 'entity'; entityIds: readonly string[] }
+) & {
+  /** The caller's display name: recorded with their actions in the audit trail (R1-15). */
+  userName?: string | undefined;
+};
 
 export class ScopeError extends Error {
   constructor(message: string) {
@@ -40,6 +44,7 @@ export async function withScope<T>(
   const entityIds = entityList(scope);
   return db.transaction().execute(async (trx) => {
     await sql`SELECT set_config('app.user_id', ${scope.userId}, true),
+                     set_config('app.user_name', ${(scope.userName ?? '').slice(0, 200)}, true),
                      set_config('app.scope', ${scope.kind}, true),
                      set_config('app.entity_ids', ${entityIds}, true)`.execute(trx);
     return work(trx);

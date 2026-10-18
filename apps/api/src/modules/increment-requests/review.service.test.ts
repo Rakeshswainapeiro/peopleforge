@@ -20,8 +20,8 @@ import { ReviewService } from './review.service.js';
 // repository's own rules and isolation are proven against Postgres in packages/db.
 const KEY = 'decision-key-0001';
 const NOW = new Date('2026-10-17T08:00:00Z');
-const scopeGroup = { userId: 'reviewer', kind: 'group' };
-const scopeA = { userId: 'alpha', kind: 'entity', entityIds: [SUB_A] };
+const scopeGroup = { userId: 'reviewer', userName: 'Reviewer', kind: 'group' };
+const scopeA = { userId: 'alpha', userName: 'Alpha HR', kind: 'entity', entityIds: [SUB_A] };
 
 type FakeReview = { [K in keyof ReviewRepository]: Mock<ReviewRepository[K]> };
 

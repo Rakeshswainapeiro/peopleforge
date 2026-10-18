@@ -1,4 +1,5 @@
 import type {
+  AuditEvent,
   ConversationPage,
   CriterionAssessment,
   Cycle,
@@ -397,6 +398,22 @@ export function conversationPage(
     pageSize: 10,
     total: items.length,
     counts: { all: 4, awaiting: items.length },
+    ...overrides,
+  };
+}
+
+/** An audit-trail entry as the API returns it (R1-15). */
+export function auditEvent(overrides: Partial<AuditEvent> = {}): AuditEvent {
+  return {
+    id: '9001',
+    at: '2026-10-15T07:14:00.000Z',
+    actor: 'oid-4',
+    actorName: 'Priya Nair',
+    action: 'increment_request.submitted',
+    entityId: ENTITY,
+    subjectType: 'increment_request',
+    subjectId: REQUEST_ID,
+    details: { reference: 'INC-2026-0152', from: 'draft', to: 'submitted' },
     ...overrides,
   };
 }

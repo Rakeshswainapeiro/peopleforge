@@ -322,10 +322,54 @@ test('the subsidiary sees the decisions and is emailed the final status [R1-13]'
   expect(decided.text).not.toMatch(/16,?800/u);
 });
 
+test('the history tells the whole story, and RP-01 downloads in Excel and PDF [R1-14, R1-15]', async ({
+  page,
+}) => {
+  const errors = watchForErrors(page);
+  await signIn(page, 'alphaHr');
+  await page.goto(detailUrl);
+  const history = page.getByRole('table', { name: `History of ${reference}` });
+  await expect(history).toContainText('Submitted to Sirius HR');
+  await expect(history).toContainText('Yusuf Karim returned to the subsidiary');
+  await expect(history).toContainText('returned employees resubmitted');
+  await expect(history).toContainText('Aisha Rahman approved');
+  await page.goto(`/reports?cycle=all&q=${reference}`);
+  await expect(page.getByText('1 request · 2 employees match')).toBeVisible();
+  for (const [name, fileName] of [
+    ['Download Excel', /^PeopleForge-RP-01-\d{4}-\d{2}-\d{2}\.xlsx$/u],
+    ['Download PDF', /^PeopleForge-RP-01-\d{4}-\d{2}-\d{2}\.pdf$/u],
+  ] as const) {
+    const download = page.waitForEvent('download');
+    await page.getByRole('link', { name }).click();
+    const file = await download;
+    expect(file.suggestedFilename()).toMatch(fileName);
+    expect(await file.failure()).toBeNull();
+  }
+  expect(errors).toEqual([]);
+});
+
+test('Sirius HR finds the downloads in the audit trail [R1-15]', async ({ page }) => {
+  await signIn(page, 'reviewer');
+  await page.goto('/audit?q=report.downloaded');
+  const trail = page.getByRole('table', { name: 'Audit trail' });
+  await expect(
+    trail.getByRole('row').filter({ hasText: 'Report downloaded' }).first(),
+  ).toContainText('format: pdf');
+  await trail
+    .getByRole('link', { name: /^Show only the actions of / })
+    .first()
+    .click();
+  await expect(page.getByText(/^Actions of /u)).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Show everyone' })).toBeVisible();
+});
+
 test('another subsidiary can’t review or see any of it', async ({ page }) => {
   await signIn(page, 'betaHr');
   await page.goto('/review');
   await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible();
   await page.goto(detailUrl);
+  await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible();
+  // Nor the audit trail (Sirius HR only).
+  await page.goto('/audit');
   await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible();
 });

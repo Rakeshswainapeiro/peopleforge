@@ -52,7 +52,12 @@ describe('scopeOf [ADR-002]', () => {
   it('maps group and entity callers to the Row-Level Security scope', () => {
     const group = principalFromIdentity(identity([ROLES.admin]), []);
     const entity = principalFromIdentity(identity([ROLES.subsidiaryHr]), ['e-1']);
-    expect(scopeOf(group)).toEqual({ userId: 'oid-1', kind: 'group' });
-    expect(scopeOf(entity)).toEqual({ userId: 'oid-1', kind: 'entity', entityIds: ['e-1'] });
+    expect(scopeOf(group)).toEqual({ userId: 'oid-1', userName: 'User', kind: 'group' });
+    expect(scopeOf(entity)).toEqual({
+      userId: 'oid-1',
+      userName: 'User',
+      kind: 'entity',
+      entityIds: ['e-1'],
+    });
   });
 });

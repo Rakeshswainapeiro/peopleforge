@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: PeopleForge API
-  version: 0.10.0
+  version: 0.11.0
   description: >
     Phase 1 API (BRD SIRIUS-HR-BRD-001). Every /api/v1 route requires an access token from the
     Sirius identity provider (Microsoft Entra ID; Keycloak locally) sent as
@@ -16,6 +16,10 @@ tags:
     description: R1 Increment Request Portal
   - name: notifications
     description: In-app notifications (R1-07, R1-13)
+  - name: reports
+    description: Increment reports as Excel and PDF (R1-14)
+  - name: audit
+    description: The audit trail (R1-15, NFR-AUD-01)
   - name: health
   - name: identity
 paths:
@@ -664,6 +668,89 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ConversationPage' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/v1/reports/increment-requests:
+    get:
+      tags: [reports]
+      summary: RP-01, the increment status report, as Excel or PDF (R1-14)
+      description: >
+        Needs `report:read_operational`, and `increment_request:read` with
+        `employee_data:read_compensation` (the report holds increments): admins and executives
+        get 403. The caller's own requests (Row-Level Security; drafts only for those who prepare
+        them) with the dashboard's filters; at most 20,000 employees (the Summary says when cut).
+        Labels in `locale`; dates in Asia/Dubai; text cells neutralised against formula
+        injection. Every download is recorded in the audit trail (`report.downloaded`, with the
+        format, row count and filters). Never cached.
+      parameters:
+        - { name: format, in: query, required: true, schema: { type: string, enum: [xlsx, pdf] } }
+        - { name: locale, in: query, schema: { type: string, enum: [en, ar], default: en } }
+        - { $ref: '#/components/parameters/CycleFilter' }
+        - { name: entityId, in: query, schema: { type: string, format: uuid } }
+        - {
+            name: status,
+            in: query,
+            schema:
+              {
+                type: string,
+                enum:
+                  [draft, submitted, under_review, returned, approved, partly_approved, rejected],
+              },
+          }
+        - { $ref: '#/components/parameters/SearchFilter' }
+      responses:
+        '200':
+          description: The file, as an attachment named `PeopleForge-RP-01-YYYY-MM-DD.xlsx|pdf`
+          headers:
+            Content-Disposition: { schema: { type: string } }
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: { type: string, format: binary }
+            application/pdf:
+              schema: { type: string, format: binary }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/v1/increment-requests/{id}/history:
+    get:
+      tags: [audit]
+      summary: A request's history, newest first (R1-15)
+      description: >
+        Needs `increment_request:read` and the request visible to the caller (404 otherwise;
+        drafts stay their subsidiary's). Entries about the request, its employees, files and
+        messages; at most 500. Details carry IDs, codes and counts only, never pay or text.
+      parameters: [{ $ref: '#/components/parameters/RequestId' }]
+      responses:
+        '200':
+          description: The entries
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/AuditEvent' } }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/audit:
+    get:
+      tags: [audit]
+      summary: The whole audit trail, newest first (R1-15)
+      description: >
+        Needs `audit:read` (Sirius HR reviewers, admins). `actor` is one user's ID; `search`
+        matches the actor's name or ID or the action; `from` and `to` are inclusive dates in
+        Asia/Dubai.
+      parameters:
+        - { name: actor, in: query, schema: { type: string, maxLength: 128 } }
+        - { name: search, in: query, schema: { type: string, maxLength: 100 } }
+        - { name: from, in: query, schema: { type: string, format: date } }
+        - { name: to, in: query, schema: { type: string, format: date } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: pageSize, in: query, schema: { type: integer, enum: [10, 25, 50], default: 25 } }
+      responses:
+        '200':
+          description: A page of entries
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuditTrailPage' }
         '400': { $ref: '#/components/responses/ValidationFailed' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
@@ -1362,6 +1449,32 @@ components:
                 enum: [pending, approved, rejected, returned]
                 description: The employee's own place in the review (R1-09)
               updatedAt: { type: string, format: date-time }
+    AuditEvent:
+      type: object
+      required: [id, at, actor, actorName, action, entityId, subjectType, subjectId, details]
+      properties:
+        id: { type: string }
+        at: { type: string, format: date-time }
+        actor: { type: string, description: The actor's user ID }
+        actorName:
+          type: [string, 'null']
+          description: The actor's name as recorded (null for entries before 0.11)
+        action: { type: string, examples: [increment_request.submitted, report.downloaded] }
+        entityId: { type: [string, 'null'], format: uuid }
+        subjectType: { type: string }
+        subjectId: { type: string }
+        details:
+          type: object
+          description: Flat values only (IDs, codes, counts); never pay or text
+          additionalProperties: { type: [string, number, boolean, 'null'] }
+    AuditTrailPage:
+      type: object
+      required: [items, page, pageSize, total]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/AuditEvent' } }
+        page: { type: integer, minimum: 1 }
+        pageSize: { type: integer, minimum: 1 }
+        total: { type: integer, minimum: 0 }
     Notification:
       type: object
       required: [id, kind, requestId, params, actionNeeded, createdAt, read]

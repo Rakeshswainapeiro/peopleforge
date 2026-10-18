@@ -3,9 +3,10 @@ import { cleanup, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getRequestLocale } from '@/i18n/request-locale';
 import type { ApiResult } from '@/server/api-client';
-import { getRequest, openCycles, searchEmployees } from '@/server/increment-requests';
+import { getHistory, getRequest, openCycles, searchEmployees } from '@/server/increment-requests';
 import { requireViewer } from '@/server/session';
 import {
+  auditEvent,
   decisionOf,
   draftRequest,
   EVIDENCE_ID,
@@ -21,6 +22,7 @@ import NewRequestPage from './new/page';
 vi.mock('@/i18n/request-locale', () => ({ getRequestLocale: vi.fn() }));
 vi.mock('@/server/session', () => ({ requireViewer: vi.fn() }));
 vi.mock('@/server/increment-requests', () => ({
+  getHistory: vi.fn(),
   getRequest: vi.fn(),
   openCycles: vi.fn(),
   searchEmployees: vi.fn(),
@@ -327,6 +329,42 @@ describe('Draft editor [R1-02]', () => {
 describe('Request detail [R1-06, R1-07]', () => {
   beforeEach(() => {
     vi.mocked(getRequest).mockResolvedValue({ kind: 'ok', data: submittedRequest() });
+    vi.mocked(getHistory).mockResolvedValue({ kind: 'ok', data: [] });
+  });
+
+  it('shows the request’s history, newest first, in words [R1-15]', async () => {
+    vi.mocked(getHistory).mockResolvedValue({
+      kind: 'ok',
+      data: [
+        auditEvent({
+          id: '2',
+          at: '2026-10-16T06:00:00.000Z',
+          actorName: 'Sara Al Mansoori',
+          action: 'request_line.returned',
+          subjectType: 'request_line',
+          subjectId: LINE_2,
+          details: { reasonCode: 'missing_evidence' },
+        }),
+        auditEvent(),
+      ],
+    });
+    render(await detailPage());
+    const table = screen.getByRole('table', { name: 'History of INC-2026-0152' });
+    const rows = within(table).getAllByRole('row');
+    expect(rows[1]).toHaveTextContent(
+      '16 Oct 2026, 10:00Sara Al MansooriNeha Iyer returned to the subsidiary',
+    );
+    expect(rows[2]).toHaveTextContent('Priya NairSubmitted to Sirius HR');
+  });
+
+  it('says when nothing is recorded, and still shows the request if the trail can’t be read', async () => {
+    render(await detailPage());
+    expect(screen.getByText('Nothing recorded yet.')).toBeInTheDocument();
+    cleanup();
+    vi.mocked(getHistory).mockResolvedValue({ kind: 'unavailable' });
+    render(await detailPage());
+    expect(screen.getByRole('heading', { level: 1, name: 'INC-2026-0152' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'History' })).toBeNull();
   });
 
   it('shows where the request is, its figures and its employees (Figma "Request detail")', async () => {

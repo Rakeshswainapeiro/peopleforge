@@ -13,8 +13,8 @@ import {
 } from '../../test-support/increment-requests.js';
 import { DashboardService } from './dashboard.service.js';
 
-const scopeA = { userId: 'alpha', kind: 'entity', entityIds: [SUB_A] };
-const scopeGroup = { userId: 'reviewer', kind: 'group' };
+const scopeA = { userId: 'alpha', userName: 'Alpha HR', kind: 'entity', entityIds: [SUB_A] };
+const scopeGroup = { userId: 'reviewer', userName: 'Reviewer', kind: 'group' };
 
 describe('DashboardService.summary', () => {
   it('counts every status (zero when none) in the caller’s scope, drafts only for preparers', async () => {

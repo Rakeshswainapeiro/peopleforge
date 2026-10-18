@@ -8,6 +8,9 @@ import {
   listRequests,
   openCycles,
   downloadEvidence,
+  downloadIncrementReport,
+  getHistory,
+  REPORT_TIMEOUT_MS,
   removeEmployee,
   removeEvidence,
   saveDraftChanges,
@@ -100,6 +103,30 @@ describe('increment request client', () => {
       `/api/v1/increment-requests/${ID}/evidence/${OTHER}`,
     );
     expect(() => downloadEvidence(ID, '../x')).toThrow();
+  });
+
+  it('reads a request’s history and downloads RP-01 with its filters [R1-14, R1-15]', async () => {
+    await getHistory(ID);
+    expect(calls()).toEqual([[`/api/v1/increment-requests/${ID}/history`, undefined]]);
+    expect(() => getHistory('../x')).toThrow();
+    vi.mocked(downloadFromApi).mockResolvedValue({ kind: 'unavailable' });
+    await downloadIncrementReport({ format: 'pdf', locale: 'en' });
+    await downloadIncrementReport({
+      format: 'xlsx',
+      locale: 'ar',
+      cycleId: ID,
+      entityId: OTHER,
+      status: 'returned',
+      search: 'Aisha & co',
+    });
+    expect(vi.mocked(downloadFromApi).mock.calls).toEqual([
+      ['/api/v1/reports/increment-requests?format=pdf&locale=en', REPORT_TIMEOUT_MS],
+      [
+        `/api/v1/reports/increment-requests?format=xlsx&locale=ar&cycleId=${ID}&entityId=${OTHER}&status=returned&search=Aisha+%26+co`,
+        REPORT_TIMEOUT_MS,
+      ],
+    ]);
+    expect(() => downloadIncrementReport({ format: 'pdf', locale: 'en', cycleId: 'x' })).toThrow();
   });
 
   it('never puts an unvalidated ID into a path', () => {

@@ -8,6 +8,9 @@ import {
   RemoveLineResultSchema,
   RequestLinePageSchema,
   ReviewQueuePageSchema,
+  AuditEventSchema,
+  type AuditEvent,
+  type IncrementReportQuery,
   type CreateIncrementRequest,
   type DecideLine,
   type ReviewQueuePage,
@@ -221,4 +224,25 @@ export function reviewQueue(
   query.set('page', String(options.page ?? 1));
   query.set('pageSize', String(options.pageSize ?? 10));
   return callApi(`/api/v1/review-queue?${query.toString()}`, ReviewQueuePageSchema);
+}
+
+/** A request's history, newest first (R1-15). */
+export function getHistory(id: string): Promise<ApiResult<AuditEvent[]>> {
+  return callApi(requestPath(id, '/history'), z.array(AuditEventSchema));
+}
+
+/** How long a report may take to build and stream (NFR-PERF-01: large exports < 60 s). */
+export const REPORT_TIMEOUT_MS = 60_000;
+
+/** RP-01 as Excel or PDF (R1-14), streamed; the API records the download. */
+export function downloadIncrementReport(query: IncrementReportQuery): Promise<DownloadResult> {
+  const params = new URLSearchParams({ format: query.format, locale: query.locale });
+  if (query.cycleId !== undefined) params.set('cycleId', Id.parse(query.cycleId));
+  if (query.entityId !== undefined) params.set('entityId', Id.parse(query.entityId));
+  if (query.status !== undefined) params.set('status', query.status);
+  if (query.search !== undefined) params.set('search', query.search);
+  return downloadFromApi(
+    `/api/v1/reports/increment-requests?${params.toString()}`,
+    REPORT_TIMEOUT_MS,
+  );
 }

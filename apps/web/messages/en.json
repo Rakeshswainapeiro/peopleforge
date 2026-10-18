@@ -13,7 +13,8 @@
     "myRequests": "My Request",
     "requests": "Request Tracker",
     "reviewQueue": "Review Queue",
-    "conversations": "Conversations"
+    "conversations": "Conversations",
+    "audit": "Audit trail"
   },
   "home": {
     "heading": "Welcome",
@@ -188,7 +189,22 @@
   },
   "reports": {
     "heading": "Reports",
-    "intro": "Increment request reports for your subsidiaries, exportable to Excel and PDF."
+    "intro": "Increment request reports for your subsidiary, exportable to Excel and PDF.",
+    "introGroup": "Increment request reports across subsidiaries, exportable to Excel and PDF.",
+    "rp01Title": "RP-01 · Increment status report",
+    "rp01Body": "Every request and employee matching the filters: status, proposed and approved increments, and turnaround time (TAT).",
+    "matches": {
+      "one": "{requests} request · {employees} employees match",
+      "other": "{requests} requests · {employees} employees match"
+    },
+    "preview": "Preview: the first {shown} of {total} requests. The files include them all.",
+    "downloadExcel": "Download Excel",
+    "downloadPdf": "Download PDF",
+    "logged": "Every download is recorded in the audit trail with your name and the filters.",
+    "emptyTitle": "Nothing to report",
+    "emptyBody": "No requests match these filters.",
+    "executiveTitle": "Executive reports",
+    "executiveBody": "Group-level reports for executives arrive with the Group Dashboard (R2)."
   },
   "request": {
     "newTitle": "New increment request",
@@ -762,5 +778,87 @@
     "closed": "The review is over: the conversation is read-only.",
     "awaitingYou": "Waiting for your answer",
     "awaitingThem": "Waiting for {side}"
+  },
+  "history": {
+    "title": "History",
+    "intro": "Everything that happened to this request, newest first. Recorded and never changed.",
+    "caption": "History of {reference}",
+    "colWhen": "When",
+    "colWho": "Who",
+    "colWhat": "What",
+    "someone": "Unknown user",
+    "empty": "Nothing recorded yet.",
+    "actions": {
+      "increment_request.created": "Request created with {count} employees",
+      "request_line.added": "{employee} added",
+      "request_line.removed": "An employee was removed",
+      "increment_request.discarded": "Draft discarded",
+      "increment_request.draft_saved": "Draft saved",
+      "evidence.uploaded": "File attached for {employee} · {code}",
+      "evidence.removed": "File removed",
+      "evidence.downloaded": "File downloaded",
+      "increment_request.submitted": "Submitted to Sirius HR",
+      "increment_request.status_changed": "Status changed: {from} → {to}",
+      "criterion.verified": "{code} verified for {employee}",
+      "criterion.unverified": "{code} check undone for {employee}",
+      "request_line.approved": "{employee} approved",
+      "request_line.rejected": "{employee} rejected",
+      "request_line.returned": "{employee} returned to the subsidiary",
+      "increment_request.resubmitted": "{count} returned employees resubmitted",
+      "message.posted": "Message about {employee}",
+      "report.downloaded": "Report {report} downloaded ({format})"
+    },
+    "unknownEmployee": "an employee",
+    "unknownCode": "a criterion"
+  },
+  "audit": {
+    "heading": "Audit trail",
+    "intro": "Every recorded action across PeopleForge, newest first. Filter by person, text or dates.",
+    "filters": "Filter the audit trail",
+    "search": "Search",
+    "searchPlaceholder": "Name, user ID or action",
+    "from": "From",
+    "to": "To",
+    "apply": "Apply",
+    "caption": "Audit trail",
+    "colWhen": "When",
+    "colWho": "Who",
+    "colAction": "Action",
+    "colSubject": "Record",
+    "colDetails": "Details",
+    "onlyUser": "Only {name}",
+    "onlyUserLabel": "Show only the actions of {name}",
+    "userFilter": "Actions of {name}",
+    "clearUser": "Show everyone",
+    "emptyTitle": "Nothing recorded",
+    "emptyBody": "No entries match these filters.",
+    "pagination": {
+      "navigation": "Audit trail pages",
+      "pageOf": "Page {page} of {pages}",
+      "first": "First page",
+      "previous": "Previous page",
+      "next": "Next page",
+      "last": "Last page"
+    },
+    "actionNames": {
+      "increment_request.created": "Request created",
+      "request_line.added": "Employee added",
+      "request_line.removed": "Employee removed",
+      "increment_request.discarded": "Draft discarded",
+      "increment_request.draft_saved": "Draft saved",
+      "evidence.uploaded": "File attached",
+      "evidence.removed": "File removed",
+      "evidence.downloaded": "File downloaded",
+      "increment_request.submitted": "Request submitted",
+      "increment_request.status_changed": "Status changed",
+      "criterion.verified": "Criterion verified",
+      "criterion.unverified": "Criterion check undone",
+      "request_line.approved": "Employee approved",
+      "request_line.rejected": "Employee rejected",
+      "request_line.returned": "Employee returned",
+      "increment_request.resubmitted": "Request resubmitted",
+      "message.posted": "Message posted",
+      "report.downloaded": "Report downloaded"
+    }
   }
 }

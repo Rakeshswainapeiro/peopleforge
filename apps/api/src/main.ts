@@ -5,6 +5,8 @@ import {
   createDashboardRepository,
   createReviewRepository,
   createConversationRepository,
+  createReportRepository,
+  createAuditTrailRepository,
   createIncrementRequestRepository,
   createNotificationRepository,
   type FieldCipher,
@@ -54,6 +56,8 @@ async function start(): Promise<void> {
     dashboard: createDashboardRepository(database.db, cipher),
     review: createReviewRepository(database.db, cipher),
     conversations: createConversationRepository(database.db, cipher),
+    reports: createReportRepository(database.db, cipher),
+    auditTrail: createAuditTrailRepository(database.db),
     notifications: createNotificationRepository(database.db),
     // Uploads need both: without them the API is not ready to serve R1-04.
     readinessChecks: [

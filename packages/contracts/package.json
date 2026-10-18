@@ -18,6 +18,7 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "@sirius/shared-types": "0.1.0",
     "zod": "4.6.5"
   },
   "devDependencies": {

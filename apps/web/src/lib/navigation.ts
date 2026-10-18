@@ -73,6 +73,12 @@ export const NAV_ITEMS: readonly NavItem[] = [
   },
   { href: '/notifications', label: 'nav.notifications', icon: 'bell', showsUnread: true },
   {
+    href: '/audit',
+    label: 'nav.audit',
+    icon: 'clock',
+    anyOf: ['audit:read'],
+  },
+  {
     href: '/reports',
     label: 'nav.reports',
     icon: 'chart',

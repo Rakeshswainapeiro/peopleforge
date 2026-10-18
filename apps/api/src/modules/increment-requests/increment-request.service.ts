@@ -17,7 +17,12 @@ import {
   type IncrementRequestRepository,
   type RequestLineRecord,
 } from '@peopleforge/db';
-import { permissionsOfPrincipal, scopeOf, type Principal } from '../../auth/principal.js';
+import {
+  displayNameOf,
+  permissionsOfPrincipal,
+  scopeOf,
+  type Principal,
+} from '../../auth/principal.js';
 import type { DomainError } from '../../errors/domain-errors.js';
 import {
   ConflictError,
@@ -245,12 +250,9 @@ function toDto(record: IncrementRequestRecord): IncrementRequest {
   };
 }
 
-/**
- * How people read who acted: the identity provider's display name, else the username, else the
- * ID; at most 200 characters (what the database keeps).
- */
+/** How people read who acted (the caller's display name, ≤ 200 characters). */
 export function actorName(caller: Principal): string {
-  return (caller.name ?? caller.username ?? caller.userId).slice(0, 200);
+  return displayNameOf(caller);
 }
 
 /** Who hears about a submission (R1-07): the submitter, and every Sirius HR reviewer. */

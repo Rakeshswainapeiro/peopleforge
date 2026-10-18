@@ -187,7 +187,15 @@ test('Sirius HR reviewers are notified and can open the submitted request', asyn
   // Sirius HR can't raise requests.
   await expect(page.getByRole('link', { name: 'New increment request' })).toHaveCount(0);
   // Each employee's own status: waiting for Sirius HR's review.
-  await expect(page.getByRole('row', { name: /Mariam Saleh/u })).toContainText('To review');
+  await expect(
+    page
+      .getByRole('table', { name: `Employees in ${reference}` })
+      .getByRole('row', { name: /Mariam Saleh/u }),
+  ).toContainText('To review');
+  // The History says who submitted it [R1-15].
+  await expect(page.getByRole('table', { name: `History of ${reference}` })).toContainText(
+    'Submitted to Sirius HR',
+  );
   expect(errors).toEqual([]);
 });
 

@@ -4,6 +4,17 @@ All notable changes are recorded here. Format: [Keep a Changelog](https://keepac
 
 ## [Unreleased]
 
+### Added — slice S6: reports, request history and the audit trail (R1-14, R1-15)
+
+- **Reports** (`/reports`): RP-01, the increment status report, with the dashboard's filters (period, subsidiary for Sirius HR, status, search), a preview and **Download Excel** / **Download PDF**. The Excel file has Summary, Requests and Employees sheets (status, proposed and approved %, increase, turnaround time in calendar days) and opens cleanly in Excel; the PDF is A4 landscape with page numbers and Arabic-capable fonts. Files are in the reader's language with dates in Dubai time; text cells are protected against formula injection. Every download is recorded in the audit trail with the filters (never the rows).
+- **History** on every request's page: what happened, who did it and when, newest first, in words ("Yusuf Karim returned to the subsidiary", "C3 verified for Aisha Rahman"). Subsidiaries see their own requests' history.
+- **Audit trail** (`/audit`, Sirius HR reviewers and admins): every recorded action with search, **From / To** dates and "Only {name}" to see one person's actions.
+- The trail now records the actor's name (migration `0011_history_reports`). API: `GET /reports/increment-requests`, `GET /increment-requests/{id}/history`, `GET /audit`. OpenAPI 0.11.0.
+
+### Security — slice S6
+
+- RP-01 needs increment-request and compensation access as well as the report permission: an admin (who configures, but must not see pay) is refused (403). The web app shows executives and admins the coming group reports instead.
+
 ### Added — slice S5b: questions and answers per employee (R1-08)
 
 - **Questions and answers** on every submitted employee's page: Sirius HR reviewers ask, the subsidiary's HR answers, in a thread that shows who wrote what and when, and who has to answer next ("Waiting for your answer" / "Waiting for Sirius HR"). Read-only once the request is decided; executives read only.

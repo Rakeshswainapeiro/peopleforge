@@ -65,11 +65,14 @@ export async function callApi<T>(
   return apiRequest(apiConfig(), bearer, path, schema, init);
 }
 
-/** Downloads a file from the API as the signed-in user (the token stays server-side). */
-export async function downloadFromApi(path: string): Promise<DownloadResult> {
+/**
+ * Downloads a file from the API as the signed-in user (the token stays server-side). Reports
+ * pass a longer timeout: large exports may take up to 60 s (NFR-PERF-01).
+ */
+export async function downloadFromApi(path: string, timeoutMs?: number): Promise<DownloadResult> {
   const bearer = await getProviderAccessToken(getAuth(), await headers());
   if (bearer === null) return { kind: 'unauthenticated' };
-  return apiDownload(apiConfig(), bearer, path);
+  return apiDownload(apiConfig(), bearer, path, timeoutMs);
 }
 
 /**

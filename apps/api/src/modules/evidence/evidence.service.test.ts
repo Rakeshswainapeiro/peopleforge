@@ -68,7 +68,7 @@ describe('EvidenceService.upload [R1-04]', () => {
     expect(String(key).startsWith(`evidence/${SUB_A}/`)).toBe(true);
     expect([body, mediaType]).toEqual([SAMPLE_PDF, 'application/pdf']);
     expect(repository.addEvidence).toHaveBeenCalledWith(
-      { userId: 'alpha', kind: 'entity', entityIds: [SUB_A] },
+      { userId: 'alpha', userName: 'Alpha HR', kind: 'entity', entityIds: [SUB_A] },
       REQUEST_ID,
       expect.objectContaining({
         lineId: LINE_2,
@@ -260,7 +260,7 @@ describe('EvidenceService.download [R1-04, NFR-SEC-01]', () => {
       mediaType: 'application/pdf',
     });
     expect(repository.recordAction).toHaveBeenCalledWith(
-      { userId: 'alpha', kind: 'entity', entityIds: [SUB_A] },
+      { userId: 'alpha', userName: 'Alpha HR', kind: 'entity', entityIds: [SUB_A] },
       {
         action: 'evidence.downloaded',
         entityId: SUB_A,
@@ -294,7 +294,7 @@ describe('EvidenceService.remove', () => {
     const { repository, service } = setup();
     await service.remove(alphaHr, REQUEST_ID, EVIDENCE_ID);
     expect(repository.removeEvidence).toHaveBeenCalledWith(
-      { userId: 'alpha', kind: 'entity', entityIds: [SUB_A] },
+      { userId: 'alpha', userName: 'Alpha HR', kind: 'entity', entityIds: [SUB_A] },
       REQUEST_ID,
       EVIDENCE_ID,
     );

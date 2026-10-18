@@ -211,6 +211,8 @@ export interface AuditLogTable {
   subject_id: string;
   details: ColumnType<Record<string, unknown>, string | undefined, never>;
   correlation_id: string | null;
+  /** The actor's display name at the time, from the transaction (0011); null before 0011. */
+  actor_name: ColumnType<string | null, never, never>;
 }
 
 export interface NotificationTable {

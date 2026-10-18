@@ -24,7 +24,7 @@ import {
 } from '../../test-support/increment-requests.js';
 import { actorName, IncrementRequestService, toDomainError } from './increment-request.service.js';
 
-const scopeA = { userId: 'alpha', kind: 'entity', entityIds: [SUB_A] };
+const scopeA = { userId: 'alpha', userName: 'Alpha HR', kind: 'entity', entityIds: [SUB_A] };
 
 describe('IncrementRequestService', () => {
   it('returns a request with derived figures and totals [R1-02]', async () => {
@@ -166,7 +166,7 @@ describe('IncrementRequestService', () => {
     expect(repository.searchEmployees.mock.calls).toEqual([
       [scopeA, { entityId: SUB_A, limit: 50 }],
       [
-        { userId: 'reviewer', kind: 'group' },
+        { userId: 'reviewer', userName: 'Reviewer', kind: 'group' },
         { entityId: SUB_B, limit: 50, search: 'omar', excludeRequestId: REQUEST_ID },
       ],
     ]);

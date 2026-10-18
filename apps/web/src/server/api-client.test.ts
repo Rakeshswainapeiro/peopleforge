@@ -152,6 +152,9 @@ describe('apiDownload', () => {
     const [url, init] = fetchImpl.mock.calls[0] ?? [];
     expect(url).toBe('http://api.test/f');
     expect(new Headers(init?.headers).get('authorization')).toBe('Bearer eyJ.token');
+    // A longer timeout for reports: still a deadline, never an unbounded wait.
+    await apiDownload(config, 'eyJ.token', '/report', 60_000);
+    expect(fetchImpl.mock.calls[1]?.[1]?.signal).toBeInstanceOf(AbortSignal);
   });
 
   it.each([

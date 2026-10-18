@@ -7,6 +7,11 @@ onlyBuiltDependencies:
   - esbuild
   - sharp
 
+# exceljs 4.4.0 pins uuid 8 (GHSA-w5hq-g745-h8pq, moderate); it only calls `v4()`, which uuid 11
+# keeps. Patched version forced here; remove when exceljs updates its dependency.
+overrides:
+  exceljs>uuid: 11.1.1
+
 # Audit exceptions — each must be justified and dated in SECURITY.md ("Accepted advisories").
 # CI fails on any other high/critical finding.
 auditConfig:

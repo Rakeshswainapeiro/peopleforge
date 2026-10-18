@@ -254,7 +254,7 @@ describe('status history and audit trail are append-only [R1-15, NFR-AUD-01]', (
     ).rejects.toThrow(/permission denied/);
   });
 
-  it('lets people record only their own actions, in their own scope, and only Sirius read', async () => {
+  it('lets people record only their own actions, in their own scope, and read only their own', async () => {
     await repo.recordAction(alpha, {
       action: 'evidence.downloaded',
       entityId: SUB_A.id,
@@ -285,10 +285,12 @@ describe('status history and audit trail are append-only [R1-15, NFR-AUD-01]', (
         subjectId: 'f-2',
       }),
     ).rejects.toThrow(/row-level security/);
+    // A subsidiary reads only its own entity's trail (its requests' history, migration 0011).
     const seenByAlpha = await withScope(handle.db, alpha, (trx) =>
-      trx.selectFrom('audit.audit_log').select('id').execute(),
+      trx.selectFrom('audit.audit_log').select('entity_id').execute(),
     );
-    expect(seenByAlpha).toEqual([]);
+    expect(seenByAlpha.length).toBeGreaterThan(0);
+    expect(seenByAlpha.every((row) => row.entity_id === SUB_A.id)).toBe(true);
     const seenBySirius = await withScope(handle.db, reviewer, (trx) =>
       trx
         .selectFrom('audit.audit_log')

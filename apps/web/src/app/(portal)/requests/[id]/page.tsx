@@ -11,6 +11,7 @@ import {
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { z } from 'zod';
+import { HistoryTable } from '@/components/audit/history-table';
 import { RequestEmployeesTable } from '@/components/requests/request-employees-table';
 import { getRequestLocale } from '@/i18n/request-locale';
 import { createTranslator } from '@/i18n/translator';
@@ -24,11 +25,12 @@ import {
   submittedBanner,
 } from '@/lib/request-detail-view';
 import { formatDate } from '@/lib/format';
+import { historyRows } from '@/lib/history-view';
 import { statusBadge } from '@/lib/request-status';
 import { requestFigures } from '@/lib/request-figures';
 import { markStateLabels } from '@/lib/request-view';
 import { editRequestHref, employeeStatusHref, requestHref } from '@/lib/routes';
-import { getRequest } from '@/server/increment-requests';
+import { getHistory, getRequest } from '@/server/increment-requests';
 import { requireViewer } from '@/server/session';
 
 interface RequestDetailPageProps {
@@ -51,7 +53,7 @@ export default async function RequestDetailPage({ params, searchParams }: Reques
   const t = createTranslator(locale);
   const query = await searchParams;
 
-  const result = await getRequest(id);
+  const [result, history] = await Promise.all([getRequest(id), getHistory(id)]);
   if (result.kind === 'unauthenticated') redirect('/session-ended');
   if (result.kind === 'error' && result.status === 404) notFound();
   if (result.kind !== 'ok') throw new Error('Increment request API unavailable');
@@ -216,6 +218,30 @@ export default async function RequestDetailPage({ params, searchParams }: Reques
           />
         </div>
       </Card>
+
+      {/* Secondary: if the trail can't be read just now, the request still shows. */}
+      {history.kind === 'ok' ? (
+        <Card className="mt-6" label={t('history.title')}>
+          <div id="history" className="scroll-mt-6">
+            <CardHeader title={t('history.title')} description={t('history.intro')} />
+          </div>
+          <div className="px-6 pt-2 pb-6">
+            {history.data.length === 0 ? (
+              <p className="text-sm text-ink-muted">{t('history.empty')}</p>
+            ) : (
+              <HistoryTable
+                rows={historyRows(history.data, request, locale, t)}
+                labels={{
+                  caption: t('history.caption', { reference: request.reference }),
+                  when: t('history.colWhen'),
+                  who: t('history.colWho'),
+                  what: t('history.colWhat'),
+                }}
+              />
+            )}
+          </div>
+        </Card>
+      ) : null}
     </>
   );
 }

@@ -160,7 +160,10 @@ function all(conditions: readonly Condition[]): Condition {
   return sql<boolean>`(${sql.join(conditions, sql` and `)})`;
 }
 
-function lineConditions(filter: DashboardFilter & { requestId?: string | undefined }): Condition {
+/** Every condition on an employee row (alias `l`, its request `r`): filters, search, request. */
+export function lineConditions(
+  filter: DashboardFilter & { requestId?: string | undefined },
+): Condition {
   const conditions = [
     sql<boolean>`l.deleted_at is null`,
     ...requestConditions(filter),

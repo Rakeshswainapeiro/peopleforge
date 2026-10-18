@@ -97,12 +97,13 @@ export async function apiDownload(
   config: ApiClientConfig,
   accessToken: string,
   path: string,
+  timeoutMs = config.timeoutMs,
 ): Promise<DownloadResult> {
   const fetchImpl = config.fetch ?? fetch;
   try {
     const response = await fetchImpl(`${config.apiUrl}${path}`, {
       headers: { authorization: `Bearer ${accessToken}` },
-      signal: AbortSignal.timeout(config.timeoutMs),
+      signal: AbortSignal.timeout(timeoutMs),
       cache: 'no-store',
     });
     if (response.ok) return { kind: 'ok', response };

@@ -152,3 +152,15 @@ export {
   type PostMessage,
   type Thread,
 } from './conversations.js';
+export {
+  AuditEventSchema,
+  AuditTrailPageSchema,
+  AuditTrailQuerySchema,
+  IncrementReportQuerySchema,
+  ReportFormatSchema,
+  type AuditEvent,
+  type AuditTrailPage,
+  type AuditTrailQuery,
+  type IncrementReportQuery,
+  type ReportFormat,
+} from './reports.js';

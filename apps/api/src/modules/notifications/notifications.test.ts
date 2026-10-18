@@ -62,7 +62,7 @@ describe('NotificationService [R1-07, R1-13]', () => {
       pageSize: 10,
     });
     expect(repo.list).toHaveBeenCalledWith(
-      { userId: 'reviewer', kind: 'group' },
+      { userId: 'reviewer', userName: 'Reviewer', kind: 'group' },
       { roles: reviewer.roles, filter: 'action_needed', limit: 10, offset: 10 },
     );
     // A kind this version doesn't know is left out.
@@ -95,6 +95,7 @@ describe('NotificationService [R1-07, R1-13]', () => {
       [
         {
           userId: 'alpha',
+          userName: 'Alpha HR',
           kind: 'entity',
           entityIds: alphaHr.scope === 'entity' ? alphaHr.entityIds : [],
         },
@@ -103,6 +104,7 @@ describe('NotificationService [R1-07, R1-13]', () => {
       [
         {
           userId: 'alpha',
+          userName: 'Alpha HR',
           kind: 'entity',
           entityIds: alphaHr.scope === 'entity' ? alphaHr.entityIds : [],
         },

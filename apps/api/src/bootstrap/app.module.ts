@@ -13,6 +13,8 @@ import type {
   NotificationRepository,
   ReviewRepository,
   ConversationRepository,
+  ReportRepository,
+  AuditTrailRepository,
 } from '@peopleforge/db';
 import type { MalwareScanner, ObjectStore } from '@peopleforge/integrations';
 import { AuthenticateMiddleware, SiriusAuthModule } from '@sirius/auth-nest';
@@ -42,11 +44,19 @@ import {
 } from '../modules/increment-requests/increment-requests.controller.js';
 import { ReviewService } from '../modules/increment-requests/review.service.js';
 import { ConversationService } from '../modules/conversations/conversation.service.js';
+import { ReportService } from '../modules/reports/report.service.js';
+import { ReportsController } from '../modules/reports/reports.controller.js';
+import { AuditService } from '../modules/audit/audit.service.js';
+import {
+  AuditTrailController,
+  RequestHistoryController,
+} from '../modules/audit/audit.controller.js';
 import {
   ConversationsController,
   MessagesController,
 } from '../modules/conversations/conversations.controller.js';
 import {
+  AUDIT_SERVICE,
   CONVERSATION_SERVICE,
   ENTITY_DIRECTORY,
   ENV,
@@ -56,6 +66,7 @@ import {
   INCREMENT_REQUEST_SERVICE,
   LOGGER,
   READINESS_CHECKS,
+  REPORT_SERVICE,
   REVIEW_SERVICE,
   SHUTDOWN_STATE,
 } from './tokens.js';
@@ -81,6 +92,10 @@ export interface AppDependencies {
   review: ReviewRepository;
   /** Questions and answers per employee (R1-08). */
   conversations: ConversationRepository;
+  /** Report data, every read logged as a download (R1-14). */
+  reports: ReportRepository;
+  /** The audit trail, read side (R1-15). */
+  auditTrail: AuditTrailRepository;
   /** The caller's in-app notifications (R1-07, R1-13). */
   notifications: NotificationRepository;
   readinessChecks: readonly ReadinessCheck[];
@@ -115,6 +130,9 @@ export class AppModule implements NestModule {
         ReviewQueueController,
         MessagesController,
         ConversationsController,
+        ReportsController,
+        RequestHistoryController,
+        AuditTrailController,
         EvidenceController,
         NotificationsController,
       ],
@@ -125,6 +143,8 @@ export class AppModule implements NestModule {
         { provide: INCREMENT_REQUEST_SERVICE, useValue: requests },
         { provide: DASHBOARD_SERVICE, useValue: new DashboardService(deps.dashboard) },
         { provide: REVIEW_SERVICE, useValue: new ReviewService(requests, deps.review) },
+        { provide: REPORT_SERVICE, useValue: new ReportService(requests, deps.reports) },
+        { provide: AUDIT_SERVICE, useValue: new AuditService(requests, deps.auditTrail) },
         {
           provide: CONVERSATION_SERVICE,
           useValue: new ConversationService(requests, deps.conversations),

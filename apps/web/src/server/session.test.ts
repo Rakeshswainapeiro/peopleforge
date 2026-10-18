@@ -129,7 +129,11 @@ describe('downloadFromApi', () => {
       { apiUrl: 'http://api.test', timeoutMs: 2000 },
       'eyJ.token',
       '/api/v1/f',
+      undefined,
     );
+    // Reports allow longer (NFR-PERF-01).
+    await downloadFromApi('/api/v1/report', 60_000);
+    expect(vi.mocked(apiDownload).mock.calls[1]?.[3]).toBe(60_000);
     vi.mocked(getProviderAccessToken).mockResolvedValue(null);
     await expect(downloadFromApi('/x')).resolves.toEqual({ kind: 'unauthenticated' });
   });
