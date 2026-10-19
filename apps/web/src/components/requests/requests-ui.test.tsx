@@ -73,7 +73,10 @@ function table(editable = true) {
         ]}
         labels={tableLabels(t)}
         messages={saveMessages(t)}
-        footer={<p>Totals</p>}
+        totals={[
+          { id: 'total-employees', label: 'Employees', value: '2' },
+          { id: 'total-increase', label: 'Total increase', value: 'AED 1,718 / month' },
+        ]}
       />
     </DraftForm>,
   );
@@ -84,6 +87,13 @@ beforeEach(() => {
 });
 
 describe('ProposalsTable', () => {
+  it('shows the totals as data it renders itself (no server markup in a client list)', () => {
+    table();
+    const totals = screen.getAllByRole('term')[0]?.closest('dl');
+    expect(totals).toHaveTextContent('Employees2Total increaseAED 1,718 / month');
+    expect(screen.getByTestId('total-increase')).toHaveTextContent('AED 1,718 / month');
+  });
+
   it('renders an editable row per employee, labelled for screen readers', () => {
     table();
     expect(
@@ -103,7 +113,7 @@ describe('ProposalsTable', () => {
     ).toBeChecked();
     // No name/value on the button: React overrides them; the line ID is bound to the action.
     expect(screen.getByRole('button', { name: 'Remove Omar Haddad' })).not.toHaveAttribute('value');
-    expect(screen.getByText('Totals')).toBeInTheDocument();
+    expect(screen.getByTestId('total-employees')).toHaveTextContent('2');
   });
 
   it('makes "Save draft" the default button, so Enter never removes an employee', () => {
@@ -213,7 +223,7 @@ describe('ProposalsTable while fixing returned employees [R1-08]', () => {
           ]}
           labels={tableLabels(t)}
           messages={saveMessages(t)}
-          footer={null}
+          totals={[]}
         />
       </DraftForm>,
     );

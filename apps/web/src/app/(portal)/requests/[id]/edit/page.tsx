@@ -21,7 +21,7 @@ import {
   readyView,
   saveMessages,
   tableLabels,
-  totalsView,
+  totalItems,
 } from '@/lib/request-view';
 import { decisionSummary } from '@/lib/review-view';
 import { requestHref } from '@/lib/routes';
@@ -66,7 +66,6 @@ export default async function EditRequestPage({ params, searchParams }: EditRequ
     ? { kind: 'skipped' as const }
     : await searchEmployees(request.entity.id, request.id);
   const entity = entityName(request.entity, locale);
-  const totals = totalsView(request, locale, t);
   const error = parseErrorKey(query.error);
   // The employee being assessed: the one asked for, else the first (that may change).
   const assessable = linesToSend(request);
@@ -147,26 +146,7 @@ export default async function EditRequestPage({ params, searchParams }: EditRequ
             rows={proposalRows(request, locale, t)}
             labels={tableLabels(t)}
             messages={saveMessages(t)}
-            footer={
-              <dl className="flex flex-wrap gap-x-8 gap-y-2 text-sm">
-                <div className="flex gap-2">
-                  <dt className="text-ink-muted">{t('request.totalsEmployees')}</dt>
-                  <dd className="font-semibold tabular-nums">{totals.employees}</dd>
-                </div>
-                <div className="flex gap-2">
-                  <dt className="text-ink-muted">{t('request.totalsIncrease')}</dt>
-                  <dd className="font-semibold tabular-nums" data-testid="total-increase">
-                    {totals.increase}
-                  </dd>
-                </div>
-                <div className="flex gap-2">
-                  <dt className="text-ink-muted">{t('request.totalsAverage')}</dt>
-                  <dd className="font-semibold tabular-nums" data-testid="average-percent">
-                    {totals.average}
-                  </dd>
-                </div>
-              </dl>
-            }
+            totals={totalItems(request, locale, t)}
           />
         </div>
       </Card>

@@ -105,10 +105,14 @@ Reminders are checked by the worker every 15 minutes (`REMINDER_INTERVAL_MS` in 
 
    ```bash
    docker exec -i sirius-local-postgres-1 psql -U postgres -d peopleforge -c \
-     "UPDATE increments.increment_request SET submitted_at = now() - interval '3 days' WHERE reference = 'REF2';"
+     "UPDATE increments.increment_request SET submitted_at = now() - interval '3 days'
+      WHERE id = (SELECT id FROM increments.increment_request
+                   WHERE status IN ('submitted', 'under_review') AND deleted_at IS NULL
+                   ORDER BY submitted_at DESC LIMIT 1)
+      RETURNING reference;"
    ```
 
-   Within a minute `pf.reviewer` gets "1 employee from SUB-A has waited more than 2 days for review." (Action needed) and Mailpit "Reminder: REF2 from SUB-A is waiting for review". The Review queue shows Mariam under _Past reminder_.
+   This ages the most recently submitted request (REF2) and prints its reference; `UPDATE 0` means nothing is submitted and waiting. Within a minute `pf.reviewer` gets "1 employee from SUB-A has waited more than 2 days for review." (Action needed) and Mailpit "Reminder: REF2 from SUB-A is waiting for review". The Review queue shows Mariam under _Past reminder_.
 
 3. Deadline (to whoever prepares a draft): as `pf.alpha.hr` start a draft with Mariam (don't submit), then
 

@@ -4,6 +4,11 @@ All notable changes are recorded here. Format: [Keep a Changelog](https://keepac
 
 ## [Unreleased]
 
+### Fixed — draft editor key warning; reminder test SQL
+
+- The draft editor no longer logs "Each child in a list should have a unique key prop" (`ProposalsTable`) in development: the totals under the table are now passed as data and rendered by the table, instead of server-built markup inside the client component.
+- Manual test flow: the "waiting for review" reminder step ages the latest submitted request itself, instead of a `REF2` placeholder that matched nothing (`UPDATE 0`).
+
 ### Added — slice S7b: TAT and back-and-forth analytics, RP-02 (R1-10 … R1-12, R1-14)
 
 - **Analytics** (`/analytics`, Sirius HR): **Turnaround time** — average TAT of decided requests, open requests and their age, the longest open one; TAT by criterion (from when it started waiting for Sirius HR to its verification), by subsidiary and by request — and **Back-and-forth** — employees returned and how long they stayed with the subsidiary, questions and how long answers took, by subsidiary and by request. Filters: period and subsidiary.

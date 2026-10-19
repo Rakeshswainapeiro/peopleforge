@@ -66,8 +66,18 @@ export interface ProposalsTableProps {
   labels: ProposalsTableLabels;
   /** Translated texts for the error keys the save can return, as [key, text] pairs. */
   messages: readonly (readonly [string, string])[];
-  /** The totals line under the table. */
-  footer: React.ReactNode;
+  /**
+   * The totals under the table, as data rendered here: server-built markup passed into this
+   * client list made React warn about keys in development (fixed 2026-10-19).
+   */
+  totals: readonly TotalItem[];
+}
+
+/** One figure under the table; `id` is also its test ID (e.g. `total-increase`). */
+export interface TotalItem {
+  id: string;
+  label: string;
+  value: string;
 }
 
 /**
@@ -82,7 +92,7 @@ export function ProposalsTable({
   rows,
   labels,
   messages,
-  footer,
+  totals,
 }: ProposalsTableProps) {
   const { formId, state, pending } = useDraftForm();
   const texts = new Map(messages);
@@ -226,7 +236,16 @@ export function ProposalsTable({
         </TBody>
       </Table>
       <div className="mt-4 flex flex-wrap items-center justify-between gap-4 border-t border-line pt-4">
-        {footer}
+        <dl className="flex flex-wrap gap-x-8 gap-y-2 text-sm">
+          {totals.map((item) => (
+            <div key={item.id} className="flex gap-2">
+              <dt className="text-ink-muted">{item.label}</dt>
+              <dd className="font-semibold tabular-nums" data-testid={item.id}>
+                {item.value}
+              </dd>
+            </div>
+          ))}
+        </dl>
         {pending ? (
           <span role="status" className="flex items-center gap-2 text-xs text-ink-muted">
             <Spinner />

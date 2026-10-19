@@ -11,7 +11,11 @@ import type {
   CriteriaEditorLabels,
   CriterionCardView,
 } from '@/components/requests/criteria-editor';
-import type { ProposalRowView, ProposalsTableLabels } from '@/components/requests/proposals-table';
+import type {
+  ProposalRowView,
+  ProposalsTableLabels,
+  TotalItem,
+} from '@/components/requests/proposals-table';
 import type { ReadyPanelProps } from '@/components/requests/ready-panel';
 import type { SubmitDialogView } from '@/components/requests/submit-control';
 import type { MessageKey, Translate } from '@/i18n/translator';
@@ -337,6 +341,16 @@ export function totalsView(request: IncrementRequest, locale: Locale, t: Transla
         ? t('request.notSet')
         : formatPercent(totals.averagePercent, locale),
   };
+}
+
+/** The figures under the employees table: count, total increase per month, average. */
+export function totalItems(request: IncrementRequest, locale: Locale, t: Translate): TotalItem[] {
+  const totals = totalsView(request, locale, t);
+  return [
+    { id: 'total-employees', label: t('request.totalsEmployees'), value: totals.employees },
+    { id: 'total-increase', label: t('request.totalsIncrease'), value: totals.increase },
+    { id: 'average-percent', label: t('request.totalsAverage'), value: totals.average },
+  ];
 }
 
 export function tableLabels(t: Translate): ProposalsTableLabels {
