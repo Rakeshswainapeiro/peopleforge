@@ -60,9 +60,11 @@ import { AnalyticsService } from '../modules/analytics/analytics.service.js';
 import { SettingsService } from '../modules/settings/settings.service.js';
 import { DataQualityService } from '../modules/group-data/data-quality.service.js';
 import {
+  GroupDashboardsController,
   GroupDataController,
   GroupSettingsController,
 } from '../modules/group-data/group-data.controller.js';
+import { GroupDashboardService } from '../modules/group-data/dashboard.service.js';
 import { GroupDataService } from '../modules/group-data/group-data.service.js';
 import {
   AuditTrailController,
@@ -74,6 +76,7 @@ import {
 } from '../modules/conversations/conversations.controller.js';
 import {
   DATA_QUALITY_SERVICE,
+  GROUP_DASHBOARD_SERVICE,
   GROUP_DATA_SERVICE,
   AUDIT_SERVICE,
   SETTINGS_SERVICE,
@@ -166,6 +169,7 @@ export class AppModule implements NestModule {
         AnalyticsController,
         TatReportController,
         GroupDataController,
+        GroupDashboardsController,
         GroupSettingsController,
         EvidenceController,
         NotificationsController,
@@ -210,6 +214,14 @@ export class AppModule implements NestModule {
           }),
         },
         { provide: DATA_QUALITY_SERVICE, useValue: new DataQualityService(deps.dataQuality) },
+        {
+          provide: GROUP_DASHBOARD_SERVICE,
+          useValue: new GroupDashboardService({
+            repository: deps.groupData,
+            quality: deps.dataQuality,
+            directory: deps.directory,
+          }),
+        },
         { provide: READINESS_CHECKS, useValue: deps.readinessChecks },
         { provide: SHUTDOWN_STATE, useValue: { isShuttingDown: deps.isShuttingDown } },
         {

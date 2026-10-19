@@ -43,9 +43,9 @@ export function UploadsTable({ rows, labels }: UploadsTableProps) {
           <Th>{labels.upload}</Th>
           <Th>{labels.month}</Th>
           <Th>{labels.status}</Th>
-          <Th className="text-end">{labels.rows}</Th>
+          <Th align="end">{labels.rows}</Th>
           <Th>{labels.problems}</Th>
-          <Th className="text-end">{labels.flags}</Th>
+          <Th align="end">{labels.flags}</Th>
         </tr>
       </THead>
       <TBody>
@@ -143,7 +143,7 @@ export function EmployeesTable({ rows, labels }: EmployeesTableProps) {
           <Th>{labels.subsidiary}</Th>
           <Th>{labels.department}</Th>
           <Th>{labels.grade}</Th>
-          <Th className="text-end">{labels.salary}</Th>
+          <Th align="end">{labels.salary}</Th>
           <Th>{labels.status}</Th>
           <Th>{labels.version}</Th>
         </tr>

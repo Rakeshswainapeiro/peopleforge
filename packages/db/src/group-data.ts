@@ -164,6 +164,15 @@ export interface EmployeeQueryInput {
   offset: number;
 }
 
+/** One subsidiary's per-department figures for a month (dashboards, R2-05). */
+export interface SummaryRow {
+  entityId: string;
+  entityCode: string;
+  period: string;
+  department: string;
+  metrics: Record<string, unknown>;
+}
+
 export interface ExtractRow {
   record: SnapshotRecord;
   uploadedByName: string;
@@ -232,6 +241,11 @@ export interface GroupDataRepository {
   ) => Promise<{
     records: (SnapshotRecord & { uploadedByName: string; uploadedAt: Date })[];
   } | null>;
+  /** The stored per-department figures of the versions in use, `from`…`to` (R2-05). */
+  summaries: (
+    scope: Scope,
+    query: { from: string; to: string; entityId?: string | undefined },
+  ) => Promise<SummaryRow[]>;
   /** RP-08 rows; reading them is the extraction and is audited (R2-08, R2-13). */
   extract: (
     scope: Scope,
@@ -916,6 +930,30 @@ export function createGroupDataRepository(
             uploadedAt: row.uploaded_at,
           })),
         };
+      }),
+
+    summaries: (scope, query) =>
+      withScope(db, scope, async (trx) => {
+        const result = await sql<{
+          entity_id: string;
+          code: string;
+          period: string;
+          department: string;
+          metrics: Record<string, unknown>;
+        }>`
+          SELECT p.entity_id, e.code, to_char(p.period, 'YYYY-MM') AS period, p.department, p.metrics
+            FROM groupdata.period_summary p
+            JOIN core.entity e ON e.id = p.entity_id
+           WHERE p.period BETWEEN ${toDate(query.from)}::date AND ${toDate(query.to)}::date
+             ${query.entityId === undefined ? sql`` : sql`AND p.entity_id = ${query.entityId}`}
+           ORDER BY p.period, e.code, p.department`.execute(trx);
+        return result.rows.map((row) => ({
+          entityId: row.entity_id,
+          entityCode: row.code,
+          period: row.period,
+          department: row.department,
+          metrics: row.metrics,
+        }));
       }),
 
     extract: (scope, query, format) =>

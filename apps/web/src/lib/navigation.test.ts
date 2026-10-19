@@ -24,7 +24,21 @@ describe('visibleNavItems', () => {
     expect(items.map((item) => [item.href, item.label])).toEqual([
       ['/', 'nav.requests'],
       ['/notifications', 'nav.notifications'],
+      ['/executive', 'nav.executive'],
       ['/reports', 'nav.reports'],
+    ]);
+  });
+
+  it('shows the group dashboards to readers of employee data [DASH-D5, D6]', () => {
+    const items = visibleNavItems(['employee_data:read', 'employee_data:read_compensation']);
+    expect(items.map((item) => item.href)).toEqual([
+      '/',
+      '/notifications',
+      '/group/overview',
+      '/group/compensation',
+      '/group/employees',
+      '/group/uploads',
+      '/group/quality',
     ]);
   });
 

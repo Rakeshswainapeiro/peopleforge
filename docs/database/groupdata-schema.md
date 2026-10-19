@@ -93,7 +93,7 @@ PK `(entity_id, period)` → `upload_id`, `version`, `accepted_at`. Moves to eac
 
 ### `groupdata.period_summary` — dashboard aggregates (R2-05, NFR-PERF-01), Derived
 
-PK `(entity_id, period, department)`, `upload_id`, `metrics` jsonb: `headcount`, `joiners`, `leavers`, `female`, `male`, `otherGender`, `ageBands{under_25,25_34,35_44,45_54,55_plus,unknown}`, `grades{grade:{headcount, payroll{currency:amount}}}`, `payroll{currency:amount}`. Replaced with each accepted version; always recomputable from snapshots. Department totals only — never one person's pay (a department of one is still a total; D8 shows group totals only).
+PK `(entity_id, period, department)`, `upload_id`, `metrics` jsonb: `headcount`, `joiners`, `leavers`, `female`, `male`, `otherGender`, `ageBands{under_25,25_34,35_44,45_54,55_plus,unknown}`, `pay[{currency, grade, headcount, payroll}]` (monthly gross of those not left, per currency and grade; amounts are decimal strings). Read back through a schema; rows in another shape are ignored (S8–S9 rows: re-upload the month). Replaced with each accepted version; always recomputable from snapshots. Department totals only — never one person's pay (a department of one is still a total; D8 shows group totals only).
 
 ### `groupdata.anomaly_rule` — the rules (R2-10), Config
 

@@ -500,6 +500,22 @@ describe('employee records [R2-04, R2-05]', () => {
   });
 });
 
+describe('summaries [R2-05]', () => {
+  it('returns the stored figures of the versions in use, by month, isolated per subsidiary', async () => {
+    const all = await repo.summaries(admin, { from: '2026-06', to: '2026-08' });
+    expect(all.map((row) => [row.period, row.entityCode, row.department])).toEqual([
+      ['2026-06', SUB_A.code, 'Finance'],
+      ['2026-07', SUB_A.code, 'Finance'],
+      ['2026-08', SUB_C.code, 'Finance'],
+    ]);
+    expect(all[0]?.metrics).toEqual({ headcount: 1 });
+    expect(
+      await repo.summaries(admin, { from: '2026-08', to: '2026-08', entityId: SUB_A.id }),
+    ).toEqual([]);
+    expect(await repo.summaries(beta, { from: '2026-01', to: '2026-12' })).toEqual([]);
+  });
+});
+
 describe('raw extract [R2-08, RP-08]', () => {
   it('extracts the version in use, or every version, and audits it', async () => {
     const inUse = await repo.extract(

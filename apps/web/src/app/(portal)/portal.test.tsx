@@ -105,7 +105,7 @@ describe('portal shell', () => {
       within(nav)
         .getAllByRole('link')
         .map((link) => link.textContent),
-    ).toEqual(['Home', 'Notifications', 'Reports']);
+    ).toEqual(['Home', 'Notifications', 'Executive view', 'Reports']);
     expect(screen.getByText('Signed in as Reviewer Test')).toBeInTheDocument();
     expect(screen.getByText('Sirius HR Reviewer · All subsidiaries')).toBeInTheDocument();
     expect(screen.getByText('RT')).toHaveAttribute('aria-hidden', 'true');

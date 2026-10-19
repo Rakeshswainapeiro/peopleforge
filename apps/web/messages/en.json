@@ -21,7 +21,10 @@
     "groupUpload": "Upload data",
     "groupUploads": "Uploads",
     "groupQuality": "Data quality",
-    "groupExtract": "Raw data extract"
+    "groupExtract": "Raw data extract",
+    "groupOverview": "Group overview",
+    "groupCompensation": "Compensation",
+    "executive": "Executive view"
   },
   "home": {
     "heading": "Welcome",
@@ -1355,6 +1358,88 @@
       "rulesIntro": "Checked on every accepted upload. Flags go to the uploader to resolve.",
       "threshold": "Threshold",
       "months": "months"
+    }
+  },
+  "groupDashboards": {
+    "colLabel": "Item",
+    "colValue": "Value",
+    "noData": "No data",
+    "emptyTitle": "No data for this month yet",
+    "emptyBody": "Figures appear once a subsidiary's upload for the month is accepted.",
+    "headcount": "Headcount",
+    "fromLastMonth": "{count} last month",
+    "joiners": "Joiners",
+    "leavers": "Leavers",
+    "movement": "Joiners / leavers",
+    "turnover": "Turnover {percent}",
+    "femaleShare": "Female share",
+    "ofHeadcount": "{count} of {total}",
+    "trend": "Headcount, last 12 months",
+    "bySubsidiary": "Headcount by subsidiary",
+    "byDepartment": "Headcount by department",
+    "gender": "Gender",
+    "age": "Age",
+    "byGrade": "Headcount by grade",
+    "genders": {
+      "female": "Female",
+      "male": "Male",
+      "other": "Other / not stated"
+    },
+    "ageBands": {
+      "under_25": "Under 25",
+      "25_34": "25–34",
+      "35_44": "35–44",
+      "45_54": "45–54",
+      "55_plus": "55+",
+      "unknown": "Unknown"
+    },
+    "buckets": {
+      "under_3": "< 3%",
+      "3_5": "3–5%",
+      "5_8": "5–8%",
+      "8_10": "8–10%",
+      "10_plus": "10%+"
+    },
+    "overview": {
+      "heading": "Group overview",
+      "intro": "{period}: the data in use for {count} of {total} subsidiaries."
+    },
+    "compensation": {
+      "heading": "Compensation trends",
+      "intro": "{period}: monthly gross payroll and averages from the data in use, and this year's approved increments.",
+      "currency": "Pay in {currency}",
+      "payroll": "Monthly payroll ({currency})",
+      "change": "Change from last month",
+      "noPrevious": "No data for last month",
+      "fromAmount": "From {amount}",
+      "average": "Average monthly salary",
+      "trend": "Monthly payroll ({currency}), last 12 months",
+      "byGrade": "Average salary by grade ({currency})",
+      "byGradeNote": "The bar is the grade's band; the mark is the average.",
+      "grade": "Grade",
+      "band": "Band",
+      "noBand": "No band",
+      "incrementsTitle": "Approved increments",
+      "incrementsIntro": "{year}: {count} employees approved in the Increment Portal, {percent} on average.",
+      "incrementsNone": "{year}: no increments approved in the Increment Portal yet.",
+      "distribution": "Approved increments by size",
+      "costImpact": "Cost of approved increments",
+      "employees": "Employees",
+      "monthly": "Monthly increase",
+      "annual": "Annual cost",
+      "currencies": "Amounts in different currencies are shown separately and never added together."
+    },
+    "executive": {
+      "eyebrow": "Executive / IHC view",
+      "heading": "Sirius Group HR · {period}",
+      "intro": "Group totals from the data in use for {count} of {total} subsidiaries. No names and no individual pay.",
+      "print": "Print / Save as PDF",
+      "openFlags": "Open data flags",
+      "change": "{percent} from last month",
+      "bySubsidiary": "By subsidiary",
+      "payroll": "Monthly payroll",
+      "notUploaded": "Not uploaded",
+      "footnote": "Totals are computed from each subsidiary's accepted monthly upload. Prepared in PeopleForge."
     }
   }
 }

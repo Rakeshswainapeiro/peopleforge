@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { snapshot } from '../../test-support/group-data.js';
-import { ageBand, ageOn, summarise } from './summary.js';
+import { ageBand, ageOn, DepartmentMetricsSchema, summarise } from './summary.js';
 
 // Per department figures stored with each accepted version (R2-05, DASH-D5/D6, ADR-015).
 
@@ -47,14 +47,25 @@ describe('summarise [R2-05]', () => {
       male: 1,
       otherGender: 1,
       ageBands: { under_25: 0, '25_34': 0, '35_44': 2, '45_54': 0, '55_plus': 0, unknown: 1 },
-      grades: {
-        G5: { headcount: 2, payroll: { AED: '14200.00', USD: '5000.00' } },
-        G6: { headcount: 1, payroll: { AED: '16800.50' } },
-      },
-      payroll: { AED: '31000.50', USD: '5000.00' },
+      pay: [
+        { currency: 'AED', grade: 'G5', headcount: 1, payroll: '14200.00' },
+        { currency: 'AED', grade: 'G6', headcount: 1, payroll: '16800.50' },
+        { currency: 'USD', grade: 'G5', headcount: 1, payroll: '5000.00' },
+      ],
     });
     // Joined after the month: not a joiner of September.
     expect(summary[0]?.metrics).toMatchObject({ headcount: 1, joiners: 0 });
+  });
+
+  it('adds employees of the same currency and grade into one cell', () => {
+    const [finance] = summarise(
+      [snapshot({ employeeNumber: 'A' }), snapshot({ employeeNumber: 'B', grossSalary: '800.25' })],
+      '2026-09',
+    );
+    expect(finance?.metrics.pay).toEqual([
+      { currency: 'AED', grade: 'G5', headcount: 2, payroll: '15000.25' },
+    ]);
+    expect(DepartmentMetricsSchema.parse(finance?.metrics)).toEqual(finance?.metrics);
   });
 
   it('is empty for no records', () => {

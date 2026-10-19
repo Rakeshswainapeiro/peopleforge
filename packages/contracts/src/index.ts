@@ -188,3 +188,4 @@ export {
 } from './analytics.js';
 export * from './group-data.js';
 export * from './data-quality.js';
+export * from './group-analytics.js';

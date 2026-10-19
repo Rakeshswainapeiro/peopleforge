@@ -181,6 +181,32 @@ test('the employee data shows the version in use, with its history', async ({ pa
   await expect(page.getByRole('list', { name: 'Versions' })).toContainText('14200.00');
 });
 
+test('the dashboards show the subsidiary its month in use [DASH-D5, D6]', async ({ page }) => {
+  await signIn(page, 'alphaHr');
+  await page.goto(`/group/overview?period=${monthBefore(1)}`);
+  await expect(page.getByRole('heading', { level: 1, name: 'Group overview' })).toBeVisible();
+  await expect(page.getByText(/the data in use for 1 of 1 subsidiaries\.$/u)).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Headcount by department' })).toBeVisible();
+
+  await page.goto(`/group/compensation?period=${monthBefore(1)}`);
+  const aed = page.getByRole('region', { name: 'Pay in AED' });
+  await expect(aed.getByText('Monthly payroll (AED)', { exact: true })).toBeVisible();
+  await expect(aed.getByText('No data for last month')).toBeHidden();
+  await page.goto('/executive');
+  await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible();
+});
+
+test('the executive view gives Sirius HR group totals, printable [DASH-D8, R2-07]', async ({
+  page,
+}) => {
+  await signIn(page, 'reviewer');
+  await page.goto(`/executive?period=${monthBefore(1)}`);
+  await expect(page.getByRole('button', { name: 'Print / Save as PDF' })).toBeVisible();
+  const table = page.getByRole('table', { name: 'By subsidiary' });
+  await expect(table.getByRole('row', { name: /^SUB-A \d+ AED/u })).toBeVisible();
+  await expect(page.getByRole('main')).not.toContainText('Aisha');
+});
+
 test('another subsidiary sees none of it', async ({ page }) => {
   await signIn(page, 'betaHr');
   await page.goto(`/group/employees?period=${monthBefore(1)}&q=EMP-1101`);

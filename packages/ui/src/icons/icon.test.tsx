@@ -10,6 +10,11 @@ describe('Icon', () => {
     expect(svg?.querySelector('path')?.getAttribute('d')).toMatch(/^M/);
   });
 
+  it.each(['pie', 'banknote', 'presentation'] as const)('draws the %s icon', (name) => {
+    const { container } = render(<Icon name={name} />);
+    expect(container.querySelector('path')?.getAttribute('d')).toMatch(/^M/);
+  });
+
   it('becomes an image with a name when labelled', () => {
     render(<Icon name="check" label="Pass" />);
     expect(screen.getByRole('img', { name: 'Pass' })).toBeInTheDocument();

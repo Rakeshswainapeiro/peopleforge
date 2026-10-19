@@ -44,13 +44,19 @@ export function Tr({ children, selected = false }: { children: ReactNode; select
   );
 }
 
-export function Th({ className, scope = 'col', ...props }: ThHTMLAttributes<HTMLTableCellElement>) {
+export interface ThProps extends Omit<ThHTMLAttributes<HTMLTableCellElement>, 'align'> {
+  /** `end` for numeric columns, so the heading lines up with right-aligned figures. */
+  align?: 'start' | 'end';
+}
+
+export function Th({ className, scope = 'col', align = 'start', ...props }: ThProps) {
   return (
     <th
       {...props}
       scope={scope}
       className={cn(
-        'whitespace-nowrap px-3 py-3 text-start text-xs font-medium text-ink',
+        'whitespace-nowrap px-3 py-3 text-xs font-medium text-ink',
+        align === 'end' ? 'text-end' : 'text-start',
         className,
       )}
     />

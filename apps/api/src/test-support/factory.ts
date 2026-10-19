@@ -174,6 +174,7 @@ export const unusedGroupData: GroupDataRepository = {
   uploadFile: unexpected,
   employees: unexpected,
   history: unexpected,
+  summaries: unexpected,
   extract: unexpected,
 };
 

@@ -1,4 +1,10 @@
 import {
+  CompensationSchema,
+  ExecutiveViewSchema,
+  GroupOverviewSchema,
+  type Compensation,
+  type ExecutiveView,
+  type GroupOverview,
   AnomalyRuleSchema,
   EmployeeHistorySchema,
   EmployeePageSchema,
@@ -195,4 +201,41 @@ export function required<T>(result: ApiResult<T>): T {
   if (result.kind === 'error' && result.status === 404) notFound();
   if (result.kind !== 'ok') throw new Error('Group data API unavailable');
   return result.data;
+}
+
+/** DASH-D5 Group overview (R2-05). */
+export function getGroupOverview(filter: {
+  period: string;
+  entityId?: string | undefined;
+  department?: string | undefined;
+}): Promise<ApiResult<GroupOverview>> {
+  return callApi(
+    `${GROUP}/overview${query({
+      period: filter.period,
+      entityId: filter.entityId === undefined ? undefined : Id.parse(filter.entityId),
+      department: filter.department,
+    })}`,
+    GroupOverviewSchema,
+  );
+}
+
+/** DASH-D6 Compensation trends (R2-05). */
+export function getCompensation(filter: {
+  period: string;
+  entityId?: string | undefined;
+  department?: string | undefined;
+}): Promise<ApiResult<Compensation>> {
+  return callApi(
+    `${GROUP}/compensation${query({
+      period: filter.period,
+      entityId: filter.entityId === undefined ? undefined : Id.parse(filter.entityId),
+      department: filter.department,
+    })}`,
+    CompensationSchema,
+  );
+}
+
+/** DASH-D8 Executive / IHC view (R2-07). */
+export function getExecutiveView(period: string): Promise<ApiResult<ExecutiveView>> {
+  return callApi(`${GROUP}/executive${query({ period })}`, ExecutiveViewSchema);
 }

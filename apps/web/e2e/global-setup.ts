@@ -20,14 +20,20 @@ const CORE_MIGRATIONS = path.join(
 const WEB_MIGRATIONS = path.join(import.meta.dirname, '..', 'db', 'migrations');
 
 /**
- * Brings the test database up to date in deployment order (core, then web), loads the
- * synthetic seed (subsidiaries, assignments) and starts every run with no sessions.
+ * Rebuilds the core schema (every core migration down, then up), brings the web schema up to
+ * date, loads the synthetic seed (subsidiaries, assignments, employees) and starts every run
+ * with no sessions. The database is shared with the db package's tests, which leave their own
+ * data behind (an employee master refreshed from their uploads): each run starts from the seed.
  */
 export default async function globalSetup(): Promise<void> {
   // Each run reads only the emails it caused.
   await rm(E2E.emailDir, { recursive: true, force: true });
   const common = { connectionString: E2E.databaseOwnerUrl, appRole: 'peopleforge_app' };
-  await runMigrations('up', { ...common, directory: CORE_MIGRATIONS, module: 'core' });
+  const core = { ...common, directory: CORE_MIGRATIONS, module: 'core' };
+  while ((await runMigrations('down', core)).length > 0) {
+    // roll back every applied core migration
+  }
+  await runMigrations('up', core);
   await runMigrations('up', { ...common, directory: WEB_MIGRATIONS, module: 'web' });
   await seedDevelopmentData({
     connectionString: E2E.databaseOwnerUrl,

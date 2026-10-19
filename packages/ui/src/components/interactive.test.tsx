@@ -125,6 +125,7 @@ describe('Table', () => {
         <THead>
           <Tr>
             <Th>Request</Th>
+            <Th align="end">Employees</Th>
           </Tr>
         </THead>
         <TBody>
@@ -143,6 +144,11 @@ describe('Table', () => {
     );
     expect(screen.getByRole('table', { name: 'Increment requests' })).toHaveClass('x');
     expect(screen.getByRole('columnheader', { name: 'Request' })).toHaveAttribute('scope', 'col');
+    expect(screen.getByRole('columnheader', { name: 'Request' })).toHaveClass('text-start');
+    // A numeric column's heading lines up with its right-aligned figures (one text-align class).
+    const numeric = screen.getByRole('columnheader', { name: 'Employees' });
+    expect(numeric).toHaveClass('text-end');
+    expect(numeric).not.toHaveClass('text-start');
     const rows = screen.getAllByRole('row');
     expect(rows[1]).toHaveAttribute('aria-selected', 'true');
     expect(rows[2]).not.toHaveAttribute('aria-selected');

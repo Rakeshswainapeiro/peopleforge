@@ -4,6 +4,20 @@ All notable changes are recorded here. Format: [Keep a Changelog](https://keepac
 
 ## [Unreleased]
 
+### Added — slice S10: group dashboards (R2-05, R2-07, DASH-D5, D6, D8)
+
+- **Group overview** (`/group/overview`, DASH-D5): headcount with last month, joiners, leavers and turnover, female share, the 12-month headcount trend, and headcount by subsidiary, department, gender, age band and grade, for a month with subsidiary and department filters. Subsidiary HR see their own subsidiary only.
+- **Compensation trends** (`/group/compensation`, DASH-D6, compensation access): monthly payroll per currency with its change, average salary and the 12-month payroll trend; average salary by grade against the grade's band; increments approved in the Increment Portal this year by size, with their monthly and annual cost per subsidiary. Currencies are shown apart and never added.
+- **Executive view** (`/executive`, DASH-D8, Sirius roles with executive reporting): the group's month on one page — headcount, movement, female share, open data flags, payroll per currency, each subsidiary's totals with uploads not yet received, and the trend. Totals only, no names, no individual pay; **Print / Save as PDF** for IHC.
+- Charts are server-rendered SVG (no inline styles under the CSP) with values written out, a tooltip per mark and the same data as a table for screen readers; they do not mirror in RTL.
+- The figures come from the per-department totals stored with each accepted version (now per currency and grade), never from decrypted salaries. API `GET /group/overview`, `/group/compensation`, `/group/executive`; OpenAPI 0.14.0. Sidebar: Group overview, Compensation, Executive view (by permission). No migration.
+
+### Fixed — slice S10
+
+- Numeric column headings (rows, flags, salary, headcount, payroll) now line up with their right-aligned figures: the table heading takes `align="end"` instead of a class that lost to its built-in left alignment.
+- The executive view's subsidiary rows read "SUB-C, Not uploaded" to screen readers, not "SUB-CNot uploaded".
+- End-to-end tests rebuild the core schema at the start of each run: the database package's tests share the test database and left their own employee list behind, which made employee choices disappear.
+
 ### Added — slices S8–S9: group employee data and data quality (R2-01 … R2-04, R2-08 … R2-14)
 
 - **Upload data** (`/group/upload`, subsidiary HR): download the employee data template (Excel, in the reader's language), choose the month and upload Excel or CSV (≤ 5 MB, ≤ 10,000 employees). Every file is scanned and checked against the template; a file with any error is **rejected with every problem by row and column** (values are never shown; problem report downloadable as Excel) and changes nothing. A valid file becomes the month's **next version**; earlier versions are kept. Uploading the version already in use again is refused.

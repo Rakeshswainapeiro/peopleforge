@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: PeopleForge API
-  version: 0.13.0
+  version: 0.14.0
   description: >
     Phase 1 API (BRD SIRIUS-HR-BRD-001). Every /api/v1 route requires an access token from the
     Sirius identity provider (Microsoft Entra ID; Keycloak locally) sent as
@@ -16,6 +16,8 @@ tags:
     description: R2 group employee data, uploads, versions, raw extract (R2-01 … R2-04, R2-08, R2-14)
   - name: data-quality
     description: R2 anomaly rules and flags (R2-09 … R2-11, DASH-D7)
+  - name: group-dashboards
+    description: R2 group dashboards from per-department totals (R2-05, R2-07, DASH-D5, D6, D8)
   - name: increment-requests
     description: R1 Increment Request Portal
   - name: notifications
@@ -1188,6 +1190,81 @@ paths:
         '400': { $ref: '#/components/responses/ValidationFailed' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
+  /api/v1/group/overview:
+    get:
+      tags: [group-dashboards]
+      summary: Group overview for a month (DASH-D5)
+      description: >
+        Needs `employee_data:read`. Headcount, joiners, leavers, turnover, gender, age bands,
+        departments, grades and the 12-month trend, from the version in use per subsidiary.
+        Subsidiary HR see their own subsidiary only (R2-12); another subsidiary's ID is 403.
+      parameters:
+        - {
+            name: period,
+            in: query,
+            required: true,
+            schema: { $ref: '#/components/schemas/Period' },
+          }
+        - { name: entityId, in: query, schema: { type: string, format: uuid } }
+        - { name: department, in: query, schema: { type: string, minLength: 1, maxLength: 80 } }
+      responses:
+        '200':
+          description: The overview
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GroupOverview' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/v1/group/compensation:
+    get:
+      tags: [group-dashboards]
+      summary: Compensation trends for a month (DASH-D6)
+      description: >
+        Needs `employee_data:read_compensation`. Payroll per currency (never added across
+        currencies), the 12-month trend, average per grade against its band, and increments
+        approved in the Increment Portal in the period's year with their cost. Totals only.
+      parameters:
+        - {
+            name: period,
+            in: query,
+            required: true,
+            schema: { $ref: '#/components/schemas/Period' },
+          }
+        - { name: entityId, in: query, schema: { type: string, format: uuid } }
+        - { name: department, in: query, schema: { type: string, minLength: 1, maxLength: 80 } }
+      responses:
+        '200':
+          description: Compensation figures
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Compensation' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/v1/group/executive:
+    get:
+      tags: [group-dashboards]
+      summary: Executive / IHC view for a month (DASH-D8, R2-07)
+      description: >
+        Needs `report:read_executive` and group scope. Group totals and per-subsidiary totals,
+        missing uploads and open flags. No names and no individual pay.
+      parameters:
+        - {
+            name: period,
+            in: query,
+            required: true,
+            schema: { $ref: '#/components/schemas/Period' },
+          }
+      responses:
+        '200':
+          description: The executive view
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ExecutiveView' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
   /api/v1/group/flags:
     get:
       tags: [data-quality]
@@ -1720,6 +1797,223 @@ components:
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
         resolvedAt: { type: [string, 'null'], format: date-time }
+    MoneyByCurrency:
+      type: object
+      additionalProperties: { $ref: '#/components/schemas/Decimal' }
+      description: 'Amounts per currency code, e.g. {"AED": "1250000.00"}'
+    EntityRef:
+      type: object
+      required: [id, code]
+      properties: { id: { type: string, format: uuid }, code: { type: string } }
+    Percent:
+      type: [string, 'null']
+      description: One decimal, e.g. "12.9"; null when not computable
+    HeadcountTrend:
+      type: array
+      items:
+        type: object
+        required: [period, headcount]
+        properties:
+          period: { $ref: '#/components/schemas/Period' }
+          headcount: { type: [integer, 'null'] }
+    GroupOverview:
+      type: object
+      required:
+        [
+          period,
+          previousPeriod,
+          entities,
+          entitiesWithData,
+          headcount,
+          previousHeadcount,
+          joiners,
+          leavers,
+          turnoverPercent,
+          female,
+          femaleSharePercent,
+          byEntity,
+          byDepartment,
+          gender,
+          ageBands,
+          grades,
+          trend,
+          departments,
+        ]
+      properties:
+        period: { $ref: '#/components/schemas/Period' }
+        previousPeriod: { $ref: '#/components/schemas/Period' }
+        entities: { type: integer }
+        entitiesWithData: { type: integer }
+        headcount: { type: integer }
+        previousHeadcount: { type: [integer, 'null'] }
+        joiners: { type: integer }
+        leavers: { type: integer }
+        turnoverPercent: { $ref: '#/components/schemas/Percent' }
+        female: { type: integer }
+        femaleSharePercent: { $ref: '#/components/schemas/Percent' }
+        byEntity:
+          type: array
+          items:
+            type: object
+            required: [entity, headcount, joiners, leavers]
+            properties:
+              entity: { $ref: '#/components/schemas/EntityRef' }
+              headcount: { type: integer }
+              joiners: { type: integer }
+              leavers: { type: integer }
+        byDepartment:
+          type: array
+          items:
+            {
+              type: object,
+              required: [department, headcount],
+              properties: { department: { type: string }, headcount: { type: integer } },
+            }
+        gender:
+          type: object
+          required: [female, male, other]
+          properties:
+            { female: { type: integer }, male: { type: integer }, other: { type: integer } }
+        ageBands:
+          type: array
+          items:
+            type: object
+            required: [band, count]
+            properties:
+              band: { type: string, enum: [under_25, 25_34, 35_44, 45_54, 55_plus, unknown] }
+              count: { type: integer }
+        grades:
+          type: array
+          items:
+            {
+              type: object,
+              required: [grade, headcount],
+              properties: { grade: { type: string }, headcount: { type: integer } },
+            }
+        trend: { $ref: '#/components/schemas/HeadcountTrend' }
+        departments: { type: array, items: { type: string } }
+    Compensation:
+      type: object
+      required: [period, previousPeriod, payroll, trend, grades, increments, departments]
+      properties:
+        period: { $ref: '#/components/schemas/Period' }
+        previousPeriod: { $ref: '#/components/schemas/Period' }
+        payroll:
+          type: array
+          items:
+            type: object
+            required: [currency, amount, previousAmount, changePercent, headcount, average]
+            properties:
+              currency: { type: string }
+              amount: { $ref: '#/components/schemas/Decimal' }
+              previousAmount: { $ref: '#/components/schemas/NullableDecimal' }
+              changePercent: { $ref: '#/components/schemas/Percent' }
+              headcount: { type: integer }
+              average: { $ref: '#/components/schemas/Decimal' }
+        trend:
+          type: array
+          items:
+            type: object
+            required: [period, payroll]
+            properties:
+              period: { $ref: '#/components/schemas/Period' }
+              payroll: { $ref: '#/components/schemas/MoneyByCurrency' }
+        grades:
+          type: array
+          items:
+            type: object
+            required: [grade, currency, headcount, average, band]
+            properties:
+              grade: { type: string }
+              currency: { type: string }
+              headcount: { type: integer }
+              average: { $ref: '#/components/schemas/Decimal' }
+              band:
+                type: [object, 'null']
+                required: [min, max]
+                properties:
+                  {
+                    min: { $ref: '#/components/schemas/Decimal' },
+                    max: { $ref: '#/components/schemas/Decimal' },
+                  }
+        increments:
+          type: object
+          required: [approved, averagePercent, distribution, costImpact]
+          properties:
+            approved: { type: integer }
+            averagePercent: { $ref: '#/components/schemas/Percent' }
+            distribution:
+              type: array
+              items:
+                type: object
+                required: [bucket, count]
+                properties:
+                  bucket: { type: string, enum: [under_3, 3_5, 5_8, 8_10, 10_plus] }
+                  count: { type: integer }
+            costImpact:
+              type: array
+              items:
+                type: object
+                required: [entity, currency, employees, monthlyIncrease, annualIncrease]
+                properties:
+                  entity: { $ref: '#/components/schemas/EntityRef' }
+                  currency: { type: string }
+                  employees: { type: integer }
+                  monthlyIncrease: { $ref: '#/components/schemas/Decimal' }
+                  annualIncrease: { $ref: '#/components/schemas/Decimal' }
+        departments: { type: array, items: { type: string } }
+    ExecutiveView:
+      type: object
+      required:
+        [
+          period,
+          previousPeriod,
+          entities,
+          entitiesWithData,
+          headcount,
+          previousHeadcount,
+          joiners,
+          leavers,
+          turnoverPercent,
+          femaleSharePercent,
+          payroll,
+          byEntity,
+          trend,
+          openFlags,
+        ]
+      properties:
+        period: { $ref: '#/components/schemas/Period' }
+        previousPeriod: { $ref: '#/components/schemas/Period' }
+        entities: { type: integer }
+        entitiesWithData: { type: integer }
+        headcount: { type: integer }
+        previousHeadcount: { type: [integer, 'null'] }
+        joiners: { type: integer }
+        leavers: { type: integer }
+        turnoverPercent: { $ref: '#/components/schemas/Percent' }
+        femaleSharePercent: { $ref: '#/components/schemas/Percent' }
+        payroll:
+          type: array
+          items:
+            type: object
+            required: [currency, amount, changePercent]
+            properties:
+              currency: { type: string }
+              amount: { $ref: '#/components/schemas/Decimal' }
+              changePercent: { $ref: '#/components/schemas/Percent' }
+        byEntity:
+          type: array
+          items:
+            type: object
+            required: [entity, headcount, payroll, openFlags, missing]
+            properties:
+              entity: { $ref: '#/components/schemas/EntityRef' }
+              headcount: { type: integer }
+              payroll: { $ref: '#/components/schemas/MoneyByCurrency' }
+              openFlags: { type: integer }
+              missing: { type: boolean, description: No accepted upload for the month }
+        trend: { $ref: '#/components/schemas/HeadcountTrend' }
+        openFlags: { type: integer }
     FlagPage:
       type: object
       required: [items, page, pageSize, total, counts, oldestOpenAt, rules, byEntity, variations]

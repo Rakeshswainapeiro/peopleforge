@@ -17,6 +17,11 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
+  ExecutiveQuerySchema,
+  GroupDashboardQuerySchema,
+  type Compensation,
+  type ExecutiveView,
+  type GroupOverview,
   EmployeeQuerySchema,
   ExtractQuerySchema,
   FileLocaleQuerySchema,
@@ -42,9 +47,14 @@ import type { IncomingMessage } from 'node:http';
 import { RequirePermission } from '../../auth/policy.js';
 import { principal } from '../../auth/principal.js';
 import { API_V1 } from '../../bootstrap/routes.js';
-import { DATA_QUALITY_SERVICE, GROUP_DATA_SERVICE } from '../../bootstrap/tokens.js';
+import {
+  DATA_QUALITY_SERVICE,
+  GROUP_DASHBOARD_SERVICE,
+  GROUP_DATA_SERVICE,
+} from '../../bootstrap/tokens.js';
 import { attachmentDisposition } from '../../http/content-disposition.js';
 import { Id } from '../increment-requests/increment-requests.controller.js';
+import type { GroupDashboardService } from './dashboard.service.js';
 import type { DataQualityService } from './data-quality.service.js';
 import type { GroupDataService, GroupFile, UploadedFile as Upload } from './group-data.service.js';
 
@@ -238,5 +248,35 @@ export class GroupSettingsController {
       RuleCodeSchema.parse(code),
       UpdateRuleSchema.parse(body),
     );
+  }
+}
+
+/**
+ * The group dashboards (R2-05, R2-07): D5 needs `employee_data:read`, D6 compensation access,
+ * D8 `report:read_executive` (Sirius only, checked by the service).
+ */
+@Controller(`${API_V1}/group`)
+export class GroupDashboardsController {
+  constructor(@Inject(GROUP_DASHBOARD_SERVICE) private readonly service: GroupDashboardService) {}
+
+  @Get('overview')
+  @RequirePermission('employee_data:read')
+  overview(@Req() req: IncomingMessage, @Query() query: unknown): Promise<GroupOverview> {
+    return this.service.overview(principal.require(req), GroupDashboardQuerySchema.parse(query));
+  }
+
+  @Get('compensation')
+  @RequirePermission('employee_data:read_compensation')
+  compensation(@Req() req: IncomingMessage, @Query() query: unknown): Promise<Compensation> {
+    return this.service.compensation(
+      principal.require(req),
+      GroupDashboardQuerySchema.parse(query),
+    );
+  }
+
+  @Get('executive')
+  @RequirePermission('report:read_executive')
+  executive(@Req() req: IncomingMessage, @Query() query: unknown): Promise<ExecutiveView> {
+    return this.service.executive(principal.require(req), ExecutiveQuerySchema.parse(query));
   }
 }

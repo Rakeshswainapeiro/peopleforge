@@ -1,6 +1,9 @@
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import {
   AnomalyRuleSchema,
+  CompensationSchema,
+  ExecutiveViewSchema,
+  GroupOverviewSchema,
   EmployeeHistorySchema,
   EmployeePageSchema,
   FieldTemplateSchema,
@@ -69,6 +72,9 @@ const ROUTES: [string, string][] = [
   ['GET', `${g}/flags/${FLAG_ID}`],
   ['PATCH', `${g}/flags/${FLAG_ID}`],
   ['POST', `${g}/flags/${FLAG_ID}/remind`],
+  ['GET', `${g}/overview?period=2026-09`],
+  ['GET', `${g}/compensation?period=2026-09`],
+  ['GET', `${g}/executive?period=2026-09`],
   ['GET', '/api/v1/settings/template'],
   ['PUT', '/api/v1/settings/template'],
   ['GET', '/api/v1/settings/anomaly-rules'],
@@ -87,7 +93,9 @@ describe('group data routes: access [R2-12, NFR-SEC-01]', () => {
 
   const forbidden: (readonly [Principal, string, string])[] = [
     // Executives see aggregates only (D8), never employee rows, files or flags.
-    ...ROUTES.slice(0, 14).map(([method, path]) => [executive, method, path] as const),
+    ...ROUTES.slice(0, 16).map(([method, path]) => [executive, method, path] as const),
+    // Admins configure; they see no group dashboards either.
+    [admin, 'GET', `${g}/executive?period=2026-09`],
     // Admins configure; they don't read employee data.
     [admin, 'GET', `${g}/employees?period=2026-09`],
     [admin, 'POST', `${g}/uploads`],
@@ -235,6 +243,31 @@ describe('flags [R2-10, R2-11]', () => {
       .send({ ownerId: null, status: 'in_progress', note: null })
       .expect(200);
     await request(server).post(`${g}/flags/${FLAG_ID}/remind`).expect(403);
+  });
+});
+
+describe('group dashboards [R2-05, R2-07]', () => {
+  it('serves D5, D6 and D8 to the roles that may see them', async () => {
+    const server = (await app(reviewer)).getHttpServer();
+    GroupOverviewSchema.parse(
+      (await request(server).get(`${g}/overview?period=2026-09&department=Finance`).expect(200))
+        .body,
+    );
+    CompensationSchema.parse(
+      (await request(server).get(`${g}/compensation?period=2026-09`).expect(200)).body,
+    );
+    ExecutiveViewSchema.parse(
+      (await request(server).get(`${g}/executive?period=2026-09`).expect(200)).body,
+    );
+    await request(server).get(`${g}/overview`).expect(400);
+    const exec = (await app(executive)).getHttpServer();
+    await request(exec).get(`${g}/executive?period=2026-09`).expect(200);
+  });
+
+  it('keeps D8 to Sirius: subsidiary HR are refused', async () => {
+    const server = (await app(alphaHr)).getHttpServer();
+    await request(server).get(`${g}/overview?period=2026-09`).expect(200);
+    await request(server).get(`${g}/executive?period=2026-09`).expect(403);
   });
 });
 

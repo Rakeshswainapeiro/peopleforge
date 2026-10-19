@@ -1,5 +1,7 @@
 import { Decimal } from 'decimal.js';
+import { AGE_BAND_KEYS, DecimalString } from '@peopleforge/contracts';
 import type { SnapshotInput } from '@peopleforge/db';
+import { z } from 'zod';
 import { periodEnd } from './validate.js';
 
 /**
@@ -8,25 +10,44 @@ import { periodEnd } from './validate.js';
  * view (NFR-PERF-01, ADR-015). Amounts are decimal strings per currency.
  */
 
-export const AGE_BANDS = ['under_25', '25_34', '35_44', '45_54', '55_plus', 'unknown'] as const;
+export const AGE_BANDS = AGE_BAND_KEYS;
 export type AgeBand = (typeof AGE_BANDS)[number];
 
-export interface DepartmentMetrics {
+const Count = z.number().int().min(0);
+
+/**
+ * What is stored per subsidiary, month and department (`groupdata.period_summary.metrics`),
+ * read back through this schema: the database row is data, not trusted.
+ */
+export const DepartmentMetricsSchema = z.object({
   /** Not left at month end. */
-  headcount: number;
+  headcount: Count,
   /** Joined during the month. */
-  joiners: number;
+  joiners: Count,
   /** Left during the month. */
-  leavers: number;
-  female: number;
-  male: number;
-  otherGender: number;
-  ageBands: Record<AgeBand, number>;
-  /** Per grade: headcount and gross payroll per currency. */
-  grades: Record<string, { headcount: number; payroll: Record<string, string> }>;
-  /** Monthly gross payroll per currency (headcount only). */
-  payroll: Record<string, string>;
-}
+  leavers: Count,
+  female: Count,
+  male: Count,
+  otherGender: Count,
+  ageBands: z.object({
+    under_25: Count,
+    '25_34': Count,
+    '35_44': Count,
+    '45_54': Count,
+    '55_plus': Count,
+    unknown: Count,
+  }),
+  /** Monthly gross payroll and headcount per currency and grade (those not left). */
+  pay: z.array(
+    z.object({
+      currency: z.string(),
+      grade: z.string(),
+      headcount: z.number().int().min(1),
+      payroll: DecimalString,
+    }),
+  ),
+});
+export type DepartmentMetrics = z.infer<typeof DepartmentMetricsSchema>;
 
 /** Whole years between a birth date and a day (both ISO dates). */
 export function ageOn(birth: string, day: string): number {
@@ -45,12 +66,6 @@ export function ageBand(birth: string | null, day: string): AgeBand {
   return '55_plus';
 }
 
-const add = (sums: Record<string, string>, currency: string, amount: string) => {
-  const map = new Map(Object.entries(sums));
-  map.set(currency, new Decimal(map.get(currency) ?? '0').plus(amount).toFixed(2));
-  return Object.fromEntries(map);
-};
-
 function emptyMetrics(): DepartmentMetrics {
   return {
     headcount: 0,
@@ -60,8 +75,7 @@ function emptyMetrics(): DepartmentMetrics {
     male: 0,
     otherGender: 0,
     ageBands: { under_25: 0, '25_34': 0, '35_44': 0, '45_54': 0, '55_plus': 0, unknown: 0 },
-    grades: {},
-    payroll: {},
+    pay: [],
   };
 }
 
@@ -92,16 +106,30 @@ export function summarise(
         key === band ? count + 1 : count,
       ]),
     ) as Record<AgeBand, number>;
-    const grades = new Map(Object.entries(metrics.grades));
-    const grade = grades.get(record.grade) ?? { headcount: 0, payroll: {} };
-    grades.set(record.grade, {
-      headcount: grade.headcount + 1,
-      payroll: add(grade.payroll, record.currency, record.grossSalary),
-    });
-    metrics.grades = Object.fromEntries(grades);
-    metrics.payroll = add(metrics.payroll, record.currency, record.grossSalary);
+    const cell = metrics.pay.find(
+      (entry) => entry.currency === record.currency && entry.grade === record.grade,
+    );
+    if (cell === undefined) {
+      metrics.pay.push({
+        currency: record.currency,
+        grade: record.grade,
+        headcount: 1,
+        payroll: new Decimal(record.grossSalary).toFixed(2),
+      });
+    } else {
+      cell.headcount += 1;
+      cell.payroll = new Decimal(cell.payroll).plus(record.grossSalary).toFixed(2);
+    }
   }
   return [...byDepartment]
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([department, metrics]) => ({ department, metrics }));
+    .map(([department, metrics]) => ({
+      department,
+      metrics: {
+        ...metrics,
+        pay: metrics.pay.sort(
+          (a, b) => a.currency.localeCompare(b.currency) || a.grade.localeCompare(b.grade),
+        ),
+      },
+    }));
 }

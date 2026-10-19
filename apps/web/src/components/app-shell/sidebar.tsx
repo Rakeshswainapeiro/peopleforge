@@ -45,7 +45,7 @@ export function Sidebar({ me, locale, t, unread }: SidebarProps) {
         : undefined,
   }));
   return (
-    <aside className="flex flex-col gap-6 bg-sidebar px-3 py-4 text-sidebar-ink lg:sticky lg:top-0 lg:h-dvh lg:w-60 lg:shrink-0 lg:py-5">
+    <aside className="flex flex-col gap-6 bg-sidebar print:hidden px-3 py-4 text-sidebar-ink lg:sticky lg:top-0 lg:h-dvh lg:w-60 lg:shrink-0 lg:py-5">
       <div className="px-2">
         <Wordmark
           lead={t('signIn.brand.lead')}

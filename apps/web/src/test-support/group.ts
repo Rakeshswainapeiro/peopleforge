@@ -1,4 +1,7 @@
 import type {
+  Compensation,
+  ExecutiveView,
+  GroupOverview,
   AnomalyRule,
   EmployeeHistory,
   EmployeePage,
@@ -356,4 +359,144 @@ export function anomalyRules(): AnomalyRule[] {
       updatedByName: null,
     },
   ];
+}
+
+export function groupOverview(overrides: Partial<GroupOverview> = {}): GroupOverview {
+  return {
+    period: '2026-09',
+    previousPeriod: '2026-08',
+    entities: 2,
+    entitiesWithData: 2,
+    headcount: 19,
+    previousHeadcount: 12,
+    joiners: 2,
+    leavers: 2,
+    turnoverPercent: '12.9',
+    female: 9,
+    femaleSharePercent: '47.4',
+    byEntity: [
+      { entity: { id: SUB_A, code: 'SUB-A' }, headcount: 15, joiners: 2, leavers: 1 },
+      { entity: { id: SUB_B, code: 'SUB-B' }, headcount: 4, joiners: 0, leavers: 1 },
+    ],
+    byDepartment: [
+      { department: 'Finance', headcount: 14 },
+      { department: 'Sales', headcount: 5 },
+    ],
+    gender: { female: 9, male: 9, other: 1 },
+    ageBands: [
+      { band: 'under_25', count: 1 },
+      { band: '25_34', count: 5 },
+      { band: '35_44', count: 4 },
+      { band: '45_54', count: 2 },
+      { band: '55_plus', count: 2 },
+      { band: 'unknown', count: 1 },
+    ],
+    grades: [
+      { grade: 'G4', headcount: 4 },
+      { grade: 'G5', headcount: 15 },
+    ],
+    trend: [
+      { period: '2026-08', headcount: 12 },
+      { period: '2026-09', headcount: 19 },
+      { period: '2026-07', headcount: null },
+    ],
+    departments: ['Finance', 'Sales'],
+    ...overrides,
+  };
+}
+
+export function compensationView(overrides: Partial<Compensation> = {}): Compensation {
+  return {
+    period: '2026-09',
+    previousPeriod: '2026-08',
+    payroll: [
+      {
+        currency: 'AED',
+        amount: '189000.00',
+        previousAmount: '120000.00',
+        changePercent: '57.5',
+        headcount: 17,
+        average: '11117.65',
+      },
+      {
+        currency: 'USD',
+        amount: '6000.00',
+        previousAmount: null,
+        changePercent: null,
+        headcount: 2,
+        average: '3000.00',
+      },
+    ],
+    trend: [
+      { period: '2026-08', payroll: { AED: '120000.00' } },
+      { period: '2026-09', payroll: { AED: '189000.00', USD: '6000.00' } },
+    ],
+    grades: [
+      {
+        grade: 'G5',
+        currency: 'AED',
+        headcount: 10,
+        average: '10000.00',
+        band: { min: '9000.00', max: '12000.00' },
+      },
+      { grade: 'G5', currency: 'USD', headcount: 2, average: '3000.00', band: null },
+    ],
+    increments: {
+      approved: 2,
+      averagePercent: '6.5',
+      distribution: [
+        { bucket: 'under_3', count: 0 },
+        { bucket: '3_5', count: 1 },
+        { bucket: '5_8', count: 1 },
+        { bucket: '8_10', count: 0 },
+        { bucket: '10_plus', count: 0 },
+      ],
+      costImpact: [
+        {
+          entity: { id: SUB_A, code: 'SUB-A' },
+          currency: 'AED',
+          employees: 2,
+          monthlyIncrease: '1300.00',
+          annualIncrease: '15600.00',
+        },
+      ],
+    },
+    departments: ['Finance'],
+    ...overrides,
+  };
+}
+
+export function executiveView(overrides: Partial<ExecutiveView> = {}): ExecutiveView {
+  return {
+    period: '2026-09',
+    previousPeriod: '2026-08',
+    entities: 3,
+    entitiesWithData: 2,
+    headcount: 19,
+    previousHeadcount: 12,
+    joiners: 2,
+    leavers: 2,
+    turnoverPercent: '12.9',
+    femaleSharePercent: '47.4',
+    payroll: [{ currency: 'AED', amount: '189000.00', changePercent: '57.5' }],
+    byEntity: [
+      {
+        entity: { id: SUB_A, code: 'SUB-A' },
+        headcount: 15,
+        payroll: { AED: '145000.00', USD: '6000.00' },
+        openFlags: 3,
+        missing: false,
+      },
+      {
+        entity: { id: '00000000-0000-4000-8000-0000000e000c', code: 'SUB-C' },
+        headcount: 0,
+        payroll: {},
+        openFlags: 0,
+        missing: true,
+      },
+    ],
+    trend: [{ period: '2026-09', headcount: 19 }],
+    openFlags: 3,
+    ...overrides,
+  };
 }

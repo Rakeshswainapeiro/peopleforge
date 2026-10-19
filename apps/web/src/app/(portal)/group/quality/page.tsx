@@ -168,7 +168,7 @@ export default async function QualityPage({ searchParams }: QualityPageProps = {
                     ).map((item) => (
                       <Th key={item.id}>{item.label}</Th>
                     ))}
-                    <Th className="text-end">{t('group.uploads.colFlags')}</Th>
+                    <Th align="end">{t('group.uploads.colFlags')}</Th>
                   </tr>
                 </THead>
                 <TBody>

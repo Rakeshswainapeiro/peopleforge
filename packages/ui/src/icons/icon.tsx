@@ -48,6 +48,9 @@ const PATHS = new Map<IconName, string>([
   ],
   ['flag', 'M5 21V4M5 4h11l-2 4 2 4H5'],
   ['layers', 'M12 3l9 5-9 5-9-5zM3 13l9 5 9-5'],
+  ['pie', 'M12 3a9 9 0 1 0 9 9h-9zM15 2.5a7 7 0 0 1 6.5 6.5H15z'],
+  ['banknote', 'M3 6h18v12H3zM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM6.5 9.5v.01M17.5 14.5v.01'],
+  ['presentation', 'M3 4h18M5 4v10h14V4M12 14v3M8 21l4-4 4 4'],
 ]);
 
 export type IconName =
@@ -82,7 +85,10 @@ export type IconName =
   | 'upload'
   | 'database'
   | 'flag'
-  | 'layers';
+  | 'layers'
+  | 'pie'
+  | 'banknote'
+  | 'presentation';
 
 const DIRECTIONAL: ReadonlySet<IconName> = new Set([
   'chevron-start',

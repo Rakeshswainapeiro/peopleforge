@@ -251,6 +251,7 @@ export function workingGroupData(): Mocked<GroupDataRepository> {
         ],
       }),
     ),
+    summaries: vi.fn(() => Promise.resolve([])),
     extract: vi.fn(() =>
       Promise.resolve([
         {

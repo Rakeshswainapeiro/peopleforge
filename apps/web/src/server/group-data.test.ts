@@ -6,6 +6,9 @@ import {
   downloadUploadFile,
   downloadUploadIssues,
   getAnomalyRules,
+  getCompensation,
+  getExecutiveView,
+  getGroupOverview,
   getEmployeeHistory,
   getFlag,
   getTemplate,
@@ -72,6 +75,11 @@ describe('group data client [R2-01 … R2-14]', () => {
     await publishTemplate({ version: 1, fields: [] });
     await getAnomalyRules();
     await updateAnomalyRule('ANM-03', { threshold: '25', enabled: true });
+    await getGroupOverview({ period: '2026-09' });
+    await getGroupOverview({ period: '2026-09', entityId: SUB_A, department: 'Finance' });
+    await getCompensation({ period: '2026-09' });
+    await getCompensation({ period: '2026-09', entityId: SUB_A, department: 'Sales' });
+    await getExecutiveView('2026-09');
     expect(vi.mocked(callApi).mock.calls.map(([path, , init]) => [path, init])).toEqual([
       ['/api/v1/group/template', undefined],
       ['/api/v1/group/uploads', { method: 'POST', form, timeoutMs: UPLOAD_TIMEOUT_MS }],
@@ -102,6 +110,11 @@ describe('group data client [R2-01 … R2-14]', () => {
         '/api/v1/settings/anomaly-rules/ANM-03',
         { method: 'PUT', body: { threshold: '25', enabled: true } },
       ],
+      ['/api/v1/group/overview?period=2026-09', undefined],
+      [`/api/v1/group/overview?period=2026-09&entityId=${SUB_A}&department=Finance`, undefined],
+      ['/api/v1/group/compensation?period=2026-09', undefined],
+      [`/api/v1/group/compensation?period=2026-09&entityId=${SUB_A}&department=Sales`, undefined],
+      ['/api/v1/group/executive?period=2026-09', undefined],
     ]);
   });
 

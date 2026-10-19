@@ -164,6 +164,7 @@ export {
   type GroupDataRepository,
   type SnapshotInput,
   type SnapshotRecord,
+  type SummaryRow,
   type TemplateFieldRecord,
   type TemplateRecord,
   type UploadInput,
