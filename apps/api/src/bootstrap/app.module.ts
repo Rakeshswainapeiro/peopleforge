@@ -17,6 +17,8 @@ import type {
   AuditTrailRepository,
   SettingsRepository,
   AnalyticsRepository,
+  DataQualityRepository,
+  GroupDataRepository,
 } from '@peopleforge/db';
 import type { MalwareScanner, ObjectStore } from '@peopleforge/integrations';
 import { AuthenticateMiddleware, SiriusAuthModule } from '@sirius/auth-nest';
@@ -56,6 +58,12 @@ import {
 } from '../modules/analytics/analytics.controller.js';
 import { AnalyticsService } from '../modules/analytics/analytics.service.js';
 import { SettingsService } from '../modules/settings/settings.service.js';
+import { DataQualityService } from '../modules/group-data/data-quality.service.js';
+import {
+  GroupDataController,
+  GroupSettingsController,
+} from '../modules/group-data/group-data.controller.js';
+import { GroupDataService } from '../modules/group-data/group-data.service.js';
 import {
   AuditTrailController,
   RequestHistoryController,
@@ -65,6 +73,8 @@ import {
   MessagesController,
 } from '../modules/conversations/conversations.controller.js';
 import {
+  DATA_QUALITY_SERVICE,
+  GROUP_DATA_SERVICE,
   AUDIT_SERVICE,
   SETTINGS_SERVICE,
   ANALYTICS_SERVICE,
@@ -111,6 +121,10 @@ export interface AppDependencies {
   settings: SettingsRepository;
   /** TAT and back-and-forth facts (R1-11, R1-12). */
   analytics: AnalyticsRepository;
+  /** Group employee data: template, uploads, versions, records, extract (R2-01 … R2-04, R2-08). */
+  groupData: GroupDataRepository;
+  /** Anomaly rules and flags, and R1's approved increments for R2 (R2-09 … R2-11). */
+  dataQuality: DataQualityRepository;
   /** The caller's in-app notifications (R1-07, R1-13). */
   notifications: NotificationRepository;
   readinessChecks: readonly ReadinessCheck[];
@@ -151,6 +165,8 @@ export class AppModule implements NestModule {
         SettingsController,
         AnalyticsController,
         TatReportController,
+        GroupDataController,
+        GroupSettingsController,
         EvidenceController,
         NotificationsController,
       ],
@@ -183,6 +199,17 @@ export class AppModule implements NestModule {
             logger: deps.logger,
           }),
         },
+        {
+          provide: GROUP_DATA_SERVICE,
+          useValue: new GroupDataService({
+            repository: deps.groupData,
+            quality: deps.dataQuality,
+            store: deps.objectStore,
+            scanner: deps.malwareScanner,
+            logger: deps.logger,
+          }),
+        },
+        { provide: DATA_QUALITY_SERVICE, useValue: new DataQualityService(deps.dataQuality) },
         { provide: READINESS_CHECKS, useValue: deps.readinessChecks },
         { provide: SHUTDOWN_STATE, useValue: { isShuttingDown: deps.isShuttingDown } },
         {

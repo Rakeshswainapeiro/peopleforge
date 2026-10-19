@@ -28,6 +28,17 @@ export const NotificationKindSchema = z.enum([
   'review_overdue',
   'return_overdue',
   'deadline_approaching',
+  /** Group employee data (R2-01, R2-10, R2-11). To Sirius HR reviewers: an upload is in use. */
+  'group_upload_accepted',
+  /** To the uploader, action needed: their upload raised anomaly flags they own. */
+  'group_flags_raised',
+  /** To a flag's owner: someone else changed its owner or status. */
+  'flag_updated',
+  /** To a flag's owner, action needed: Sirius HR's "Send reminder". */
+  'flag_reminder',
+  /** Reminders on configured triggers (R2-11): data not uploaded, flag left open. */
+  'upload_due',
+  'flag_open',
 ]);
 export type NotificationKind = z.infer<typeof NotificationKindSchema>;
 

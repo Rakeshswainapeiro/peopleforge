@@ -23,3 +23,5 @@ export const REPORT_SERVICE = Symbol('REPORT_SERVICE');
 export const AUDIT_SERVICE = Symbol('AUDIT_SERVICE');
 export const SETTINGS_SERVICE = Symbol('SETTINGS_SERVICE');
 export const ANALYTICS_SERVICE = Symbol('ANALYTICS_SERVICE');
+export const GROUP_DATA_SERVICE = Symbol('GROUP_DATA_SERVICE');
+export const DATA_QUALITY_SERVICE = Symbol('DATA_QUALITY_SERVICE');

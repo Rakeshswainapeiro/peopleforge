@@ -85,11 +85,42 @@ export const NAV_ITEMS: readonly NavItem[] = [
     // Comparing subsidiaries: Sirius HR only (the page and the API check group scope too).
     anyOf: ['increment_request:review'],
   },
+  // Group employee data (R2): employee data, uploads, data quality and the raw extract.
+  {
+    href: '/group/employees',
+    label: 'nav.groupEmployees',
+    icon: 'users',
+    anyOf: ['employee_data:read'],
+  },
+  {
+    href: '/group/upload',
+    label: 'nav.groupUpload',
+    icon: 'upload',
+    anyOf: ['employee_data:upload'],
+  },
+  {
+    href: '/group/uploads',
+    label: 'nav.groupUploads',
+    icon: 'layers',
+    anyOf: ['employee_data:read'],
+  },
+  {
+    href: '/group/quality',
+    label: 'nav.groupQuality',
+    icon: 'flag',
+    anyOf: ['employee_data:read'],
+  },
+  {
+    href: '/group/extract',
+    label: 'nav.groupExtract',
+    icon: 'database',
+    anyOf: ['employee_data:extract_raw'],
+  },
   {
     href: '/settings',
     label: 'nav.settings',
     icon: 'sliders',
-    anyOf: ['criteria:configure'],
+    anyOf: ['criteria:configure', 'template:configure'],
   },
   {
     href: '/reports',

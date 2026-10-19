@@ -105,5 +105,71 @@
       "averageReturn": "Average return (days)"
     },
     "filterNone": "none (every subsidiary, every period)"
+  },
+  "groupData": {
+    "templateSheet": "Employee data",
+    "fieldsSheet": "Fields",
+    "fieldsNote": "Template version {version}. Fill one row per employee in the first sheet, as at the end of the month. Keep the column names; add no formulas.",
+    "colField": "Column",
+    "colKey": "Field key",
+    "colType": "Type",
+    "colRequired": "Required",
+    "colAllowed": "Allowed values",
+    "colPalmHr": "Palm HR field",
+    "yes": "Yes",
+    "no": "No",
+    "types": {
+      "text": "Text",
+      "date": "Date (YYYY-MM-DD or DD/MM/YYYY)",
+      "decimal": "Number (e.g. 14200.00)",
+      "enum": "One of the allowed values"
+    },
+    "issuesSheet": "Problems",
+    "colRow": "Row",
+    "colColumn": "Column",
+    "colProblem": "Problem",
+    "colSeverity": "Severity",
+    "wholeFile": "Whole file",
+    "header": "Header",
+    "severity": {
+      "error": "Error",
+      "warning": "Warning"
+    },
+    "issues": {
+      "unreadable": "The file can't be read as Excel (.xlsx) or UTF-8 CSV.",
+      "macros": "The workbook contains macros. Save it as a plain .xlsx workbook.",
+      "too_large": "The workbook expands to more data than allowed.",
+      "empty_file": "The file has no employee rows.",
+      "too_many_rows": "The file has more rows than allowed.",
+      "missing_column": "A required column is missing.",
+      "unknown_column": "This column isn't in the template and was ignored.",
+      "duplicate_column": "This column appears more than once.",
+      "formula": "Formulas aren't accepted: paste values only.",
+      "required": "A value is required.",
+      "invalid_date": "Not a date. Use YYYY-MM-DD or DD/MM/YYYY.",
+      "invalid_number": "Not a number. Use digits with up to 2 decimals.",
+      "not_allowed": "Not one of the allowed values.",
+      "too_long": "The text is too long.",
+      "duplicate_employee": "This employee ID appears more than once.",
+      "invalid_currency": "Not an ISO currency code (e.g. AED).",
+      "left_without_date": "An employee who left needs a leaving date.",
+      "future_date": "The date is after the end of the month.",
+      "date_order": "The dates are in the wrong order."
+    },
+    "extractSheet": "Raw data",
+    "colSubsidiary": "Subsidiary",
+    "colPeriod": "Month",
+    "colUpload": "Upload",
+    "colVersion": "Version",
+    "colVersionStatus": "Version status",
+    "colUploadedBy": "Uploaded by",
+    "colUploadedAt": "Uploaded at",
+    "colFile": "File",
+    "colSourceRow": "Row in file",
+    "uploadStatus": {
+      "accepted": "In use",
+      "superseded": "Replaced",
+      "rejected": "Rejected"
+    }
   }
 }

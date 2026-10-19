@@ -3,6 +3,7 @@ import { receivedJob, REQUEST_ID, submittedJob } from '../test-support/jobs.js';
 import {
   escapeHtml,
   formatDay,
+  formatMonth,
   linkFor,
   renderEmail,
   unknownKeys,
@@ -236,5 +237,97 @@ describe('escapeHtml', () => {
 describe('message files', () => {
   it('has no Arabic keys missing from English', () => {
     expect(unknownKeys('ar')).toEqual([]);
+  });
+});
+
+describe('group data emails [R2-01, R2-10, R2-11]', () => {
+  const UPLOAD = '66666666-6666-4666-8666-666666666661';
+  const FLAG = '88888888-8888-4888-8888-888888888881';
+  const job = (kind: string, params: Record<string, string | number>) =>
+    submittedJob({ kind, params, requestId: null });
+
+  it('tells reviewers an upload is in use, with its flags, linking to the upload', () => {
+    const email = rendered(
+      job('group_upload_accepted', {
+        reference: 'UP-0007',
+        entity: 'SUB-A',
+        period: '2026-09',
+        version: 2,
+        flags: 1,
+        actor: 'Priya Nair',
+        uploadId: UPLOAD,
+      }),
+    );
+    expect(email.subject).toBe('SUB-A employee data for September 2026 received (UP-0007)');
+    expect(email.text).toContain('Version 2 is now in use, with 1 anomaly flag to review.');
+    expect(email.text).toContain(`https://hr.example.ae/group/uploads/${UPLOAD}`);
+  });
+
+  it('tells the uploader they own the flags raised', () => {
+    const email = rendered(
+      job('group_flags_raised', {
+        reference: 'UP-0007',
+        entity: 'SUB-A',
+        period: '2026-09',
+        count: 3,
+        uploadId: UPLOAD,
+      }),
+    );
+    expect(email.subject).toBe('Action needed: 3 anomaly flags on SUB-A September 2026 data');
+    expect(email.text).toContain('raised 3 anomaly flags. You own them');
+  });
+
+  it('words flag updates, reminders and overdue flags, linking to the flag', () => {
+    const updated = rendered(
+      job('flag_updated', {
+        flag: 'AN-0042',
+        flagId: FLAG,
+        entity: 'SUB-A',
+        actor: 'Sara',
+        flagStatus: 'in_progress',
+      }),
+    );
+    expect(updated.subject).toBe('Anomaly flag AN-0042 (SUB-A): In progress');
+    expect(updated.text).toContain(`https://hr.example.ae/group/quality/flags/${FLAG}`);
+    const reminder = rendered(
+      job('flag_reminder', { flag: 'AN-0042', flagId: FLAG, entity: 'SUB-A', actor: 'Sara' }),
+    );
+    expect(reminder.text).toContain('Sara from Sirius HR sent a reminder');
+    const open = rendered(
+      job('flag_open', { flag: 'AN-0042', flagId: FLAG, entity: 'SUB-A', days: 5 }),
+    );
+    expect(open.subject).toBe('Reminder: anomaly flag AN-0042 (SUB-A) open for 5 days');
+  });
+
+  it('reminds a subsidiary to upload last month, linking to the upload page', () => {
+    const email = rendered(job('upload_due', { entity: 'SUB-B', period: '2026-09', days: 5 }));
+    expect(email.subject).toBe('Reminder: SUB-B employee data for September 2026 not uploaded');
+    expect(email.text).toContain('https://hr.example.ae/group/upload');
+  });
+
+  it('refuses malformed group params', () => {
+    expect(
+      renderEmail(job('upload_due', { entity: 'SUB-B', period: '2026-13', days: 5 }), OPTIONS),
+    ).toEqual({
+      ok: false,
+      reason: 'invalid_params',
+    });
+    expect(
+      renderEmail(
+        job('flag_updated', {
+          flag: 'AN-1',
+          flagId: FLAG,
+          entity: 'A',
+          actor: 'B',
+          flagStatus: 'gone',
+        }),
+        OPTIONS,
+      ),
+    ).toEqual({ ok: false, reason: 'invalid_params' });
+  });
+
+  it('names months in the reader language', () => {
+    expect(formatMonth('2026-09', 'en')).toBe('September 2026');
+    expect(formatMonth('2026-09', 'ar')).not.toBe('September 2026');
   });
 });

@@ -127,6 +127,7 @@ export {
 } from './reports.js';
 export {
   createSettingsRepository,
+  queueGroupReminders,
   queueReminders,
   REMINDER_KINDS,
   SettingsDataError,
@@ -147,3 +148,43 @@ export {
   type ReturnFact,
   type VerificationFact,
 } from './analytics.js';
+export {
+  createGroupDataRepository,
+  GroupDataError,
+  MAX_STORED_ISSUES,
+  only,
+  type AcceptContext,
+  type AcceptInput,
+  type EmployeeQueryInput,
+  type ExtractRow,
+  type FileInput,
+  type FlagInput,
+  type GradeBandRecord,
+  type GroupDataErrorReason,
+  type GroupDataRepository,
+  type SnapshotInput,
+  type SnapshotRecord,
+  type TemplateFieldRecord,
+  type TemplateRecord,
+  type UploadInput,
+  type UploadIssueRecord,
+  type UploadRecord,
+} from './group-data.js';
+export {
+  loadApprovedIncrements,
+  type ApprovedIncrementFilter,
+  type ApprovedIncrementRecord,
+} from './approved-increments.js';
+export {
+  createDataQualityRepository,
+  DataQualityError,
+  type DataQualityErrorReason,
+  type DataQualityRepository,
+  type FlagActivity,
+  type FlagContext,
+  type FlagFilter,
+  type FlagRecord,
+  type FlagStatus,
+  type RuleRecord,
+  type VariationRecord,
+} from './data-quality.js';

@@ -16,6 +16,10 @@ test.describe('portal shell', () => {
       /^Notifications/u,
       'Audit trail',
       'Analytics',
+      'Employee data',
+      'Uploads',
+      'Data quality',
+      'Raw data extract',
       'Reports',
     ]);
     await expect(nav.getByRole('link', { name: 'Request Tracker' })).toHaveAttribute(
@@ -37,6 +41,10 @@ test.describe('portal shell', () => {
       'New Request',
       'Conversations',
       /^Notifications/u,
+      'Employee data',
+      'Upload data',
+      'Uploads',
+      'Data quality',
       'Reports',
     ]);
 

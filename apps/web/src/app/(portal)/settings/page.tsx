@@ -15,6 +15,11 @@ import { roleLabel } from '@/lib/viewer-display';
 import type { ApiResult } from '@/server/api-client';
 import { requireViewer } from '@/server/session';
 import { getCriteriaSettings, getReminderRules } from '@/server/settings';
+import { ALWAYS_REQUIRED, FieldTypeSchema, RULE_THRESHOLD_UNIT } from '@peopleforge/contracts';
+import { RuleForm } from '@/components/group/rule-form';
+import { TemplateEditor } from '@/components/group/template-editor';
+import { GROUP_ERROR_KEYS, ruleDescription, ruleName } from '@/lib/group-view';
+import { getAnomalyRules, getTemplateSettings } from '@/server/group-data';
 
 function required<T>(result: ApiResult<T>): T {
   if (result.kind === 'unauthenticated') redirect('/session-ended');
@@ -33,10 +38,16 @@ export default async function SettingsPage() {
   if (!me.permissions.includes('criteria:configure')) notFound();
   const locale = await getRequestLocale();
   const t = createTranslator(locale);
-  const [criteria, rules] = await Promise.all([
+  const groupConfig = me.permissions.includes('template:configure');
+  const [criteria, rules, template, anomalyRules] = await Promise.all([
     getCriteriaSettings().then(required),
     getReminderRules().then(required),
+    groupConfig ? getTemplateSettings().then(required) : null,
+    groupConfig ? getAnomalyRules().then(required) : null,
   ]);
+  const groupMessages = GROUP_ERROR_KEYS.map((key) => [key, t(key)] as const);
+  const unitLabel = (unit: 'percent' | 'months' | null | undefined) =>
+    unit === 'percent' ? '%' : unit === 'months' ? t('group.settings.months') : null;
   const messages = SETTINGS_ERROR_KEYS.map((key) => [key, t(key)] as const);
   const next = criteria.version + 1;
 
@@ -125,6 +136,90 @@ export default async function SettingsPage() {
           ))}
         </div>
       </Card>
+      {template === null ? null : (
+        <Card className="mt-6" label={t('group.settings.templateTitle')}>
+          <CardHeader
+            title={t('group.settings.templateTitle')}
+            description={t('group.settings.templateIntro', {
+              version: String(template.version),
+              date: template.activatedAt === null ? '—' : formatDate(template.activatedAt, locale),
+            })}
+          />
+          <div className="px-4 pt-4 pb-6 sm:px-6">
+            <TemplateEditor
+              version={template.version}
+              fields={template.fields.map((field) => ({
+                key: field.key,
+                labelEn: field.label.en,
+                labelAr: field.label.ar ?? '',
+                type: field.type,
+                required: field.required,
+                allowed: field.allowedValues.join(', '),
+                palmHr: field.palmHrField ?? '',
+                core: field.core,
+                locked: (ALWAYS_REQUIRED as readonly string[]).includes(field.key),
+              }))}
+              types={FieldTypeSchema.options.map((type) => ({
+                value: type,
+                label: t(`group.settings.types.${type}`),
+              }))}
+              messages={groupMessages}
+              labels={{
+                form: t('group.settings.templateTitle'),
+                key: t('group.settings.key'),
+                labelEn: t('group.settings.labelEn'),
+                labelAr: t('group.settings.labelAr'),
+                type: t('group.settings.type'),
+                required: t('group.settings.required'),
+                allowed: t('group.settings.allowed'),
+                palmHr: t('group.settings.palmHr'),
+                remove: t('group.settings.remove'),
+                add: t('group.settings.add'),
+                note: t('group.settings.templateNote', { next: String(template.version + 1) }),
+                publish: t('group.settings.publish', { next: String(template.version + 1) }),
+                publishing: t('settings.publishing'),
+                published: t('group.settings.published'),
+              }}
+            />
+          </div>
+        </Card>
+      )}
+      {anomalyRules === null ? null : (
+        <Card className="mt-6" label={t('group.settings.rulesTitle')}>
+          <CardHeader
+            title={t('group.settings.rulesTitle')}
+            description={t('group.settings.rulesIntro')}
+          />
+          <div className="px-4 pb-2 sm:px-6">
+            {anomalyRules.map((rule) => (
+              <RuleForm
+                key={rule.code}
+                code={rule.code}
+                threshold={rule.threshold}
+                enabled={rule.enabled}
+                unit={unitLabel(RULE_THRESHOLD_UNIT.get(rule.kind))}
+                messages={groupMessages}
+                labels={{
+                  title: ruleName(rule.kind, t),
+                  body: ruleDescription(rule.kind, rule.threshold, t),
+                  changed:
+                    rule.updatedByName === null
+                      ? t('settings.defaultValue')
+                      : t('settings.lastChanged', {
+                          name: rule.updatedByName,
+                          date: formatDateTime(rule.updatedAt, locale),
+                        }),
+                  on: t('settings.reminderOn'),
+                  threshold: t('group.settings.threshold'),
+                  save: t('settings.save'),
+                  saving: t('settings.saving'),
+                  saved: t('settings.saved'),
+                }}
+              />
+            ))}
+          </div>
+        </Card>
+      )}
     </>
   );
 }

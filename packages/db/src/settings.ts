@@ -11,13 +11,16 @@ import { withScope, type Scope } from './scope.js';
  * change them (`criteria:configure`) is checked in the API; every change is audited.
  */
 
-export type ReminderKind = 'review_overdue' | 'return_overdue' | 'deadline_approaching';
+export type ReminderKind =
+  'review_overdue' | 'return_overdue' | 'deadline_approaching' | 'upload_due' | 'flag_open';
 
 /** The order the settings screen lists them in. */
 export const REMINDER_KINDS: readonly ReminderKind[] = [
   'review_overdue',
   'return_overdue',
   'deadline_approaching',
+  'upload_due',
+  'flag_open',
 ];
 
 export interface ReminderRuleRecord {
@@ -248,6 +251,18 @@ export function createSettingsRepository(db: Kysely<Database>): SettingsReposito
 export async function queueReminders(db: Kysely<Database>): Promise<number> {
   const row = await db
     .selectNoFrom(sql<number>`notify.queue_reminders()`.as('queued'))
+    .executeTakeFirstOrThrow();
+  return row.queued;
+}
+
+/**
+ * Queues the group-data reminders that are due (R2-11): last month's data not uploaded N days
+ * after month end, and flags open N days. Like `queueReminders`, the worker role may only call
+ * the database function; it reads no employee data.
+ */
+export async function queueGroupReminders(db: Kysely<Database>): Promise<number> {
+  const row = await db
+    .selectNoFrom(sql<number>`notify.queue_group_reminders()`.as('queued'))
     .executeTakeFirstOrThrow();
   return row.queued;
 }

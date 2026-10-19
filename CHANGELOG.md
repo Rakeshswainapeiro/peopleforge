@@ -4,6 +4,23 @@ All notable changes are recorded here. Format: [Keep a Changelog](https://keepac
 
 ## [Unreleased]
 
+### Added — slices S8–S9: group employee data and data quality (R2-01 … R2-04, R2-08 … R2-14)
+
+- **Upload data** (`/group/upload`, subsidiary HR): download the employee data template (Excel, in the reader's language), choose the month and upload Excel or CSV (≤ 5 MB, ≤ 10,000 employees). Every file is scanned and checked against the template; a file with any error is **rejected with every problem by row and column** (values are never shown; problem report downloadable as Excel) and changes nothing. A valid file becomes the month's **next version**; earlier versions are kept. Uploading the version already in use again is refused.
+- **Uploads** (`/group/uploads`) and the **upload result**: status, version, rows, problems, flags, the **comparison with the previous month** (headcount, payroll change, new, left, missing, changed, warnings) and the original file.
+- **Employee data** (`/group/employees`): one record per employee for the month across subsidiaries (Sirius HR) or for the user's own (subsidiary HR), with filters and cards; each record's **history** across months and versions with what changed. Pay only with compensation access.
+- **Data quality & anomalies** (`/group/quality`, DASH-D7): open / in progress / resolved counts, oldest open flag, flags by subsidiary, variation vs previous month per subsidiary, and the flags with month, subsidiary, status and rule filters. **Flag detail**: what was found (values with pay access), owner, status, resolution note (required to resolve), **Send reminder** (Sirius HR), activity, previous/next.
+- **Anomaly rules** ANM-01 … ANM-09 (placeholders, configurable on Settings): employee missing, grade changed, salary change > 20 %, change after 12 stable months, salary off the increment approved in the Increment Portal (> 1 %), outside the grade band, the same employee ID in another subsidiary, headcount or payroll moved > 10 %.
+- **Raw data extract** (`/group/extract`, RP-08, Sirius HR): Excel, CSV or **Palm HR CSV** (mapped field names), the version in use or every version, with subsidiary, uploader, time, version and file; every extraction audited.
+- **Settings** (admins): the **employee data template** (labels in English and Arabic, type, required, allowed values, Palm HR field; core fields locked; published as a new version) and the **anomaly rules** (on/off, threshold).
+- **Notifications and emails:** upload accepted (reviewers), flags raised (uploader, action needed), flag updated and reminders (owner); new reminder triggers **monthly data not uploaded** and **anomaly flag still open** (5 days each, configurable). The newest accepted month refreshes the Increment Portal's employee list.
+- Migrations `0013_group_data`, `0014_data_quality`; ADR-015; schema doc `docs/database/groupdata-schema.md`; OpenAPI 0.13.0. Sidebar: Employee data, Upload data, Uploads, Data quality, Raw data extract (by permission).
+
+### Security — slices S8–S9
+
+- Files are read defensively: type by content, malware scan first, zip central directory inspected before Excel opens a workbook (macros, zip bombs refused), formulas reported and never evaluated, strict UTF-8 CSV, row and size limits. Exports neutralise formula injection; CSV carries a BOM.
+- Every `groupdata` table is entity-scoped with FORCE RLS; configuration (template, grade bands, rules) is writable in group scope only, in the database as well as the API. Salaries, flag values and resolution notes are encrypted; the audit trail records what changed, never values or notes. Downloads go through the API, never cached; the original-file download is audited.
+
 ### Fixed — draft editor key warning; reminder test SQL
 
 - The draft editor no longer logs "Each child in a list should have a unique key prop" (`ProposalsTable`) in development: the totals under the table are now passed as data and rendered by the table, instead of server-built markup inside the client component.

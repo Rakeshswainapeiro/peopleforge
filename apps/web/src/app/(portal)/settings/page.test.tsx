@@ -6,6 +6,8 @@ import { getRequestLocale } from '@/i18n/request-locale';
 import { requireViewer } from '@/server/session';
 import { getCriteriaSettings, getReminderRules } from '@/server/settings';
 import { criteriaSettings } from '@/test-support/requests';
+import { getAnomalyRules, getTemplateSettings } from '@/server/group-data';
+import { anomalyRules, fieldTemplate } from '@/test-support/group';
 import { publishCriteriaAction } from './actions';
 import SettingsPage from './page';
 
@@ -13,6 +15,11 @@ vi.mock('@/i18n/request-locale', () => ({ getRequestLocale: vi.fn() }));
 vi.mock('@/server/session', () => ({ requireViewer: vi.fn() }));
 vi.mock('@/server/settings', () => ({ getCriteriaSettings: vi.fn(), getReminderRules: vi.fn() }));
 vi.mock('./actions', () => ({ publishCriteriaAction: vi.fn(), updateReminderAction: vi.fn() }));
+vi.mock('@/app/(portal)/group/actions', () => ({
+  publishTemplateAction: vi.fn(),
+  updateRuleAction: vi.fn(),
+}));
+vi.mock('@/server/group-data', () => ({ getTemplateSettings: vi.fn(), getAnomalyRules: vi.fn() }));
 vi.mock('next/navigation', () => ({
   redirect: vi.fn((url: string) => {
     throw new Error(`NEXT_REDIRECT ${url}`);
@@ -48,6 +55,45 @@ beforeEach(() => {
   vi.mocked(getReminderRules).mockResolvedValue({
     kind: 'ok',
     data: [rule('review_overdue'), rule('return_overdue'), rule('deadline_approaching', 3)],
+  });
+});
+
+describe('Group data settings [R2-02, R2-10, NFR-CFG-01]', () => {
+  beforeEach(() => {
+    vi.mocked(requireViewer).mockResolvedValue({
+      ...ADMIN,
+      permissions: ['criteria:configure', 'template:configure'],
+    });
+    vi.mocked(getTemplateSettings).mockResolvedValue({ kind: 'ok', data: fieldTemplate() });
+    vi.mocked(getAnomalyRules).mockResolvedValue({ kind: 'ok', data: anomalyRules() });
+  });
+
+  it('shows the field template editor and each anomaly rule', async () => {
+    render(await SettingsPage());
+    const editor = screen.getByRole('form', { name: 'Employee data template' });
+    expect(within(editor).getByLabelText('Key 1')).toHaveValue('employee_number');
+    expect(within(editor).getByLabelText('Required employee_number')).toBeDisabled();
+    expect(within(editor).getByLabelText('Required project')).not.toBeDisabled();
+    expect(within(editor).getByLabelText('Palm HR field grade')).toHaveValue('grade_code');
+    expect(
+      within(editor).getByRole('button', { name: 'Publish template version 2' }),
+    ).toBeInTheDocument();
+    const salary = screen.getByRole('form', { name: 'Salary changed sharply' });
+    expect(within(salary).getByLabelText('Threshold (%)')).toHaveValue('20');
+    expect(salary).toHaveTextContent(/Changed by Admin/u);
+    const stable = screen.getByRole('form', { name: 'Salary changed after a long stable period' });
+    expect(within(stable).getByLabelText('Threshold (months)')).toHaveValue('12');
+    const missing = screen.getByRole('form', { name: 'Employee missing' });
+    expect(within(missing).queryByLabelText(/Threshold/u)).toBeNull();
+  });
+
+  it('words a template without an activation date', async () => {
+    vi.mocked(getTemplateSettings).mockResolvedValue({
+      kind: 'ok',
+      data: fieldTemplate({ activatedAt: null }),
+    });
+    render(await SettingsPage());
+    expect(screen.getByText(/Template version 1, in use since —/u)).toBeInTheDocument();
   });
 });
 

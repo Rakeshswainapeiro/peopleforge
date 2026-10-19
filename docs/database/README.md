@@ -1,6 +1,6 @@
 # Database documentation
 
-**Status:** schemas [`core` and `increments`](core-schema.md) (slice S1, ADR-002, ADR-008) and the web sign-in schema [`auth`](auth-schema.md). The full business data model is part of the solution design (SOW-D2). This file defines the conventions every migration must follow, so the schema is documented and production-ready from the first table.
+**Status:** schemas [`core` and `increments`](core-schema.md) (slice S1, ADR-002, ADR-008), [`groupdata`](groupdata-schema.md) (R2, ADR-015) and the web sign-in schema [`auth`](auth-schema.md). The full business data model is part of the solution design (SOW-D2). This file defines the conventions every migration must follow, so the schema is documented and production-ready from the first table.
 
 ## What lives here
 

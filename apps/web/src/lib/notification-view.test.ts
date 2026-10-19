@@ -1,7 +1,7 @@
 import type { Notification, NotificationPage } from '@peopleforge/contracts';
 import { describe, expect, it } from 'vitest';
 import { createTranslator } from '@/i18n/translator';
-import { notificationRows, notificationsHref } from './notification-view';
+import { groupTargetOf, notificationRows, notificationsHref } from './notification-view';
 
 const t = createTranslator('en');
 const base: Notification = {
@@ -50,6 +50,7 @@ describe('notificationRows [R1-07]', () => {
         meta: '14 Oct 2026, 16:05',
         unread: true,
         action: 'View',
+        groupTarget: null,
       },
       expect.objectContaining({
         tag: { tone: 'warning', label: 'Action needed' },
@@ -66,6 +67,66 @@ describe('notificationRows [R1-07]', () => {
       reference: '',
       message: 'Submitted to Sirius HR with 0 employees.',
     });
+  });
+});
+
+describe('group data notifications [R2-01, R2-11]', () => {
+  const FLAG = '88888888-8888-4888-8888-888888888881';
+  const UPLOAD = '66666666-6666-4666-8666-666666666669';
+
+  it('leads to the flag, the upload or the upload page', () => {
+    expect(groupTargetOf({ kind: 'flag_reminder', params: { flagId: FLAG } })).toBe(`flag:${FLAG}`);
+    expect(groupTargetOf({ kind: 'group_flags_raised', params: { uploadId: UPLOAD } })).toBe(
+      `upload:${UPLOAD}`,
+    );
+    expect(groupTargetOf({ kind: 'upload_due', params: {} })).toBe('upload-page');
+    expect(groupTargetOf({ kind: 'request_submitted', params: { flagId: 'x' } })).toBeNull();
+  });
+
+  it('words months, flags and statuses, counting flags', () => {
+    const rows = notificationRows(
+      page([
+        {
+          ...base,
+          kind: 'group_upload_accepted',
+          requestId: null,
+          params: {
+            reference: 'UP-0007',
+            entity: 'SUB-A',
+            period: '2026-09',
+            version: 2,
+            flags: 1,
+            uploadId: UPLOAD,
+          },
+        },
+        {
+          ...base,
+          kind: 'flag_updated',
+          requestId: null,
+          params: {
+            flag: 'AN-0042',
+            flagId: FLAG,
+            entity: 'SUB-A',
+            actor: 'Sara',
+            flagStatus: 'resolved',
+          },
+        },
+        {
+          ...base,
+          kind: 'group_flags_raised',
+          requestId: null,
+          params: { reference: 'UP-0007', period: 'bad', count: 3, flagStatus: 'nope' },
+        },
+      ]),
+      'en',
+      t,
+    );
+    expect(rows.map((row) => row.message)).toEqual([
+      'SUB-A uploaded employee data for September 2026: version 2 is in use, with 1 anomaly flag.',
+      'Sara updated anomaly flag AN-0042 (SUB-A): Resolved.',
+      'Your upload UP-0007 for  raised 3 anomaly flags for you to review.',
+    ]);
+    expect(rows[0]?.groupTarget).toBe(`upload:${UPLOAD}`);
   });
 });
 

@@ -1,4 +1,9 @@
-import { createEmailOutbox, queueReminders, type DatabaseHandle } from '@peopleforge/db';
+import {
+  createEmailOutbox,
+  queueGroupReminders,
+  queueReminders,
+  type DatabaseHandle,
+} from '@peopleforge/db';
 import type { EmailSender } from '@peopleforge/integrations';
 import { DEFAULT_LOCALE } from '@sirius/shared-types';
 import type { Server } from 'node:http';
@@ -81,7 +86,9 @@ export function createWorker({
         logger,
       });
       reminders = startReminders({
-        run: () => queueReminders(database.db),
+        // Increment portal (R1-13) and group data (R2-11) reminders, each queued once.
+        run: async () =>
+          (await queueReminders(database.db)) + (await queueGroupReminders(database.db)),
         intervalMs: env.REMINDER_INTERVAL_MS,
         logger,
       });

@@ -16,7 +16,12 @@
     "conversations": "Conversations",
     "audit": "Audit trail",
     "settings": "Settings",
-    "analytics": "Analytics"
+    "analytics": "Analytics",
+    "groupEmployees": "Employee data",
+    "groupUpload": "Upload data",
+    "groupUploads": "Uploads",
+    "groupQuality": "Data quality",
+    "groupExtract": "Raw data extract"
   },
   "home": {
     "heading": "Welcome",
@@ -189,6 +194,30 @@
       "deadline_approaching": {
         "one": "Draft with {count} employee not submitted yet. Deadline: {deadline}.",
         "other": "Draft with {count} employees not submitted yet. Deadline: {deadline}."
+      },
+      "group_upload_accepted": {
+        "one": "{entity} uploaded employee data for {period}: version {version} is in use, with {count} anomaly flag.",
+        "other": "{entity} uploaded employee data for {period}: version {version} is in use, with {count} anomaly flags."
+      },
+      "group_flags_raised": {
+        "one": "Your upload {reference} for {period} raised {count} anomaly flag for you to review.",
+        "other": "Your upload {reference} for {period} raised {count} anomaly flags for you to review."
+      },
+      "flag_updated": {
+        "one": "{actor} updated anomaly flag {flag} ({entity}): {flagStatus}.",
+        "other": "{actor} updated anomaly flag {flag} ({entity}): {flagStatus}."
+      },
+      "flag_reminder": {
+        "one": "{actor} from Sirius HR sent a reminder about anomaly flag {flag} ({entity}).",
+        "other": "{actor} from Sirius HR sent a reminder about anomaly flag {flag} ({entity})."
+      },
+      "upload_due": {
+        "one": "{entity}'s employee data for {period} hasn't been uploaded, {days} days after the month ended.",
+        "other": "{entity}'s employee data for {period} hasn't been uploaded, {days} days after the month ended."
+      },
+      "flag_open": {
+        "one": "Anomaly flag {flag} ({entity}) has been open for more than {days} days.",
+        "other": "Anomaly flag {flag} ({entity}) has been open for more than {days} days."
       }
     },
     "pagination": {
@@ -920,6 +949,14 @@
       "deadline_approaching": {
         "title": "Submission deadline approaching",
         "body": "Reminds whoever prepares a draft this many days before the cycle's submission deadline."
+      },
+      "upload_due": {
+        "title": "Monthly employee data not uploaded",
+        "body": "Reminds a subsidiary's HR users when last month's employee data hasn't been uploaded this many days after the month ended."
+      },
+      "flag_open": {
+        "title": "Anomaly flag still open",
+        "body": "Reminds a flag's owner when it has stayed open or in progress this many days."
       }
     },
     "errors": {
@@ -990,5 +1027,334 @@
     "emptyBody": "No submitted requests match these filters.",
     "emptyCriteria": "No criteria verified yet.",
     "emptyFlow": "No returns or questions yet."
+  },
+  "group": {
+    "subsidiary": "Subsidiary",
+    "month": "Month",
+    "department": "Department",
+    "allSubsidiaries": "All subsidiaries",
+    "allMonths": "All months",
+    "allDepartments": "All departments",
+    "filters": "Filters",
+    "search": "Search",
+    "apply": "Apply",
+    "versionNumber": "Version {version}",
+    "problemCounts": "{errors} errors · {warnings} warnings",
+    "uploadedBy": "{name} · {date}",
+    "wholeFile": "Whole file",
+    "headerRow": "Header row",
+    "rowNumber": "Row {row}",
+    "issues": {
+      "unreadable": "The file can't be read as Excel (.xlsx) or UTF-8 CSV.",
+      "macros": "The workbook contains macros. Save it as a plain .xlsx workbook.",
+      "too_large": "The workbook expands to more data than allowed.",
+      "empty_file": "The file has no employee rows.",
+      "too_many_rows": "The file has more rows than allowed.",
+      "missing_column": "A required column is missing.",
+      "unknown_column": "This column isn't in the template and was ignored.",
+      "duplicate_column": "This column appears more than once.",
+      "formula": "Formulas aren't accepted: paste values only.",
+      "required": "A value is required.",
+      "invalid_date": "Not a date. Use YYYY-MM-DD or DD/MM/YYYY.",
+      "invalid_number": "Not a number. Use digits with up to 2 decimals.",
+      "not_allowed": "Not one of the allowed values.",
+      "too_long": "The text is too long.",
+      "duplicate_employee": "This employee ID appears more than once.",
+      "invalid_currency": "Not an ISO currency code (e.g. AED).",
+      "left_without_date": "An employee who left needs a leaving date.",
+      "future_date": "The date is after the end of the month.",
+      "date_order": "The dates are in the wrong order."
+    },
+    "severity": {
+      "error": "Error",
+      "warning": "Warning"
+    },
+    "uploadStatus": {
+      "accepted": "In use",
+      "superseded": "Replaced",
+      "rejected": "Rejected"
+    },
+    "flagStatus": {
+      "open": "Open",
+      "in_progress": "In progress",
+      "resolved": "Resolved"
+    },
+    "employmentStatus": {
+      "active": "Active",
+      "on_leave": "On leave",
+      "left": "Left"
+    },
+    "rules": {
+      "missing_employee": {
+        "name": "Employee missing",
+        "description": "In last month's data, missing now without a leaving date.",
+        "withThreshold": "In last month's data, missing now without a leaving date."
+      },
+      "grade_change": {
+        "name": "Grade changed",
+        "description": "The grade differs from last month.",
+        "withThreshold": "The grade differs from last month."
+      },
+      "salary_change": {
+        "name": "Salary changed sharply",
+        "description": "Gross salary changed from last month.",
+        "withThreshold": "Gross salary changed by more than {threshold}% from last month."
+      },
+      "salary_stable_then_changed": {
+        "name": "Salary changed after a long stable period",
+        "description": "Gross salary changed after staying the same for a year.",
+        "withThreshold": "Gross salary changed after staying the same for {threshold} months."
+      },
+      "increment_mismatch": {
+        "name": "Salary differs from the approved increment",
+        "description": "The new salary differs from the increment approved in the Increment Portal.",
+        "withThreshold": "The new salary differs by more than {threshold}% from the increment approved in the Increment Portal."
+      },
+      "outside_grade_band": {
+        "name": "Salary outside its grade band",
+        "description": "Gross salary is below or above its grade's band.",
+        "withThreshold": "Gross salary is below or above its grade's band."
+      },
+      "duplicate_across_entities": {
+        "name": "Employee ID in another subsidiary",
+        "description": "The same employee ID is in another subsidiary's data this month.",
+        "withThreshold": "The same employee ID is in another subsidiary's data this month."
+      },
+      "headcount_change": {
+        "name": "Headcount moved sharply",
+        "description": "Headcount changed from last month.",
+        "withThreshold": "Headcount changed by more than {threshold}% from last month."
+      },
+      "payroll_change": {
+        "name": "Payroll moved sharply",
+        "description": "Monthly gross payroll changed from last month.",
+        "withThreshold": "Monthly gross payroll changed by more than {threshold}% from last month."
+      }
+    },
+    "detail": {
+      "previous": "Last month",
+      "current": "This month",
+      "expected": "Expected (approved)",
+      "approvedPercent": "Approved increment",
+      "change": "Change",
+      "min": "Band minimum",
+      "max": "Band maximum",
+      "grade": "Grade",
+      "months": "Months unchanged",
+      "threshold": "Threshold",
+      "previousPeriod": "Last seen in"
+    },
+    "compare": {
+      "title": "Compared with the previous month",
+      "first": "This is the subsidiary's first month: nothing to compare yet.",
+      "against": "Against {period}.",
+      "headcount": "Headcount",
+      "fromTo": "{from} → {to}",
+      "payroll": "Payroll change",
+      "newRecords": "New employees",
+      "left": "Left",
+      "missing": "Missing",
+      "changed": "Changed",
+      "warningsTitle": "Check these totals",
+      "warnings": {
+        "headcount_change": "Headcount moved more than the threshold.",
+        "payroll_change": "Payroll moved more than the threshold."
+      }
+    },
+    "errors": {
+      "invalid": "Check the values: choose a subsidiary, a month and a file.",
+      "mediaType": "Only Excel (.xlsx) or CSV files made from the template are accepted.",
+      "tooLarge": "The file is larger than 5 MB.",
+      "infected": "The file was refused by the malware scan.",
+      "duplicateFile": "This file is already the version in use for that month.",
+      "future": "That month hasn't started yet.",
+      "forbidden": "You can't do that for this subsidiary.",
+      "stale": "Someone changed this meanwhile. Reload the page to see it.",
+      "superseded": "A newer version of the data closed this flag.",
+      "noteRequired": "Write a resolution note to resolve the flag.",
+      "unavailable": "PeopleForge is temporarily unavailable. Try again in a moment.",
+      "generic": "That didn't work. Try again in a moment."
+    },
+    "pagination": {
+      "navigation": "Pages",
+      "pageOf": "Page {page} of {pages}",
+      "first": "First page",
+      "previous": "Previous page",
+      "next": "Next page",
+      "last": "Last page"
+    },
+    "upload": {
+      "heading": "Upload employee data",
+      "intro": "Upload your subsidiary's employee data at the end of each month, in the template's columns. Each file is checked; a file with errors changes nothing.",
+      "downloadTemplate": "Download template",
+      "formTitle": "Upload a month",
+      "templateNote": "Template version {version} (since {date}): {fields} columns, {required} required. Excel (.xlsx) or UTF-8 CSV, values only.",
+      "file": "File",
+      "fileHint": "Excel or CSV · max {mb} MB · up to {rows} employees",
+      "submit": "Upload",
+      "submitting": "Checking the file…",
+      "recentTitle": "Latest uploads",
+      "allUploads": "All uploads"
+    },
+    "uploads": {
+      "heading": "Uploads",
+      "intro": "Every file uploaded: the version in use for each month, the versions it replaced and files rejected with their problems.",
+      "emptyTitle": "No uploads yet",
+      "emptyBody": "Uploaded files appear here with their checks.",
+      "colUpload": "Upload",
+      "colMonth": "Subsidiary · month",
+      "colStatus": "Status",
+      "colRows": "Rows",
+      "colProblems": "Problems",
+      "colFlags": "Flags"
+    },
+    "result": {
+      "heading": "{reference} · {entity} · {period}",
+      "meta": "{file} · uploaded by {name} on {date} · template version {template}",
+      "original": "Original file",
+      "rejectedTitle": "Rejected: nothing changed",
+      "rejectedBody": "Fix the problems below in your file and upload it again. The data in use stays as it was.",
+      "acceptedTitle": "Accepted as version {version}",
+      "acceptedBody": "This is now the data in use for the month.",
+      "supersededBody": "A later version has replaced it; it is kept for the record.",
+      "rows": "Rows",
+      "errors": "Errors",
+      "warnings": "Warnings",
+      "flags": "Anomaly flags",
+      "viewFlags": "View {count} flags",
+      "problemsTitle": "Problems found",
+      "problemsIntro": "Where each problem is and what it is. Values aren't shown.",
+      "problemsMore": "The first {shown} of {total}. Download the report for all of them.",
+      "problemsDownload": "Download problem report",
+      "colWhere": "Where",
+      "colColumn": "Column",
+      "colSeverity": "Severity",
+      "colProblem": "Problem",
+      "uploadAgain": "Upload a corrected file"
+    },
+    "employees": {
+      "heading": "Employee data",
+      "intro": "One record per employee for {period}: the version in use for each subsidiary.",
+      "subsidiariesWithData": "Subsidiaries with data",
+      "ofTotal": "{count} of {total}",
+      "records": "Employee records",
+      "versions": "Versions uploaded",
+      "lastChange": "Last change",
+      "lastChangeHint": "Version {version} · {date}",
+      "searchPlaceholder": "Name or employee ID",
+      "emptyTitle": "No records for this month",
+      "emptyBody": "Records appear once a subsidiary's upload for the month is accepted.",
+      "colEmployee": "Employee",
+      "colGrade": "Grade",
+      "colSalary": "Gross monthly salary",
+      "colStatus": "Status",
+      "colVersion": "Version"
+    },
+    "history": {
+      "intro": "{number} · {entity} · {count} versions kept",
+      "list": "Versions",
+      "versionTitle": "{period} · version {version}",
+      "uploaded": "Uploaded by {name} on {date}",
+      "first": "First record of this employee.",
+      "unchanged": "No change from the version before.",
+      "field": "Field",
+      "before": "Before",
+      "after": "After"
+    },
+    "extract": {
+      "heading": "Raw data extract",
+      "intro": "The rows subsidiaries uploaded (RP-08), with subsidiary, uploader, time and version. Every extraction is recorded in the audit trail.",
+      "formTitle": "Extract",
+      "note": "Choose the month, the subsidiary and the format. The Palm HR CSV uses the mapped Palm HR field names.",
+      "format": "Format",
+      "formats": {
+        "xlsx": "Excel (.xlsx)",
+        "csv": "CSV",
+        "palmhr": "Palm HR CSV"
+      },
+      "allVersions": "Include replaced versions",
+      "download": "Download"
+    },
+    "quality": {
+      "heading": "Data quality & anomalies",
+      "intro": "Anomaly flags and each subsidiary's data for {period} against the month before.",
+      "introAll": "Anomaly flags across all months.",
+      "oldestOpen": "Oldest open flag",
+      "byEntity": "Flags by subsidiary",
+      "noFlags": "No flags.",
+      "variations": "Variation vs previous month",
+      "variationsIntro": "The version in use for each subsidiary, compared with its previous month.",
+      "chooseMonth": "Choose a month to compare subsidiaries.",
+      "noUploads": "No accepted uploads for this month yet.",
+      "flagsTitle": "Flags",
+      "status": "Status",
+      "allStatuses": "All statuses",
+      "rule": "Rule",
+      "allRules": "All rules",
+      "emptyTitle": "No flags",
+      "emptyBody": "Flags raised by the anomaly rules appear here.",
+      "wholeSubsidiary": "Whole subsidiary",
+      "colFlag": "Flag",
+      "colSubject": "Employee",
+      "colSubsidiary": "Subsidiary · month",
+      "colOwner": "Owner",
+      "colRaised": "Raised"
+    },
+    "flag": {
+      "me": "Me",
+      "previous": "Previous flag",
+      "next": "Next flag",
+      "superseded": "A newer version of this month's data replaced the upload that raised this flag, so it was closed.",
+      "found": "What was found",
+      "upload": "Upload",
+      "noValues": "Values are shown to people with access to pay.",
+      "workTitle": "Resolution",
+      "owner": "Owner: {name}",
+      "ownerLabel": "Owner",
+      "note": "Resolution note",
+      "noteHint": "Required to resolve: what you checked and what you did.",
+      "save": "Save",
+      "saving": "Saving…",
+      "saved": "Saved.",
+      "remind": "Send reminder",
+      "reminding": "Sending…",
+      "reminded": "Reminder sent.",
+      "noNote": "No resolution note yet.",
+      "activity": "Activity",
+      "system": "PeopleForge",
+      "supersededActivity": "Closed: the data was replaced by a newer version."
+    },
+    "activity": {
+      "raised": "Flag raised by the anomaly rules",
+      "reminded": "Reminder sent to {name}",
+      "updated": "Status {status} · owner {owner}",
+      "other": "Changed"
+    },
+    "settings": {
+      "templateTitle": "Employee data template",
+      "templateIntro": "Template version {version}, in use since {date}. The columns every subsidiary uploads, and the Palm HR field each maps to (placeholders until agreed).",
+      "key": "Key",
+      "labelEn": "Column (English)",
+      "labelAr": "Column (Arabic)",
+      "type": "Type",
+      "required": "Required",
+      "allowed": "Allowed values",
+      "palmHr": "Palm HR field",
+      "remove": "Remove",
+      "add": "Add a field",
+      "templateNote": "Publishing creates version {next}. Uploads already accepted keep the version they were checked with.",
+      "publish": "Publish template version {next}",
+      "published": "Published.",
+      "types": {
+        "text": "Text",
+        "date": "Date",
+        "decimal": "Number",
+        "enum": "List of values"
+      },
+      "rulesTitle": "Anomaly rules",
+      "rulesIntro": "Checked on every accepted upload. Flags go to the uploader to resolve.",
+      "threshold": "Threshold",
+      "months": "months"
+    }
   }
 }

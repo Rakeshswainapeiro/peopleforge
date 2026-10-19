@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: PeopleForge API
-  version: 0.12.0
+  version: 0.13.0
   description: >
     Phase 1 API (BRD SIRIUS-HR-BRD-001). Every /api/v1 route requires an access token from the
     Sirius identity provider (Microsoft Entra ID; Keycloak locally) sent as
@@ -12,6 +12,10 @@ servers:
   - url: http://localhost:4000
     description: Local development
 tags:
+  - name: group-data
+    description: R2 group employee data, uploads, versions, raw extract (R2-01 … R2-04, R2-08, R2-14)
+  - name: data-quality
+    description: R2 anomaly rules and flags (R2-09 … R2-11, DASH-D7)
   - name: increment-requests
     description: R1 Increment Request Portal
   - name: notifications
@@ -780,7 +784,11 @@ paths:
         - name: kind
           in: path
           required: true
-          schema: { type: string, enum: [review_overdue, return_overdue, deadline_approaching] }
+          schema:
+            {
+              type: string,
+              enum: [review_overdue, return_overdue, deadline_approaching, upload_due, flag_open],
+            }
       requestBody:
         required: true
         content:
@@ -973,6 +981,363 @@ paths:
         '204': { description: Marked }
         '400': { $ref: '#/components/responses/ValidationFailed' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
+  /api/v1/group/template:
+    get:
+      tags: [group-data]
+      summary: The active field template (R2-01, R2-02)
+      description: Needs `employee_data:read`. Placeholder fields until Sirius HR agrees the list (BRD A3).
+      responses:
+        '200':
+          description: The template
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FieldTemplate' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/v1/group/template/file:
+    get:
+      tags: [group-data]
+      summary: The template as Excel, to fill in (R2-01)
+      parameters:
+        - { name: locale, in: query, schema: { type: string, enum: [en, ar], default: en } }
+      responses:
+        '200':
+          description: '`PeopleForge-employee-data-template-vN.xlsx` (attachment, never cached)'
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: { type: string, format: binary }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/v1/group/uploads:
+    get:
+      tags: [group-data]
+      summary: Uploads, newest first (R2-01, R2-04)
+      description: Needs `employee_data:read`; subsidiary HR see their own subsidiaries (RLS, R2-12).
+      parameters:
+        - { name: entityId, in: query, schema: { type: string, format: uuid } }
+        - { name: period, in: query, schema: { $ref: '#/components/schemas/Period' } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: pageSize, in: query, schema: { type: integer, enum: [10, 25, 50], default: 10 } }
+      responses:
+        '200':
+          description: A page of uploads
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UploadPage' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [group-data]
+      summary: Upload a subsidiary's employee data for a month (R2-01)
+      description: >
+        Needs `employee_data:upload` and the subsidiary in the caller's scope (403 otherwise).
+        Multipart: `entityId`, `period` (not a future month) and one `file` ≤ 5 MB, Excel (.xlsx,
+        by magic bytes; macros, formulas and zip bombs refused) or UTF-8 CSV named .csv, ≤ 10,000
+        rows. Scanned for malware before it is read. A file with errors is recorded as `rejected`
+        with its problems (by row and field, never values) and changes nothing; a valid file is
+        compared with the previous month, checked by the anomaly rules, and becomes the next
+        version in use. The same file as the version in use is refused (409 `duplicate_file`).
+        Sirius HR reviewers are notified; the uploader owns any flags raised.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [entityId, period, file]
+              properties:
+                entityId: { type: string, format: uuid }
+                period: { $ref: '#/components/schemas/Period' }
+                file: { type: string, format: binary }
+      responses:
+        '201':
+          description: The upload, accepted or rejected
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UploadDetail' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+  /api/v1/group/uploads/{id}:
+    get:
+      tags: [group-data]
+      summary: One upload, with up to 200 problems (R2-01, R2-09)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: The upload
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UploadDetail' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/group/uploads/{id}/issues:
+    get:
+      tags: [group-data]
+      summary: An upload's problem report as Excel (R2-01)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: locale, in: query, schema: { type: string, enum: [en, ar], default: en } }
+      responses:
+        '200':
+          description: '`UP-NNNN-problems.xlsx`'
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: { type: string, format: binary }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/group/uploads/{id}/file:
+    get:
+      tags: [group-data]
+      summary: The file as uploaded (R2-08); audited (`group_upload.downloaded`)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: The original file (attachment, never cached)
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/group/employees:
+    get:
+      tags: [group-data]
+      summary: The records in use for a month (R2-03, R2-04)
+      description: Pay only with `employee_data:read_compensation` (null otherwise).
+      parameters:
+        - {
+            name: period,
+            in: query,
+            required: true,
+            schema: { $ref: '#/components/schemas/Period' },
+          }
+        - { name: entityId, in: query, schema: { type: string, format: uuid } }
+        - { name: department, in: query, schema: { type: string, maxLength: 80 } }
+        - { $ref: '#/components/parameters/SearchFilter' }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: pageSize, in: query, schema: { type: integer, enum: [10, 25, 50], default: 25 } }
+      responses:
+        '200':
+          description: A page of records with the cards' counts
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EmployeePage' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/v1/group/employees/{id}/history:
+    get:
+      tags: [group-data]
+      summary: One employee across months and versions, with what changed (R2-04, R2-13)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Every version, newest first
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EmployeeHistory' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/group/extract:
+    get:
+      tags: [group-data]
+      summary: RP-08 raw data extract (R2-08, R2-14)
+      description: >
+        Needs `employee_data:extract_raw`. The rows as uploaded with subsidiary, month, upload,
+        version, uploader, time and file; `palmhr` heads the template fields with their mapped
+        Palm HR names. CSV is UTF-8 with a BOM; text neutralised against formula injection.
+        Audited (`group_data.extracted`, subject `RP-08`).
+      parameters:
+        - {
+            name: format,
+            in: query,
+            required: true,
+            schema: { type: string, enum: [xlsx, csv, palmhr] },
+          }
+        - {
+            name: period,
+            in: query,
+            required: true,
+            schema: { $ref: '#/components/schemas/Period' },
+          }
+        - { name: entityId, in: query, schema: { type: string, format: uuid } }
+        - {
+            name: allVersions,
+            in: query,
+            schema: { type: string, enum: ['true', 'false'], default: 'false' },
+          }
+        - { name: locale, in: query, schema: { type: string, enum: [en, ar], default: en } }
+      responses:
+        '200':
+          description: '`PeopleForge-RP-08-YYYY-MM.xlsx|.csv|-palm-hr.csv`'
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: { type: string, format: binary }
+            text/csv:
+              schema: { type: string, format: binary }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/v1/group/flags:
+    get:
+      tags: [data-quality]
+      summary: Anomaly flags with counts, by subsidiary, and the month's variations (DASH-D7)
+      description: Needs `employee_data:read`; values hidden without compensation access.
+      parameters:
+        - { name: period, in: query, schema: { $ref: '#/components/schemas/Period' } }
+        - { name: entityId, in: query, schema: { type: string, format: uuid } }
+        - { name: status, in: query, schema: { type: string, enum: [open, in_progress, resolved] } }
+        - { name: rule, in: query, schema: { type: string, pattern: '^ANM-\\d{2}$' } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+      responses:
+        '200':
+          description: A page of flags
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FlagPage' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/v1/group/flags/{id}:
+    get:
+      tags: [data-quality]
+      summary: One flag with its activity, neighbours and possible owners (R2-11)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: The flag
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FlagDetail' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [data-quality]
+      summary: Owner, status and resolution note (R2-11)
+      description: >
+        Needs `anomaly:resolve`. Resolving needs a note (400 `note_required`); the owner must be
+        someone who uploaded the subsidiary's data, a current owner, or the caller. A flag closed
+        because its data was replaced can't change (409 `superseded`). The owner is notified
+        unless they made the change. Audited without the note's text.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateFlag' }
+      responses:
+        '200':
+          description: The flag
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Flag' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/group/flags/{id}/remind:
+    post:
+      tags: [data-quality]
+      summary: Send the owner a reminder (Sirius HR, R2-11)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '204': { description: Reminder queued (in-app and email) }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/settings/template:
+    get:
+      tags: [group-data]
+      summary: The field template, for admins (`template:configure`)
+      responses:
+        '200':
+          description: The template
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FieldTemplate' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    put:
+      tags: [group-data]
+      summary: Publish the next template version (R2-02, R2-14)
+      description: >
+        Core fields keep their key and type and can't be removed; dashboard fields stay required;
+        keys are unique; list fields need allowed values (400 otherwise). A stale version is 409.
+        Audited (`field_template.published`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PublishTemplate' }
+      responses:
+        '200':
+          description: The new version
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FieldTemplate' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/settings/anomaly-rules:
+    get:
+      tags: [data-quality]
+      summary: The anomaly rules (R2-10, `template:configure`)
+      responses:
+        '200':
+          description: The rules
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/AnomalyRule' } }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/v1/settings/anomaly-rules/{code}:
+    put:
+      tags: [data-quality]
+      summary: Turn a rule on or off and set its threshold (R2-10)
+      parameters:
+        - {
+            name: code,
+            in: path,
+            required: true,
+            schema: { type: string, pattern: '^ANM-\\d{2}$' },
+          }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [threshold, enabled]
+              properties:
+                threshold: { type: [string, 'null'], pattern: '^\\d{1,3}(\\.\\d{1,2})?$' }
+                enabled: { type: boolean }
+      responses:
+        '200':
+          description: The rule
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AnomalyRule' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
 security:
   - bearer: []
 components:
@@ -1045,6 +1410,377 @@ components:
         application/json:
           schema: { $ref: '#/components/schemas/ApiError' }
   schemas:
+    Period:
+      type: string
+      pattern: '^20\\d{2}-(0[1-9]|1[0-2])$'
+      description: A month of data, as at its end ("2026-09").
+    TemplateField:
+      type: object
+      required: [key, label, type, required, core, allowedValues, palmHrField]
+      properties:
+        key: { type: string }
+        label: { $ref: '#/components/schemas/LocalisedText' }
+        type: { type: string, enum: [text, date, decimal, enum] }
+        required: { type: boolean }
+        core: { type: boolean, description: Fixed key and type (dashboards rely on it) }
+        allowedValues: { type: array, items: { type: string } }
+        palmHrField: { type: [string, 'null'], description: Mapped Palm HR field (R2-14, A7) }
+    FieldTemplate:
+      type: object
+      required: [id, version, activatedAt, fields]
+      properties:
+        id: { type: string, format: uuid }
+        version: { type: integer, minimum: 1 }
+        activatedAt: { type: [string, 'null'], format: date-time }
+        fields: { type: array, items: { $ref: '#/components/schemas/TemplateField' } }
+    PublishTemplate:
+      type: object
+      additionalProperties: false
+      required: [version, fields]
+      properties:
+        version: { type: integer, minimum: 1, description: The version being replaced }
+        fields:
+          type: array
+          minItems: 1
+          maxItems: 60
+          items:
+            type: object
+            additionalProperties: false
+            required: [key, label, type, required, allowedValues, palmHrField]
+            properties:
+              key: { type: string, pattern: '^[a-z][a-z0-9_]{1,39}$' }
+              label: { $ref: '#/components/schemas/LocalisedText' }
+              type: { type: string, enum: [text, date, decimal, enum] }
+              required: { type: boolean }
+              allowedValues: { type: array, maxItems: 50, items: { type: string, maxLength: 60 } }
+              palmHrField: { type: [string, 'null'], maxLength: 60 }
+    UploadIssue:
+      type: object
+      required: [row, field, code, severity]
+      properties:
+        row:
+          { type: [integer, 'null'], description: Spreadsheet row (header = 1); null for the file }
+        field: { type: [string, 'null'] }
+        code:
+          type: string
+          enum:
+            [
+              unreadable,
+              macros,
+              too_large,
+              empty_file,
+              too_many_rows,
+              missing_column,
+              unknown_column,
+              duplicate_column,
+              formula,
+              required,
+              invalid_date,
+              invalid_number,
+              not_allowed,
+              too_long,
+              duplicate_employee,
+              invalid_currency,
+              left_without_date,
+              future_date,
+              date_order,
+            ]
+        severity: { type: string, enum: [error, warning] }
+    UploadComparison:
+      type: object
+      description: Against the subsidiary's previous month in use (R2-09); counts and percentages only.
+      required:
+        [
+          previousPeriod,
+          headcount,
+          previousHeadcount,
+          payrollChangePercent,
+          newRecords,
+          left,
+          missing,
+          changed,
+          warnings,
+        ]
+      properties:
+        previousPeriod: { oneOf: [{ $ref: '#/components/schemas/Period' }, { type: 'null' }] }
+        headcount: { type: integer }
+        previousHeadcount: { type: [integer, 'null'] }
+        payrollChangePercent:
+          { type: [string, 'null'], description: Largest change of any currency, one decimal }
+        newRecords: { type: integer }
+        left: { type: integer }
+        missing: { type: integer }
+        changed: { type: integer }
+        warnings: { type: array, items: { type: string, enum: [headcount_change, payroll_change] } }
+    Upload:
+      type: object
+      required:
+        [
+          id,
+          reference,
+          entity,
+          period,
+          version,
+          status,
+          fileName,
+          rows,
+          errors,
+          warnings,
+          templateVersion,
+          uploadedByName,
+          uploadedAt,
+          comparison,
+          flags,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        reference: { type: string, example: UP-0007 }
+        entity:
+          {
+            type: object,
+            properties: { id: { type: string, format: uuid }, code: { type: string } },
+          }
+        period: { $ref: '#/components/schemas/Period' }
+        version: { type: [integer, 'null'], description: Null when rejected }
+        status: { type: string, enum: [rejected, accepted, superseded] }
+        fileName: { type: string }
+        rows: { type: integer }
+        errors: { type: integer }
+        warnings: { type: integer }
+        templateVersion: { type: integer }
+        uploadedByName: { type: string }
+        uploadedAt: { type: string, format: date-time }
+        comparison: { oneOf: [{ $ref: '#/components/schemas/UploadComparison' }, { type: 'null' }] }
+        flags: { type: integer }
+    UploadDetail:
+      allOf:
+        - { $ref: '#/components/schemas/Upload' }
+        - type: object
+          required: [issues, issuesTotal]
+          properties:
+            issues:
+              { type: array, maxItems: 200, items: { $ref: '#/components/schemas/UploadIssue' } }
+            issuesTotal: { type: integer }
+    UploadPage:
+      type: object
+      required: [items, page, pageSize, total]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Upload' } }
+        page: { type: integer }
+        pageSize: { type: integer }
+        total: { type: integer }
+    EmployeeRecord:
+      type: object
+      description: One record in use (R2-04); the template's core fields plus `extra`.
+      required:
+        [
+          id,
+          entity,
+          period,
+          employeeNumber,
+          fullName,
+          department,
+          grade,
+          grossSalary,
+          currency,
+          dateJoined,
+          gender,
+          status,
+          extra,
+          upload,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        entity:
+          {
+            type: object,
+            properties: { id: { type: string, format: uuid }, code: { type: string } },
+          }
+        period: { $ref: '#/components/schemas/Period' }
+        employeeNumber: { type: string }
+        fullName: { type: string }
+        department: { type: string }
+        designation: { type: [string, 'null'] }
+        grade: { type: string }
+        grossSalary:
+          {
+            oneOf: [{ $ref: '#/components/schemas/Decimal' }, { type: 'null' }],
+            description: Null without compensation access,
+          }
+        currency: { type: string }
+        dateJoined: { type: string, format: date }
+        dateOfBirth: { type: [string, 'null'], format: date }
+        gender: { type: string }
+        nationality: { type: [string, 'null'] }
+        status: { type: string }
+        dateLeft: { type: [string, 'null'], format: date }
+        costCentre: { type: [string, 'null'] }
+        extra: { type: object, additionalProperties: { type: string } }
+        upload:
+          {
+            type: object,
+            properties:
+              {
+                id: { type: string, format: uuid },
+                reference: { type: string },
+                version: { type: integer },
+              },
+          }
+    EmployeePage:
+      type: object
+      required: [items, page, pageSize, total, summary, departments]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/EmployeeRecord' } }
+        page: { type: integer }
+        pageSize: { type: integer }
+        total: { type: integer }
+        summary:
+          type: object
+          properties:
+            entitiesWithData: { type: integer }
+            entities: { type: integer }
+            versions: { type: integer }
+            lastChange: { type: [object, 'null'] }
+        departments: { type: array, items: { type: string } }
+    EmployeeHistory:
+      type: object
+      required: [employeeNumber, entity, versions]
+      properties:
+        employeeNumber: { type: string }
+        entity: { type: object }
+        versions:
+          type: array
+          items:
+            type: object
+            properties:
+              period: { $ref: '#/components/schemas/Period' }
+              upload: { type: object }
+              record: { $ref: '#/components/schemas/EmployeeRecord' }
+              changes:
+                type: array
+                items:
+                  {
+                    type: object,
+                    properties:
+                      {
+                        field: { type: string },
+                        before: { type: [string, 'null'] },
+                        after: { type: [string, 'null'] },
+                      },
+                  }
+    AnomalyRule:
+      type: object
+      required: [code, kind, threshold, enabled, updatedAt, updatedByName]
+      properties:
+        code: { type: string, example: ANM-03 }
+        kind:
+          {
+            type: string,
+            enum:
+              [
+                missing_employee,
+                grade_change,
+                salary_change,
+                salary_stable_then_changed,
+                increment_mismatch,
+                outside_grade_band,
+                duplicate_across_entities,
+                headcount_change,
+                payroll_change,
+              ],
+          }
+        threshold: { type: [string, 'null'] }
+        enabled: { type: boolean }
+        updatedAt: { type: string, format: date-time }
+        updatedByName: { type: [string, 'null'] }
+    Flag:
+      type: object
+      required: [id, reference, entity, period, upload, ruleCode, ruleKind, owner, status, detail]
+      properties:
+        id: { type: string, format: uuid }
+        reference: { type: string, example: AN-0042 }
+        entity: { type: object }
+        period: { $ref: '#/components/schemas/Period' }
+        upload: { type: object }
+        ruleCode: { type: string }
+        ruleKind: { type: string }
+        employeeNumber: { type: [string, 'null'] }
+        employeeName: { type: [string, 'null'] }
+        field: { type: [string, 'null'] }
+        detail:
+          {
+            type: object,
+            additionalProperties: { type: string },
+            description: Display values; empty without compensation access,
+          }
+        owner: { type: object, properties: { id: { type: string }, name: { type: string } } }
+        status: { type: string, enum: [open, in_progress, resolved] }
+        note: { type: [string, 'null'] }
+        resolvedReason: { type: [string, 'null'], enum: [superseded, null] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        resolvedAt: { type: [string, 'null'], format: date-time }
+    FlagPage:
+      type: object
+      required: [items, page, pageSize, total, counts, oldestOpenAt, rules, byEntity, variations]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Flag' } }
+        page: { type: integer }
+        pageSize: { type: integer }
+        total: { type: integer }
+        counts:
+          {
+            type: object,
+            properties:
+              {
+                open: { type: integer },
+                in_progress: { type: integer },
+                resolved: { type: integer },
+              },
+          }
+        oldestOpenAt: { type: [string, 'null'], format: date-time }
+        rules:
+          {
+            type: array,
+            items: { type: object, properties: { code: { type: string }, kind: { type: string } } },
+          }
+        byEntity: { type: array, items: { type: object } }
+        variations: { type: array, items: { type: object } }
+    FlagDetail:
+      type: object
+      required: [flag, activity, previousId, nextId, owners]
+      properties:
+        flag: { $ref: '#/components/schemas/Flag' }
+        activity:
+          {
+            type: array,
+            items:
+              {
+                type: object,
+                properties:
+                  {
+                    action: { type: string },
+                    actorName: { type: [string, 'null'] },
+                    at: { type: string, format: date-time },
+                    details: { type: object },
+                  },
+              },
+          }
+        previousId: { type: [string, 'null'], format: uuid }
+        nextId: { type: [string, 'null'], format: uuid }
+        owners:
+          {
+            type: array,
+            items: { type: object, properties: { id: { type: string }, name: { type: string } } },
+          }
+    UpdateFlag:
+      type: object
+      additionalProperties: false
+      required: [ownerId, status, note]
+      properties:
+        ownerId: { type: [string, 'null'], description: Null keeps the owner }
+        status: { type: string, enum: [open, in_progress, resolved] }
+        note: { type: [string, 'null'], maxLength: 2000, description: Required to resolve }
     Decimal:
       type: string
       pattern: '^\d{1,9}(\.\d{1,2})?$'
@@ -1639,7 +2375,11 @@ components:
       type: object
       required: [kind, days, enabled, updatedAt, updatedByName]
       properties:
-        kind: { type: string, enum: [review_overdue, return_overdue, deadline_approaching] }
+        kind:
+          {
+            type: string,
+            enum: [review_overdue, return_overdue, deadline_approaching, upload_due, flag_open],
+          }
         days: { type: integer, minimum: 1, maximum: 30 }
         enabled: { type: boolean }
         updatedAt: { type: string, format: date-time }
@@ -1712,8 +2452,16 @@ components:
               review_overdue,
               return_overdue,
               deadline_approaching,
+              group_upload_accepted,
+              group_flags_raised,
+              flag_updated,
+              flag_reminder,
+              upload_due,
+              flag_open,
             ]
-          description: What happened (the last three are reminders, R1-13); clients word it in the reader's language
+          description: >
+            What happened (review_overdue, return_overdue, deadline_approaching, upload_due and
+            flag_open are reminders, R1-13, R2-11); clients word it in the reader's language
         requestId: { type: [string, 'null'], format: uuid }
         params:
           type: object

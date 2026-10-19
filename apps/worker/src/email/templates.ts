@@ -30,6 +30,9 @@ const line = (max: number) =>
 const reference = line(40);
 const employees = z.number().int().min(0).max(10_000);
 const days = z.number().int().min(1).max(30);
+const count = z.number().int().min(0).max(100_000);
+/** A month of data, "2026-09". */
+const period = z.string().regex(/^20\d{2}-(0[1-9]|1[0-2])$/u);
 /** Days left before a deadline: 0 is the deadline day itself. */
 const dayCount = z.number().int().min(0).max(30);
 
@@ -42,6 +45,15 @@ export function formatDay(isoDate: string, locale: Locale): string {
     timeZone: 'UTC',
   }).format(new Date(`${isoDate}T00:00:00Z`));
 }
+/** A month as people read it ("September 2026"), in the reader's language. */
+export function formatMonth(month: string, locale: Locale): string {
+  return new Intl.DateTimeFormat(locale === 'en' ? 'en-GB' : locale, {
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(new Date(`${month}-01T00:00:00Z`));
+}
+
 const PARAMS = {
   request_submitted: z.object({ reference, employees }),
   request_received: z.object({ reference, employees, entity: line(50), actor: line(200) }),
@@ -71,9 +83,44 @@ const PARAMS = {
   review_overdue: z.object({ reference, employees, entity: line(50), days }),
   return_overdue: z.object({ reference, employees, days }),
   deadline_approaching: z.object({ reference, employees, deadline: z.iso.date(), days: dayCount }),
+  // Group employee data (R2-01, R2-10, R2-11): counts and references only, never values.
+  group_upload_accepted: z.object({
+    reference,
+    entity: line(50),
+    period,
+    version: z.number().int().min(1),
+    flags: count,
+    actor: line(200),
+    uploadId: z.uuid(),
+  }),
+  group_flags_raised: z.object({ reference, entity: line(50), period, count, uploadId: z.uuid() }),
+  flag_updated: z.object({
+    flag: reference,
+    flagId: z.uuid(),
+    entity: line(50),
+    actor: line(200),
+    flagStatus: z.enum(['open', 'in_progress', 'resolved']),
+  }),
+  flag_reminder: z.object({
+    flag: reference,
+    flagId: z.uuid(),
+    entity: line(50),
+    actor: line(200),
+  }),
+  // Reminders queued by notify.queue_group_reminders() (R2-11).
+  upload_due: z.object({ entity: line(50), period, days }),
+  flag_open: z.object({ flag: reference, flagId: z.uuid(), entity: line(50), days }),
 } as const;
 
 type Kind = keyof typeof PARAMS;
+const GROUP_KINDS: ReadonlySet<string> = new Set<Kind>([
+  'group_upload_accepted',
+  'group_flags_raised',
+  'flag_updated',
+  'flag_reminder',
+  'upload_due',
+  'flag_open',
+]);
 const isKind = (kind: string): kind is Kind => Object.hasOwn(PARAMS, kind);
 
 /** Text into HTML: every value is escaped, so a name can't add markup or links. */
@@ -102,6 +149,20 @@ export function linkFor(portalUrl: string, requestId: string | null, lineId?: un
   return new URL(path, portalUrl).toString();
 }
 
+/** Where a group data email's button goes: the flag, the upload, or the upload page. */
+export function groupLinkFor(
+  portalUrl: string,
+  params: { flagId?: string; uploadId?: string },
+): string {
+  const path =
+    params.flagId !== undefined
+      ? `/group/quality/flags/${params.flagId}`
+      : params.uploadId !== undefined
+        ? `/group/uploads/${params.uploadId}`
+        : '/group/upload';
+  return new URL(path, portalUrl).toString();
+}
+
 export interface RenderOptions {
   portalUrl: string;
   locale: Locale;
@@ -126,24 +187,38 @@ export function renderEmail(job: OutboxJob, options: RenderOptions): Rendered {
         ? number.format(value)
         : key === 'deadline'
           ? formatDay(value, options.locale)
-          : value,
+          : key === 'period'
+            ? formatMonth(value, options.locale)
+            : value,
     ]),
   );
   if ('status' in parsed.data) values.status = t(`statuses.${parsed.data.status}`);
+  const { flagStatus } = parsed.data as { flagStatus?: 'open' | 'in_progress' | 'resolved' };
+  if (flagStatus !== undefined) values.flagStatus = t(`flagStatuses.${flagStatus}`);
   if ('employees' in parsed.data) values.count = number.format(parsed.data.employees);
   const subject = t(`kinds.${job.kind}.subject`, values);
-  // Kinds about a number of employees word it in the singular or plural.
-  const body = t(
+  // Kinds about a number (employees, flags) word it in the singular or plural.
+  const counted =
     'employees' in parsed.data
-      ? `kinds.${job.kind}.body.${pluralForm(parsed.data.employees, options.locale)}`
-      : `kinds.${job.kind}.body`,
+      ? parsed.data.employees
+      : 'count' in parsed.data
+        ? parsed.data.count
+        : 'flags' in parsed.data
+          ? parsed.data.flags
+          : null;
+  const body = t(
+    counted === null
+      ? `kinds.${job.kind}.body`
+      : `kinds.${job.kind}.body.${pluralForm(counted, options.locale)}`,
     values,
   );
-  const url = linkFor(
-    options.portalUrl,
-    job.requestId,
-    'lineId' in parsed.data ? parsed.data.lineId : undefined,
-  );
+  const url = GROUP_KINDS.has(job.kind)
+    ? groupLinkFor(options.portalUrl, parsed.data as { flagId?: string; uploadId?: string })
+    : linkFor(
+        options.portalUrl,
+        job.requestId,
+        'lineId' in parsed.data ? parsed.data.lineId : undefined,
+      );
   const dir = options.locale === 'ar' ? 'rtl' : 'ltr';
   const text = [
     t('email.greeting'),

@@ -36,6 +36,18 @@ const PATHS = new Map<IconName, string>([
   ['sliders', 'M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0M14 4v4M8 10v4M16 16v4'],
   // A rising line: analytics (TAT, back-and-forth). Not mirrored: charts read left to right.
   ['trend', 'M4 17l5-5 4 4 7-7M15 9h5v5'],
+  // Group employee data (R2).
+  [
+    'users',
+    'M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM2 21v-1a6 6 0 0 1 12 0v1M16 3.5a4 4 0 0 1 0 7M22 21v-1a6 6 0 0 0-4-5.6',
+  ],
+  ['upload', 'M12 16V5M7 10l5-5 5 5M5 20h14'],
+  [
+    'database',
+    'M4 6c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3zM4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3',
+  ],
+  ['flag', 'M5 21V4M5 4h11l-2 4 2 4H5'],
+  ['layers', 'M12 3l9 5-9 5-9-5zM3 13l9 5 9-5'],
 ]);
 
 export type IconName =
@@ -65,7 +77,12 @@ export type IconName =
   | 'clipboard'
   | 'clock'
   | 'sliders'
-  | 'trend';
+  | 'trend'
+  | 'users'
+  | 'upload'
+  | 'database'
+  | 'flag'
+  | 'layers';
 
 const DIRECTIONAL: ReadonlySet<IconName> = new Set([
   'chevron-start',

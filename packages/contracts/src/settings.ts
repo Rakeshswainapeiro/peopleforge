@@ -18,6 +18,10 @@ export const ReminderKindSchema = z.enum([
   'return_overdue',
   /** To whoever prepares a draft: the cycle's submission deadline is `days` away or less. */
   'deadline_approaching',
+  /** To the subsidiary's HR users: last month's data not uploaded `days` after month end (R2-11). */
+  'upload_due',
+  /** To a flag's owner: an anomaly flag still open after `days` (R2-11). */
+  'flag_open',
 ]);
 export type ReminderKind = z.infer<typeof ReminderKindSchema>;
 

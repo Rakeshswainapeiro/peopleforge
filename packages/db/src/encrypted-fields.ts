@@ -14,3 +14,14 @@ export const APPROVED_VALUE = {
   column: 'approved_value',
 } as const;
 export const MESSAGE_BODY = { table: 'increments.line_message', column: 'body' } as const;
+export const EMPLOYEE_SALARY = { table: 'core.employee', column: 'monthly_salary' } as const;
+export const SNAPSHOT_GROSS = {
+  table: 'groupdata.employee_snapshot',
+  column: 'gross_salary',
+} as const;
+export const SNAPSHOT_BASIC = {
+  table: 'groupdata.employee_snapshot',
+  column: 'basic_salary',
+} as const;
+export const FLAG_DETAIL = { table: 'groupdata.anomaly_flag', column: 'detail' } as const;
+export const FLAG_NOTE = { table: 'groupdata.anomaly_flag', column: 'resolution_note' } as const;

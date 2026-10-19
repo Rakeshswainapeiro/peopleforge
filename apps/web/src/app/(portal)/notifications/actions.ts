@@ -7,6 +7,20 @@ import { markNotificationsRead } from '@/server/notifications';
 import { refreshPortalShell } from '@/server/portal-shell';
 import { conversationHref } from '@/lib/conversation-view';
 import { requestHref } from '@/lib/routes';
+import { flagHref, GROUP_UPLOAD_PATH, uploadHref } from '@/lib/group-view';
+
+/** A group data target, rebuilt from validated parts (bound arguments can be altered). */
+function groupHref(target: string): string {
+  if (target === 'upload-page') return GROUP_UPLOAD_PATH;
+  const [kind, id] = target.split(':');
+  const valid = Id.safeParse(id);
+  if (!valid.success) return '/notifications';
+  return kind === 'flag'
+    ? flagHref(valid.data)
+    : kind === 'upload'
+      ? uploadHref(valid.data)
+      : '/notifications';
+}
 
 /**
  * Server Actions for the notifications page (R1-07). POST-only with an Origin check (CSRF);
@@ -37,10 +51,12 @@ export async function openNotificationAction(
   notificationId: string,
   requestId: string | null,
   lineId: string | null = null,
+  groupTarget: string | null = null,
 ): Promise<never> {
   const result = await markNotificationsRead([Id.parse(notificationId)]);
   if (result.kind === 'unauthenticated') redirect('/session-ended');
   refreshPortalShell();
+  if (groupTarget !== null) redirect(groupHref(groupTarget));
   if (requestId === null) redirect('/notifications');
   redirect(
     lineId === null

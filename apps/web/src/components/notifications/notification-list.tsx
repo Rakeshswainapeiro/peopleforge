@@ -42,7 +42,15 @@ export function NotificationList({ rows, label, unreadLabel }: NotificationListP
             </p>
             <p className="mt-1 text-[11px] text-ink-muted">{row.meta}</p>
           </div>
-          <form action={openNotificationAction.bind(null, row.id, row.requestId, row.lineId)}>
+          <form
+            action={openNotificationAction.bind(
+              null,
+              row.id,
+              row.requestId,
+              row.lineId,
+              row.groupTarget,
+            )}
+          >
             <Button
               type="submit"
               variant="secondary"

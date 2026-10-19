@@ -65,6 +65,26 @@ describe('openNotificationAction', () => {
     );
   });
 
+  it('opens a group data flag, upload or the upload page [R2-11]', async () => {
+    const FLAG = '88888888-8888-4888-8888-888888888881';
+    await expect(openNotificationAction(NOTE, null, null, `flag:${FLAG}`)).rejects.toThrow(
+      `NEXT_REDIRECT /group/quality/flags/${FLAG}`,
+    );
+    await expect(openNotificationAction(NOTE, null, null, `upload:${FLAG}`)).rejects.toThrow(
+      `NEXT_REDIRECT /group/uploads/${FLAG}`,
+    );
+    await expect(openNotificationAction(NOTE, null, null, 'upload-page')).rejects.toThrow(
+      'NEXT_REDIRECT /group/upload',
+    );
+    // Altered targets lead nowhere else.
+    await expect(openNotificationAction(NOTE, null, null, 'flag:../../admin')).rejects.toThrow(
+      /^NEXT_REDIRECT \/notifications$/u,
+    );
+    await expect(openNotificationAction(NOTE, null, null, `other:${FLAG}`)).rejects.toThrow(
+      /^NEXT_REDIRECT \/notifications$/u,
+    );
+  });
+
   it('refuses tampered IDs and ends a dead session', async () => {
     await expect(openNotificationAction('../x', REQUEST)).rejects.toThrow();
     expect(markNotificationsRead).not.toHaveBeenCalled();

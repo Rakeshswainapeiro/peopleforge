@@ -76,11 +76,46 @@
         "one": "Your draft increment request {reference} with {count} employee isn't submitted yet. The submission deadline is {deadline}.",
         "other": "Your draft increment request {reference} with {count} employees isn't submitted yet. The submission deadline is {deadline}."
       }
+    },
+    "group_upload_accepted": {
+      "subject": "{entity} employee data for {period} received ({reference})",
+      "body": {
+        "one": "{actor} uploaded {entity}'s employee data for {period}. Version {version} is now in use, with {flags} anomaly flag to review.",
+        "other": "{actor} uploaded {entity}'s employee data for {period}. Version {version} is now in use, with {flags} anomaly flags to review."
+      }
+    },
+    "group_flags_raised": {
+      "subject": "Action needed: {count} anomaly flags on {entity} {period} data",
+      "body": {
+        "one": "Your upload {reference} of {entity}'s employee data for {period} was accepted and raised {count} anomaly flag. You own it: confirm or correct the value and resolve it with a note.",
+        "other": "Your upload {reference} of {entity}'s employee data for {period} was accepted and raised {count} anomaly flags. You own them: confirm or correct each value and resolve it with a note."
+      }
+    },
+    "flag_updated": {
+      "subject": "Anomaly flag {flag} ({entity}): {flagStatus}",
+      "body": "{actor} updated anomaly flag {flag} for {entity}. It is now {flagStatus}; you are its owner."
+    },
+    "flag_reminder": {
+      "subject": "Reminder: anomaly flag {flag} ({entity}) is waiting for you",
+      "body": "{actor} from Sirius HR sent a reminder about anomaly flag {flag} for {entity}. Please review it and resolve it with a note."
+    },
+    "upload_due": {
+      "subject": "Reminder: {entity} employee data for {period} not uploaded",
+      "body": "{entity}'s employee data for {period} hasn't been uploaded yet, {days} days after the month ended. Please upload it to PeopleForge."
+    },
+    "flag_open": {
+      "subject": "Reminder: anomaly flag {flag} ({entity}) open for {days} days",
+      "body": "Anomaly flag {flag} for {entity} has been open for more than {days} days. You are its owner: please review it and resolve it with a note."
     }
   },
   "statuses": {
     "approved": "Approved",
     "partly_approved": "Partly approved",
     "rejected": "Rejected"
+  },
+  "flagStatuses": {
+    "open": "Open",
+    "in_progress": "In progress",
+    "resolved": "Resolved"
   }
 }

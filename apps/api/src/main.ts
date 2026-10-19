@@ -8,6 +8,8 @@ import {
   createReportRepository,
   createAuditTrailRepository,
   createSettingsRepository,
+  createDataQualityRepository,
+  createGroupDataRepository,
   createAnalyticsRepository,
   createIncrementRequestRepository,
   createNotificationRepository,
@@ -62,6 +64,8 @@ async function start(): Promise<void> {
     auditTrail: createAuditTrailRepository(database.db),
     settings: createSettingsRepository(database.db),
     analytics: createAnalyticsRepository(database.db),
+    groupData: createGroupDataRepository(database.db, cipher),
+    dataQuality: createDataQualityRepository(database.db, cipher),
     notifications: createNotificationRepository(database.db),
     // Uploads need both: without them the API is not ready to serve R1-04.
     readinessChecks: [

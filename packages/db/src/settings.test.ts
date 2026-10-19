@@ -143,6 +143,8 @@ describe('reminder rules [R1-13, NFR-CFG-01]', () => {
       { kind: 'review_overdue', days: 2, enabled: true, updatedByName: null },
       { kind: 'return_overdue', days: 2, enabled: true },
       { kind: 'deadline_approaching', days: 3, enabled: true },
+      { kind: 'upload_due', days: 5, enabled: true },
+      { kind: 'flag_open', days: 5, enabled: true },
     ]);
     const updated = await settings.updateReminderRule(admin, 'return_overdue', {
       days: 4,

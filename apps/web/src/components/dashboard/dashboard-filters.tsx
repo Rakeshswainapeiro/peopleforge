@@ -103,7 +103,9 @@ export function DashboardFilters({
       className={cn(
         'grid gap-4',
         search === undefined
-          ? 'sm:grid-cols-2 lg:grid-cols-3'
+          ? selects.length > 3
+            ? 'sm:grid-cols-2 lg:grid-cols-4'
+            : 'sm:grid-cols-2 lg:grid-cols-3'
           : COLUMNS.get(Math.min(selects.length, 3)),
       )}
     >

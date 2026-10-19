@@ -1,4 +1,6 @@
 import {
+  FlagStatusSchema,
+  PeriodSchema as Period,
   RequestStatusSchema,
   type Notification,
   type NotificationFilter,
@@ -10,6 +12,7 @@ import type { BadgeTone } from '@peopleforge/ui';
 import type { Locale } from '@sirius/shared-types';
 import type { MessageKey, Translate } from '@/i18n/translator';
 import { formatDate, formatDateTime } from './format';
+import { formatPeriod } from './group-view';
 import { pluralForm } from '@peopleforge/i18n';
 
 const LineId = z.uuid();
@@ -28,6 +31,17 @@ export interface NotificationRowView {
   unread: boolean;
   /** "Respond" when the reader has to act, else "View". */
   action: string;
+  /** Group data (R2): "flag:<id>", "upload:<id>" or "upload-page"; null for requests. */
+  groupTarget: string | null;
+}
+
+/** Where a group data notification leads: its flag, its upload, or the upload page. */
+export function groupTargetOf(notification: Pick<Notification, 'kind' | 'params'>): string | null {
+  const flagId = LineId.safeParse(notification.params.flagId);
+  if (flagId.success) return `flag:${flagId.data}`;
+  const uploadId = LineId.safeParse(notification.params.uploadId);
+  if (uploadId.success) return `upload:${uploadId.data}`;
+  return notification.kind === 'upload_due' ? 'upload-page' : null;
 }
 
 function text(value: string | number | undefined): string {
@@ -38,7 +52,8 @@ function text(value: string | number | undefined): string {
 function messageOf(notification: Notification, locale: Locale, t: Translate): string {
   const { params } = notification;
   const number = new Intl.NumberFormat(locale);
-  const count = Number(params.employees ?? 0);
+  // Employees for requests; flags for group data.
+  const count = Number(params.employees ?? params.count ?? params.flags ?? 0);
   const criterion = Number(params.criterion ?? 0);
   const status = RequestStatusSchema.safeParse(params.status);
   const values = {
@@ -52,6 +67,15 @@ function messageOf(notification: Notification, locale: Locale, t: Translate): st
     of: number.format(Number(params.of ?? 0)),
     status: status.success ? statusBadge(status.data, t).label : '',
     days: number.format(Number(params.days ?? 0)),
+    reference: text(params.reference),
+    flag: text(params.flag),
+    version: number.format(Number(params.version ?? 0)),
+    period: Period.safeParse(params.period).success
+      ? formatPeriod(String(params.period), locale)
+      : '',
+    flagStatus: FlagStatusSchema.safeParse(params.flagStatus).success
+      ? t(`group.flagStatus.${FlagStatusSchema.parse(params.flagStatus)}`)
+      : '',
     deadline: Day.safeParse(params.deadline).success
       ? formatDate(`${String(params.deadline)}T12:00:00Z`, locale)
       : '',
@@ -77,6 +101,7 @@ export function notificationRows(
     meta: formatDateTime(notification.createdAt, locale),
     unread: !notification.read,
     action: notification.actionNeeded ? t('notifications.respond') : t('notifications.view'),
+    groupTarget: groupTargetOf(notification),
   }));
 }
 

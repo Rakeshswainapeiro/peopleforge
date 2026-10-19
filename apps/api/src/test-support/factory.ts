@@ -13,6 +13,8 @@ import type {
   AuditTrailRepository,
   SettingsRepository,
   AnalyticsRepository,
+  DataQualityRepository,
+  GroupDataRepository,
 } from '@peopleforge/db';
 import type { MalwareScanner, ObjectStore } from '@peopleforge/integrations';
 import type { Principal } from '../auth/principal.js';
@@ -157,6 +159,37 @@ export const unusedSettings: SettingsRepository = {
 
 export const unusedAnalytics: AnalyticsRepository = { facts: unexpected };
 
+export const unusedGroupData: GroupDataRepository = {
+  activeTemplate: unexpected,
+  publishTemplate: unexpected,
+  gradeBands: unexpected,
+  previousPeriod: unexpected,
+  recordsInUse: unexpected,
+  salaryHistory: unexpected,
+  numbersElsewhere: unexpected,
+  recordRejected: unexpected,
+  accept: unexpected,
+  uploads: unexpected,
+  upload: unexpected,
+  uploadFile: unexpected,
+  employees: unexpected,
+  history: unexpected,
+  extract: unexpected,
+};
+
+export const unusedDataQuality: DataQualityRepository = {
+  rules: unexpected,
+  updateRule: unexpected,
+  approvedIncrements: unexpected,
+  flags: unexpected,
+  flagsByEntity: unexpected,
+  variations: unexpected,
+  flag: unexpected,
+  owners: unexpected,
+  updateFlag: unexpected,
+  remind: unexpected,
+};
+
 export const unusedNotifications: NotificationRepository = {
   list: unexpected,
   markRead: unexpected,
@@ -200,6 +233,8 @@ export async function buildApp(
       auditTrail: unusedAuditTrail,
       settings: unusedSettings,
       analytics: unusedAnalytics,
+      groupData: unusedGroupData,
+      dataQuality: unusedDataQuality,
       notifications: unusedNotifications,
       readinessChecks: [],
       isShuttingDown: () => false,

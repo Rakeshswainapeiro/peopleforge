@@ -25,7 +25,7 @@ export type ApiResult<T> =
   | { kind: 'error'; status: number; code: ErrorCode; details: ErrorDetail[] };
 
 export interface ApiRequestInit {
-  method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   /** Sent as JSON. */
   body?: unknown;
   /** Sent as multipart/form-data (file uploads); fetch sets the boundary. */

@@ -18,3 +18,4 @@ Significant technical decisions, one file each: context, decision, alternatives,
 | [0012](0012-email-worker-and-outbox-delivery.md)             | Email worker: outbox delivery without a queue server                   | Accepted (email provider: A6)       |
 | [0013](0013-review-decisions-and-returns.md)                 | Sirius HR's review: verification, decisions per employee, returns      | Accepted (reason lists: to confirm) |
 | [0014](0014-settings-and-reminders.md)                       | Settings: versioned criteria and reminders on configured triggers      | Accepted (default days: to confirm) |
+| [0015](0015-group-data-versions-and-anomaly-flags.md)        | Group employee data: uploads, versions, aggregates and anomaly flags   | Accepted (fields A3, Palm HR A7)    |
