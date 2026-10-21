@@ -143,7 +143,10 @@ export const unusedConversations: ConversationRepository = {
   threads: unexpected,
 };
 
-export const unusedReports: ReportRepository = { incrementLines: unexpected };
+export const unusedReports: ReportRepository = {
+  incrementLines: unexpected,
+  recordDownload: unexpected,
+};
 
 export const unusedAuditTrail: AuditTrailRepository = {
   requestHistory: unexpected,

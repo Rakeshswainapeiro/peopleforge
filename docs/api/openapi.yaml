@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: PeopleForge API
-  version: 0.15.0
+  version: 0.16.0
   description: >
     Phase 1 API (BRD SIRIUS-HR-BRD-001). Every /api/v1 route requires an access token from the
     Sirius identity provider (Microsoft Entra ID; Keycloak locally) sent as
@@ -768,6 +768,177 @@ paths:
       responses:
         '200':
           description: The file, as an attachment named `PeopleForge-RP-01-YYYY-MM-DD.xlsx|pdf`
+          headers:
+            Content-Disposition: { schema: { type: string } }
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: { type: string, format: binary }
+            application/pdf:
+              schema: { type: string, format: binary }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/v1/reports/rp-03:
+    get:
+      tags: [reports]
+      summary: RP-03 Headcount & demographics for a month, Excel or PDF (R2-06)
+      description: >
+        Needs `employee_data:read`. Headcount, joiners, leavers and turnover, female share; by
+        subsidiary, department, gender, age band and grade.
+        Totals from the same figures as the group dashboards, in the caller's scope (Row-Level
+        Security: subsidiary HR get their own subsidiary); never individual pay. Labels in
+        `locale`; text cells neutralised against formula injection. Every download is recorded
+        in the audit trail (`report.downloaded`, with the format and period). Never cached.
+      parameters:
+        - {
+            name: period,
+            in: query,
+            required: true,
+            schema: { type: string, pattern: '^20\d{2}-(0[1-9]|1[0-2])$' },
+          }
+        - { name: format, in: query, required: true, schema: { type: string, enum: [xlsx, pdf] } }
+        - { name: locale, in: query, schema: { type: string, enum: [en, ar], default: en } }
+        - { name: entityId, in: query, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: The file, as an attachment named `PeopleForge-{code}-{period}-YYYY-MM-DD.{format}`
+          headers:
+            Content-Disposition: { schema: { type: string } }
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: { type: string, format: binary }
+            application/pdf:
+              schema: { type: string, format: binary }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/v1/reports/rp-04:
+    get:
+      tags: [reports]
+      summary: RP-04 Compensation & increment summary for a month, Excel or PDF (R2-06)
+      description: >
+        Needs `employee_data:read_compensation`. Payroll and average pay per currency (never
+        added across currencies), pay by grade against its band, increments approved this year
+        and their cost; for Sirius HR, the TAT of increment requests decided that month.
+        Totals from the same figures as the group dashboards, in the caller's scope (Row-Level
+        Security: subsidiary HR get their own subsidiary); never individual pay. Labels in
+        `locale`; text cells neutralised against formula injection. Every download is recorded
+        in the audit trail (`report.downloaded`, with the format and period). Never cached.
+      parameters:
+        - {
+            name: period,
+            in: query,
+            required: true,
+            schema: { type: string, pattern: '^20\d{2}-(0[1-9]|1[0-2])$' },
+          }
+        - { name: format, in: query, required: true, schema: { type: string, enum: [xlsx, pdf] } }
+        - { name: locale, in: query, schema: { type: string, enum: [en, ar], default: en } }
+        - { name: entityId, in: query, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: The file, as an attachment named `PeopleForge-{code}-{period}-YYYY-MM-DD.{format}`
+          headers:
+            Content-Disposition: { schema: { type: string } }
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: { type: string, format: binary }
+            application/pdf:
+              schema: { type: string, format: binary }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/v1/reports/rp-05:
+    get:
+      tags: [reports]
+      summary: RP-05 Data quality & anomalies for a month, Excel or PDF (R2-06, R2-10)
+      description: >
+        Needs `employee_data:read`. Each subsidiary's upload against the month before, flag
+        counts by status, and the flags themselves (at most 2,000; the report says when cut).
+        Totals from the same figures as the group dashboards, in the caller's scope (Row-Level
+        Security: subsidiary HR get their own subsidiary); never individual pay. Labels in
+        `locale`; text cells neutralised against formula injection. Every download is recorded
+        in the audit trail (`report.downloaded`, with the format and period). Never cached.
+      parameters:
+        - {
+            name: period,
+            in: query,
+            required: true,
+            schema: { type: string, pattern: '^20\d{2}-(0[1-9]|1[0-2])$' },
+          }
+        - { name: format, in: query, required: true, schema: { type: string, enum: [xlsx, pdf] } }
+        - { name: locale, in: query, schema: { type: string, enum: [en, ar], default: en } }
+        - { name: entityId, in: query, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: The file, as an attachment named `PeopleForge-{code}-{period}-YYYY-MM-DD.{format}`
+          headers:
+            Content-Disposition: { schema: { type: string } }
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: { type: string, format: binary }
+            application/pdf:
+              schema: { type: string, format: binary }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/v1/reports/rp-06:
+    get:
+      tags: [reports]
+      summary: RP-06 Quarterly group HR review, PDF (R2-06, R2-07)
+      description: >
+        Needs `report:read_executive` and group scope (403 otherwise). Group-wide; no
+        `entityId`. Headcount and payroll at the quarter's end against the one before, the
+        quarter's movement and data quality, by subsidiary and by month.
+        Totals from the same figures as the group dashboards, in the caller's scope (Row-Level
+        Security: subsidiary HR get their own subsidiary); never individual pay. Labels in
+        `locale`; text cells neutralised against formula injection. Every download is recorded
+        in the audit trail (`report.downloaded`, with the format and period). Never cached.
+      parameters:
+        - {
+            name: period,
+            in: query,
+            required: true,
+            schema: { type: string, pattern: '^20\d{2}-Q[1-4]$' },
+          }
+        - { name: format, in: query, required: true, schema: { type: string, enum: [pdf] } }
+        - { name: locale, in: query, schema: { type: string, enum: [en, ar], default: en } }
+      responses:
+        '200':
+          description: The file, as an attachment named `PeopleForge-{code}-{period}-YYYY-MM-DD.{format}`
+          headers:
+            Content-Disposition: { schema: { type: string } }
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: { type: string, format: binary }
+            application/pdf:
+              schema: { type: string, format: binary }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/v1/reports/rp-07:
+    get:
+      tags: [reports]
+      summary: RP-07 Annual HR report, PDF (R2-06, R2-07)
+      description: >
+        Needs `report:read_executive` and group scope (403 otherwise). Group-wide; no
+        `entityId`. The year's workforce, turnover, payroll at both year ends, increments approved
+        in the year and their cost, by subsidiary and by month; for Sirius leadership and IHC.
+        Totals from the same figures as the group dashboards, in the caller's scope (Row-Level
+        Security: subsidiary HR get their own subsidiary); never individual pay. Labels in
+        `locale`; text cells neutralised against formula injection. Every download is recorded
+        in the audit trail (`report.downloaded`, with the format and period). Never cached.
+      parameters:
+        - {
+            name: period,
+            in: query,
+            required: true,
+            schema: { type: string, pattern: '^20\d{2}$' },
+          }
+        - { name: format, in: query, required: true, schema: { type: string, enum: [pdf] } }
+        - { name: locale, in: query, schema: { type: string, enum: [en, ar], default: en } }
+      responses:
+        '200':
+          description: The file, as an attachment named `PeopleForge-{code}-{period}-YYYY-MM-DD.{format}`
           headers:
             Content-Disposition: { schema: { type: string } }
           content:

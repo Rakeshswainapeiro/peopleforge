@@ -225,6 +225,7 @@ describe('PDF [R1-14, RP-01]', () => {
 describe('ReportService [R1-14, R1-15]', () => {
   interface Fake {
     incrementLines: Mock<ReportRepository['incrementLines']>;
+    recordDownload: Mock<ReportRepository['recordDownload']>;
   }
 
   function service(lines = LINES): { service: ReportService; repository: Fake } {
@@ -232,6 +233,7 @@ describe('ReportService [R1-14, R1-15]', () => {
       incrementLines: vi.fn<ReportRepository['incrementLines']>(() =>
         Promise.resolve({ lines, truncated: false }),
       ),
+      recordDownload: vi.fn<ReportRepository['recordDownload']>(() => Promise.resolve()),
     };
     return {
       repository,
@@ -303,7 +305,10 @@ describe('report route [R1-14, NFR-SEC-01]', () => {
     const app = await buildApp({
       resolvePrincipal: caller === null ? anonymous : resolveAs(caller),
       incrementRequests: workingRepository(),
-      reports: { incrementLines: () => Promise.resolve({ lines: LINES, truncated: false }) },
+      reports: {
+        incrementLines: () => Promise.resolve({ lines: LINES, truncated: false }),
+        recordDownload: () => Promise.resolve(),
+      },
     });
     return app.getHttpServer();
   }

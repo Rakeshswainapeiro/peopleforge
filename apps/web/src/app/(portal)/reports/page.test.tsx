@@ -2,6 +2,7 @@ import type { Me } from '@peopleforge/contracts';
 import { cleanup, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getRequestLocale } from '@/i18n/request-locale';
+import { currentPeriod } from '@/lib/group-view';
 import { dashboardSummary, listRequests, openCycles } from '@/server/increment-requests';
 import { requireViewer } from '@/server/session';
 import {
@@ -70,6 +71,8 @@ const REVIEWER: Me = {
   ],
 };
 
+const rp01 = () => within(screen.getByRole('region', { name: 'RP-01 · Increment status report' }));
+
 const page = (params: Record<string, string> = {}) =>
   ReportsPage({ searchParams: Promise.resolve(params) });
 
@@ -124,7 +127,7 @@ describe('Reports [R1-14, RP-01]', () => {
       data: dashboardSummaryFixture({ requests: 1, employees: 2 }),
     });
     render(await page({ cycle: 'all', entity: SUB_B, status: 'approved', q: 'Aisha' }));
-    expect(screen.getByRole('combobox', { name: 'Subsidiary' })).toHaveValue(SUB_B);
+    expect(rp01().getByRole('combobox', { name: 'Subsidiary' })).toHaveValue(SUB_B);
     expect(screen.getByText('1 request · 2 employees match')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Download PDF' })).toHaveAttribute(
       'href',
@@ -136,7 +139,7 @@ describe('Reports [R1-14, RP-01]', () => {
   it('opens without filters for Sirius HR on every subsidiary', async () => {
     vi.mocked(requireViewer).mockResolvedValue(REVIEWER);
     render(await ReportsPage());
-    expect(screen.getByRole('combobox', { name: 'Subsidiary' })).toHaveValue('');
+    expect(rp01().getByRole('combobox', { name: 'Subsidiary' })).toHaveValue('');
   });
 
   it('offers no download when nothing matches', async () => {
@@ -149,31 +152,100 @@ describe('Reports [R1-14, RP-01]', () => {
     expect(screen.queryByRole('link', { name: 'Download Excel' })).toBeNull();
   });
 
-  it('shows executives and admins what is coming instead of pay data', async () => {
+  it('offers subsidiary HR the monthly group reports for their own subsidiary [R2-06]', async () => {
+    vi.mocked(requireViewer).mockResolvedValue({
+      ...ALPHA_HR,
+      permissions: [...ALPHA_HR.permissions, 'employee_data:read'],
+    });
+    render(await page());
+    const section = screen.getByRole('region', { name: 'Group HR reports' });
+    const forms = within(section).getAllByRole('form');
+    expect(forms.map((form) => form.getAttribute('aria-label'))).toEqual([
+      'RP-03 · Headcount & demographics',
+      'RP-04 · Compensation & increments',
+      'RP-05 · Data quality & anomalies',
+    ]);
+    const rp03 = within(section).getByRole('form', { name: 'RP-03 · Headcount & demographics' });
+    expect(rp03).toHaveAttribute('action', '/reports/group/rp-03');
+    expect(rp03).toHaveAttribute('method', 'get');
+    // The current month first, as on the dashboards.
+    expect(within(rp03).getByRole('combobox', { name: 'Month' })).toHaveValue(
+      currentPeriod(new Date()),
+    );
+    // One subsidiary: no subsidiary choice.
+    expect(within(rp03).queryByRole('combobox', { name: 'Subsidiary' })).toBeNull();
+    expect(
+      within(rp03)
+        .getAllByRole('button')
+        .map((button) => [
+          button.textContent,
+          button.getAttribute('name'),
+          button.getAttribute('value'),
+        ]),
+    ).toEqual([
+      ['Download Excel', 'format', 'xlsx'],
+      ['Download PDF', 'format', 'pdf'],
+    ]);
+    expect(
+      within(
+        within(section).getByRole('region', { name: 'RP-03 · Headcount & demographics' }),
+      ).getByText('Monthly'),
+    ).toBeInTheDocument();
+  });
+
+  it('gives Sirius HR every group report, monthly ones by subsidiary [R2-06, R2-07]', async () => {
+    vi.mocked(requireViewer).mockResolvedValue({
+      ...REVIEWER,
+      permissions: [...REVIEWER.permissions, 'employee_data:read'],
+    });
+    render(await page());
+    const section = screen.getByRole('region', { name: 'Group HR reports' });
+    expect(within(section).getAllByRole('form')).toHaveLength(5);
+    const rp04 = within(section).getByRole('form', { name: 'RP-04 · Compensation & increments' });
+    expect(within(rp04).getByRole('combobox', { name: 'Subsidiary' })).toHaveValue('');
+    const rp06 = within(section).getByRole('form', { name: 'RP-06 · Quarterly group HR review' });
+    expect(within(rp06).getByRole('combobox', { name: 'Quarter' })).toBeInTheDocument();
+    expect(within(rp06).queryByRole('combobox', { name: 'Subsidiary' })).toBeNull();
+    expect(
+      within(rp06)
+        .getAllByRole('button')
+        .map((button) => button.textContent),
+    ).toEqual(['Download PDF']);
+    const rp07 = within(section).getByRole('form', { name: 'RP-07 · Annual HR report' });
+    expect(within(rp07).getByRole('combobox', { name: 'Year' })).toBeInTheDocument();
+    expect(
+      within(within(section).getByRole('region', { name: 'RP-07 · Annual HR report' })).getByText(
+        'Annual',
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('gives executives the quarterly and annual reviews only, no pay data', async () => {
     vi.mocked(requireViewer).mockResolvedValue({
       ...REVIEWER,
       roles: ['PeopleForge.Executive'],
       permissions: ['report:read_executive'],
     });
     render(await page());
+    expect(screen.getByText(/Quarterly and annual group HR reviews/u)).toBeInTheDocument();
     expect(
-      screen.getByRole('heading', { level: 1, name: 'Executive reports' }),
-    ).toBeInTheDocument();
-    expect(screen.getByRole('status')).toHaveTextContent('Coming in a later release.');
+      within(screen.getByRole('region', { name: 'Group HR reports' }))
+        .getAllByRole('form')
+        .map((form) => form.getAttribute('action')),
+    ).toEqual(['/reports/group/rp-06', '/reports/group/rp-07']);
+    expect(screen.queryByRole('table')).toBeNull();
     expect(dashboardSummary).not.toHaveBeenCalled();
+    expect(openCycles).not.toHaveBeenCalled();
+  });
+
+  it('answers not found to readers who can run no report, and nothing while signed out', async () => {
+    vi.mocked(requireViewer).mockResolvedValue({ ...ALPHA_HR, permissions: [] });
+    await expect(page()).rejects.toThrow('NEXT_NOT_FOUND');
+    // Admins: the operational-report permission alone runs no report.
     vi.mocked(requireViewer).mockResolvedValue({
       ...REVIEWER,
       permissions: ['report:read_operational', 'audit:read'],
     });
-    cleanup();
-    render(await page());
-    expect(
-      screen.getByRole('heading', { level: 1, name: 'Executive reports' }),
-    ).toBeInTheDocument();
-  });
-
-  it('answers not found without a report permission, and nothing while the API is down', async () => {
-    vi.mocked(requireViewer).mockResolvedValue({ ...ALPHA_HR, permissions: [] });
     await expect(page()).rejects.toThrow('NEXT_NOT_FOUND');
     vi.mocked(requireViewer).mockResolvedValue(null);
     await expect(ReportsPage()).resolves.toBeNull();

@@ -56,6 +56,14 @@ export interface ReportRepository {
     filter: DashboardFilter,
     download: ReportDownload,
   ) => Promise<{ lines: ReportLineRecord[]; truncated: boolean }>;
+  /**
+   * Records a group report download (RP-03 … RP-07, R2-13): which report, period, format and
+   * subsidiary filter. Never the figures.
+   */
+  recordDownload: (
+    scope: Scope,
+    download: ReportDownload & { period: string; entityId?: string | undefined },
+  ) => Promise<void>;
 }
 
 /** Most employee lines one report holds (a cycle's worth with headroom; NFR-PERF-01). */
@@ -66,6 +74,16 @@ export function createReportRepository(
   cipher: FieldCipher,
 ): ReportRepository {
   return {
+    recordDownload: (scope, download) =>
+      withScope(db, scope, async (trx) => {
+        await recordAudit(trx, scope.userId, {
+          action: 'report.downloaded',
+          entityId: download.entityId ?? null,
+          subjectType: 'report',
+          subjectId: download.report,
+          details: { format: download.format, period: download.period },
+        });
+      }),
     incrementLines: (scope, filter, download) =>
       withScope(db, scope, async (trx) => {
         const rows = await trx

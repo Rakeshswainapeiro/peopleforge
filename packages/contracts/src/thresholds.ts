@@ -14,6 +14,7 @@ export const THRESHOLD_UNITS = ['rating', 'score', 'percent', 'months', 'years',
 export const ThresholdValueSchema = z
   .string()
   .trim()
+  // eslint-disable-next-line security/detect-unsafe-regex -- every quantifier is bounded (≤ 9 chars): no backtracking blow-up
   .regex(/^\d{1,6}(\.\d{1,2})?$/u);
 
 export const CriterionThresholdSchema = z.strictObject({

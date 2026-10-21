@@ -9,12 +9,14 @@ describe('visibleNavItems', () => {
     const items = visibleNavItems([
       'increment_request:create',
       'increment_request:read',
+      'employee_data:read_compensation',
       'report:read_operational',
     ]);
     expect(items.map((item) => [item.href, item.label])).toEqual([
       ['/', 'nav.myRequests'],
       ['/requests/new', 'nav.newRequest'],
       ['/notifications', 'nav.notifications'],
+      ['/group/compensation', 'nav.groupCompensation'],
       ['/reports', 'nav.reports'],
     ]);
   });
@@ -39,7 +41,15 @@ describe('visibleNavItems', () => {
       '/group/employees',
       '/group/uploads',
       '/group/quality',
+      '/reports',
     ]);
+  });
+
+  // Reports appears only to readers of a report they can run (RP-01, RP-03 … RP-07): an admin's
+  // operational-report permission alone runs none of them.
+  it('hides Reports from admins, who can run no report', () => {
+    const items = visibleNavItems(['criteria:configure', 'report:read_operational', 'audit:read']);
+    expect(items.map((item) => item.href)).not.toContain('/reports');
   });
 
   it('shows only Home and Notifications without permissions', () => {
@@ -54,7 +64,7 @@ describe('activeHref', () => {
   const preparer = visibleNavItems([
     'increment_request:create',
     'increment_request:read',
-    'report:read_operational',
+    'employee_data:read_compensation',
   ]);
 
   it.each([
@@ -66,7 +76,7 @@ describe('activeHref', () => {
     ['/requests/new', '/requests/new'],
     [`/requests/${ID}/edit`, '/requests/new'],
     ['/notifications', '/notifications'],
-    ['/reports/rp-01', '/reports'],
+    ['/reports/group/rp-03', '/reports'],
     ['/reportsx', undefined],
     ['/session-ended', undefined],
   ])('%s → %s', (pathname, expected) => {

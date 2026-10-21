@@ -50,6 +50,8 @@ import { ReviewService } from '../modules/increment-requests/review.service.js';
 import { ConversationService } from '../modules/conversations/conversation.service.js';
 import { ReportService } from '../modules/reports/report.service.js';
 import { ReportsController } from '../modules/reports/reports.controller.js';
+import { GroupReportsController } from '../modules/reports/group-reports.controller.js';
+import { GroupReportService } from '../modules/reports/group-report.service.js';
 import { AuditService } from '../modules/audit/audit.service.js';
 import { SettingsController } from '../modules/settings/settings.controller.js';
 import {
@@ -77,6 +79,7 @@ import {
 import {
   DATA_QUALITY_SERVICE,
   GROUP_DASHBOARD_SERVICE,
+  GROUP_REPORT_SERVICE,
   GROUP_DATA_SERVICE,
   AUDIT_SERVICE,
   SETTINGS_SERVICE,
@@ -143,6 +146,14 @@ export interface AppDependencies {
 export class AppModule implements NestModule {
   static register(deps: AppDependencies): DynamicModule {
     const requests = new IncrementRequestService(deps.incrementRequests);
+    // Shared by their routes and the group reports (R2-06), which reuse their figures.
+    const analytics = new AnalyticsService(requests, deps.analytics);
+    const quality = new DataQualityService(deps.dataQuality);
+    const dashboards = new GroupDashboardService({
+      repository: deps.groupData,
+      quality: deps.dataQuality,
+      directory: deps.directory,
+    });
     return {
       module: AppModule,
       imports: [
@@ -163,6 +174,7 @@ export class AppModule implements NestModule {
         MessagesController,
         ConversationsController,
         ReportsController,
+        GroupReportsController,
         RequestHistoryController,
         AuditTrailController,
         SettingsController,
@@ -184,7 +196,7 @@ export class AppModule implements NestModule {
         { provide: REPORT_SERVICE, useValue: new ReportService(requests, deps.reports) },
         { provide: AUDIT_SERVICE, useValue: new AuditService(requests, deps.auditTrail) },
         { provide: SETTINGS_SERVICE, useValue: new SettingsService(deps.settings) },
-        { provide: ANALYTICS_SERVICE, useValue: new AnalyticsService(requests, deps.analytics) },
+        { provide: ANALYTICS_SERVICE, useValue: analytics },
         {
           provide: CONVERSATION_SERVICE,
           useValue: new ConversationService(requests, deps.conversations),
@@ -213,12 +225,18 @@ export class AppModule implements NestModule {
             logger: deps.logger,
           }),
         },
-        { provide: DATA_QUALITY_SERVICE, useValue: new DataQualityService(deps.dataQuality) },
+        { provide: DATA_QUALITY_SERVICE, useValue: quality },
         {
           provide: GROUP_DASHBOARD_SERVICE,
-          useValue: new GroupDashboardService({
-            repository: deps.groupData,
-            quality: deps.dataQuality,
+          useValue: dashboards,
+        },
+        {
+          provide: GROUP_REPORT_SERVICE,
+          useValue: new GroupReportService({
+            dashboards,
+            quality,
+            analytics,
+            reports: deps.reports,
             directory: deps.directory,
           }),
         },

@@ -261,8 +261,42 @@
     "logged": "Every download is recorded in the audit trail with your name and the filters.",
     "emptyTitle": "Nothing to report",
     "emptyBody": "No requests match these filters.",
-    "executiveTitle": "Executive reports",
-    "executiveBody": "Group-level reports for executives arrive with the Group Dashboard (R2)."
+    "introExecutive": "Quarterly and annual group HR reviews, as presentation-ready PDFs.",
+    "quarter": "Q{quarter} {year}",
+    "groupHeading": "Group HR reports",
+    "groupIntro": "Built from the same figures as the dashboards, in your scope. Totals only: no individual pay.",
+    "cadence": {
+      "month": "Monthly",
+      "quarter": "Quarterly",
+      "year": "Annual"
+    },
+    "periodLabel": {
+      "month": "Month",
+      "quarter": "Quarter",
+      "year": "Year"
+    },
+    "group": {
+      "rp03": {
+        "title": "RP-03 · Headcount & demographics",
+        "body": "Headcount, joiners and leavers, gender and age, by subsidiary, department and grade."
+      },
+      "rp04": {
+        "title": "RP-04 · Compensation & increments",
+        "body": "Payroll and average pay per currency, pay by grade against its band, approved increments and their cost."
+      },
+      "rp05": {
+        "title": "RP-05 · Data quality & anomalies",
+        "body": "Each subsidiary's upload against the month before, and every flag raised with its status and owner."
+      },
+      "rp06": {
+        "title": "RP-06 · Quarterly group HR review",
+        "body": "The quarter's headcount, movement, payroll and data quality across the group, for Sirius leadership."
+      },
+      "rp07": {
+        "title": "RP-07 · Annual HR report",
+        "body": "The year's workforce, turnover, payroll and increments across the group, for Sirius leadership and IHC."
+      }
+    }
   },
   "request": {
     "newTitle": "New increment request",

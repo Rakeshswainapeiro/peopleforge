@@ -4,6 +4,23 @@ All notable changes are recorded here. Format: [Keep a Changelog](https://keepac
 
 ## [Unreleased]
 
+### Added — slice S11b: group HR reports (R2-06, R2-07, RP-03 … RP-07)
+
+- **Group HR reports** on the Reports page, each offered by permission with its own period choice:
+  - **RP-03 Headcount & demographics** and **RP-05 Data quality & anomalies** (employee data access) and **RP-04 Compensation & increments** (compensation access): monthly, Excel or PDF, for all subsidiaries or one. Subsidiary HR get their own subsidiary only.
+  - **RP-06 Quarterly group HR review** and **RP-07 Annual HR report** (Sirius executive reporting): presentation-ready PDFs, group-wide; RP-07 is the one to send IHC (IHC has no login).
+- Built from the same stored totals as the dashboards (never decrypted salaries); currencies are never added together; RP-04 adds, for Sirius HR, the TAT of increment requests decided that month; RP-05 lists up to 2,000 flags and says when it stops. Excel numbers stay numbers, text is neutralised against formula injection, PDFs repeat table headers across pages. Every download is in the audit trail (`report.downloaded` with the format and period).
+- API `GET /api/v1/reports/rp-03` … `/rp-07`; OpenAPI 0.16.0. No migration.
+
+### Changed — slice S11b
+
+- The Reports menu item shows only to people who can run a report. Admins, who can run none, no longer see it (previously a "coming later" page); executives now get RP-06 and RP-07 there.
+
+### Fixed — slice S11b
+
+- The production build compiled the report-spec lookup wrongly (the minifier merged distinct cases), which would have offered RP-06 and RP-07 by month; the lookup now returns a distinct constant per case. Caught by the end-to-end download test.
+- Larger pages streamed by React logged a Content Security Policy error for React's hidden holding container. The CSP now allows exactly `display:none` on style attributes, by hash; every other inline style stays blocked.
+
 ### Added — slice S11a: Increment Portal gaps against the BRD (R1-05, R1-09, R1-10, R1-11)
 
 - **Criteria: add, remove, thresholds** (Settings, R1-05, ADR-016): admins can add a criterion (it gets the next unused code, e.g. C6), remove one and reorder them, publishing a new version as before. Any criterion can pass on a **measured value** — at least or at most a threshold, in a rating, score, percent, months, years or days. On the request page such a criterion asks for the employee's value instead of Pass/Fail and shows the outcome as it is typed; the API decides Pass or Fail from the value by the same rule. Values are stored encrypted; reviewers see them against the threshold. Requests already created keep their criteria.

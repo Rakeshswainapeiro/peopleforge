@@ -24,6 +24,17 @@ describe('buildCsp', () => {
     expect(buildCsp('n', false)).not.toContain('unsafe-inline');
   });
 
+  // React streams a large page in chunks, holding late ones in <svg style="display:none">
+  // until they move into place. Exactly that declaration is allowed on style attributes, by
+  // hash; any other inline style stays blocked.
+  it('lets React’s streaming container hide itself, and nothing else inline', async () => {
+    const hash = Buffer.from(
+      await crypto.subtle.digest('SHA-256', new TextEncoder().encode('display:none')),
+    ).toString('base64');
+    expect(buildCsp('n', false)).toContain(`style-src-attr 'unsafe-hashes' 'sha256-${hash}'`);
+    expect(buildCsp('n', true)).not.toContain('style-src-attr');
+  });
+
   it('allows unsafe-eval only in development', () => {
     const csp = buildCsp('n0nce', true);
     expect(csp).toContain("'unsafe-eval'");

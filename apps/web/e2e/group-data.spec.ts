@@ -234,3 +234,40 @@ test('Sirius HR extracts the raw data as CSV', async ({ page }) => {
   expect(body.startsWith('﻿Subsidiary,Month,Upload')).toBe(true);
   expect(body).toContain('Aisha Rahman');
 });
+
+test('Sirius HR downloads the group reports; a subsidiary gets its monthly ones only [R2-06, R2-07]', async ({
+  page,
+}) => {
+  await signIn(page, 'reviewer');
+  await page.goto('/reports');
+  const rp03 = page.getByRole('form', { name: 'RP-03 · Headcount & demographics' });
+  await rp03.getByLabel('Month').selectOption(monthBefore(1));
+  await rp03.getByLabel('Subsidiary').selectOption({ label: 'SUB-A' });
+  const [excel] = await Promise.all([
+    page.waitForEvent('download'),
+    rp03.getByRole('button', { name: 'Download Excel' }).click(),
+  ]);
+  const excelName = excel.suggestedFilename();
+  expect(excelName.startsWith(`PeopleForge-RP-03-${monthBefore(1)}-`)).toBe(true);
+  expect(excelName.endsWith('.xlsx')).toBe(true);
+  // The path is Playwright's own temporary download file.
+  // eslint-disable-next-line security/detect-non-literal-fs-filename
+  expect((await readFile(await excel.path())).subarray(0, 2).toString()).toBe('PK');
+  const rp06 = page.getByRole('form', { name: 'RP-06 · Quarterly group HR review' });
+  const [pdf] = await Promise.all([
+    page.waitForEvent('download'),
+    rp06.getByRole('button', { name: 'Download PDF' }).click(),
+  ]);
+  expect(pdf.suggestedFilename()).toMatch(/^PeopleForge-RP-06-\d{4}-Q[1-4]-[\d-]+\.pdf$/u);
+  // eslint-disable-next-line security/detect-non-literal-fs-filename
+  expect((await readFile(await pdf.path())).subarray(0, 5).toString()).toBe('%PDF-');
+
+  await signIn(page, 'betaHr');
+  await page.goto('/reports');
+  const group = page.getByRole('region', { name: 'Group HR reports' });
+  await expect(group.getByRole('form')).toHaveCount(3);
+  await expect(group).not.toContainText('RP-06');
+  // The API refuses the executive review to a subsidiary, whatever the URL.
+  const refused = await page.request.get('/reports/group/rp-06?period=2026-Q3&format=pdf');
+  expect(refused.status()).toBe(404);
+});

@@ -151,6 +151,28 @@ describe('audit trail [R1-15]', () => {
   });
 });
 
+describe('group report downloads [R2-06, R2-13]', () => {
+  it('records which report, period, format and subsidiary was downloaded, never figures', async () => {
+    const reports = createReportRepository(handle.db, testCipher);
+    await reports.recordDownload(reviewer, {
+      report: 'RP-03',
+      format: 'pdf',
+      period: '2026-09',
+      entityId: SUB_A.id,
+    });
+    await reports.recordDownload(reviewer, { report: 'RP-06', format: 'pdf', period: '2026-Q3' });
+    const { items } = await createAuditTrailRepository(handle.db).trail(reviewer, {
+      search: 'report.downloaded',
+      limit: 2,
+      offset: 0,
+    });
+    expect(items.map((item) => [item.subjectId, item.entityId, item.details])).toEqual([
+      ['RP-06', null, { format: 'pdf', period: '2026-Q3' }],
+      ['RP-03', SUB_A.id, { format: 'pdf', period: '2026-09' }],
+    ]);
+  });
+});
+
 describe('increment report data [R1-14, RP-01]', () => {
   it('returns each employee with the latest decision, and logs the download', async () => {
     const reports = createReportRepository(handle.db, testCipher);

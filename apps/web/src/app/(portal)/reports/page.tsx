@@ -1,9 +1,15 @@
-import { PAGE_SIZES, type DashboardFilter } from '@peopleforge/contracts';
+import {
+  groupReportSpec,
+  PAGE_SIZES,
+  type DashboardFilter,
+  type GroupReportCode,
+} from '@peopleforge/contracts';
+import type { Locale } from '@sirius/shared-types';
 import { ButtonLink, Card, CardHeader, EmptyState, PageHeader } from '@peopleforge/ui';
 import { notFound, redirect } from 'next/navigation';
 import { DashboardFilters } from '@/components/dashboard/dashboard-filters';
 import { RequestsTable } from '@/components/dashboard/requests-table';
-import { PlaceholderPage } from '@/components/placeholder-page';
+import { GroupReportCard } from '@/components/reports/group-report-card';
 import { getRequestLocale } from '@/i18n/request-locale';
 import { createTranslator } from '@/i18n/translator';
 import { pluralForm } from '@peopleforge/i18n';
@@ -17,9 +23,18 @@ import {
   statusOptions,
   type SearchParams,
 } from '@/lib/dashboard-view';
-import { hasAnyPermission } from '@/lib/navigation';
-import { canReadIncrementReport, REPORTS_PATH, reportHref } from '@/lib/report-view';
+import { entityChoices } from '@/lib/group-view';
+import {
+  canReadIncrementReport,
+  groupReportHref,
+  groupReportsFor,
+  REPORTS_PATH,
+  reportHref,
+  reportPeriodOptions,
+} from '@/lib/report-view';
 import { roleLabel } from '@/lib/viewer-display';
+import type { Translate } from '@/i18n/translator';
+import type { Me } from '@peopleforge/contracts';
 import type { ApiResult } from '@/server/api-client';
 import { dashboardSummary, listRequests, openCycles } from '@/server/increment-requests';
 import { requireViewer } from '@/server/session';
@@ -35,28 +50,96 @@ function required<T>(result: ApiResult<T>): T {
 }
 
 /**
- * Reports (R1-14): RP-01, the increment status report, with the dashboard's filters, a preview
- * and Excel / PDF downloads in the reader's language. Every download is audited (R1-15).
- * Executives' group reports arrive with R2.
+ * Reports: RP-01, the increment status report (R1-14), with the dashboard's filters, a preview
+ * and Excel / PDF downloads; then the group HR reports RP-03 … RP-07 (R2-06, R2-07) the reader
+ * may run, each for a chosen period. Files come in the reader's language and every download is
+ * audited (R1-15, R2-13).
  */
 export default async function ReportsPage({ searchParams }: ReportsPageProps = {}) {
   const me = await requireViewer();
   if (me === null) return null;
-  if (!hasAnyPermission(me.permissions, ['report:read_operational', 'report:read_executive'])) {
-    notFound();
-  }
+  const increments = canReadIncrementReport(me.permissions);
+  const groupReports = groupReportsFor(me.permissions);
+  if (!increments && groupReports.length === 0) notFound();
   const locale = await getRequestLocale();
   const t = createTranslator(locale);
-  if (!canReadIncrementReport(me.permissions)) {
-    return (
-      <PlaceholderPage
-        t={t}
-        title="reports.executiveTitle"
-        body="reports.executiveBody"
-        icon="chart"
+  const group = me.scope === 'group';
+  const rp01 = increments ? await incrementReport({ me, locale, t, searchParams }) : null;
+
+  return (
+    <>
+      <PageHeader
+        eyebrow={t(roleLabel(me.roles))}
+        title={t('reports.heading')}
+        description={t(
+          increments ? (group ? 'reports.introGroup' : 'reports.intro') : 'reports.introExecutive',
+        )}
       />
-    );
+      {rp01}
+      {/* Never empty here: RP-01's readers have compensation access, so RP-04. */}
+      <section aria-labelledby="group-reports" className="mt-8">
+        <h2 id="group-reports" className="text-lg font-semibold tracking-tight text-ink">
+          {t('reports.groupHeading')}
+        </h2>
+        <p className="mt-1 text-sm text-ink-muted">{t('reports.groupIntro')}</p>
+        <div className="mt-4 grid gap-6 lg:grid-cols-2">
+          {groupReports.map((code) => (
+            <GroupReportCard key={code} {...groupCardProps(code, me, locale, t)} />
+          ))}
+        </div>
+      </section>
+    </>
+  );
+}
+
+function groupCardText(code: GroupReportCode, t: Translate): { title: string; body: string } {
+  switch (code) {
+    case 'rp-03':
+      return { title: t('reports.group.rp03.title'), body: t('reports.group.rp03.body') };
+    case 'rp-04':
+      return { title: t('reports.group.rp04.title'), body: t('reports.group.rp04.body') };
+    case 'rp-05':
+      return { title: t('reports.group.rp05.title'), body: t('reports.group.rp05.body') };
+    case 'rp-06':
+      return { title: t('reports.group.rp06.title'), body: t('reports.group.rp06.body') };
+    case 'rp-07':
+      return { title: t('reports.group.rp07.title'), body: t('reports.group.rp07.body') };
   }
+}
+
+function groupCardProps(code: GroupReportCode, me: Me, locale: Locale, t: Translate) {
+  const spec = groupReportSpec(code);
+  const text = groupCardText(code, t);
+  return {
+    title: text.title,
+    description: text.body,
+    cadence: t(`reports.cadence.${spec.cadence}`),
+    action: groupReportHref(code),
+    period: {
+      label: t(`reports.periodLabel.${spec.cadence}`),
+      options: reportPeriodOptions(spec.cadence, new Date(), locale, t),
+    },
+    // Monthly reports can be cut by subsidiary for readers who see several.
+    entity:
+      spec.cadence === 'month' && me.entities.length > 1
+        ? { label: t('group.subsidiary'), options: entityChoices(me.entities, t) }
+        : undefined,
+    formats: spec.formats.map((format) => ({
+      value: format,
+      label: t(format === 'xlsx' ? 'reports.downloadExcel' : 'reports.downloadPdf'),
+    })),
+  };
+}
+
+interface IncrementReportProps {
+  me: Me;
+  locale: Locale;
+  t: Translate;
+  searchParams: Promise<SearchParams> | undefined;
+}
+
+/** RP-01 (R1-14): the dashboard's filters, the match count, downloads and a preview. */
+async function incrementReport({ me, locale, t, searchParams }: IncrementReportProps) {
   const group = me.scope === 'group';
   const state = dashboardState((await searchParams) ?? {});
   const cycles = required(await openCycles());
@@ -75,11 +158,6 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps = {
 
   return (
     <>
-      <PageHeader
-        eyebrow={t(roleLabel(me.roles))}
-        title={t('reports.heading')}
-        description={t(group ? 'reports.introGroup' : 'reports.intro')}
-      />
       <Card className="mt-6" label={t('reports.rp01Title')}>
         <CardHeader title={t('reports.rp01Title')} description={t('reports.rp01Body')} />
         <div className="flex flex-col gap-5 px-4 pt-4 pb-6 sm:px-6">

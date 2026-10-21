@@ -1,8 +1,9 @@
-import { createRequire } from 'node:module';
-import PDFDocument from 'pdfkit';
 import { RequestStatusSchema } from '@peopleforge/contracts';
 import type { ReportContent } from './report-content.js';
 import type { ReportLabels } from './report-labels.js';
+import { finish, fontFor, INK, LINE, MARGIN, MUTED, newPdf } from './pdf-kit.js';
+
+export { fontFor } from './pdf-kit.js';
 
 /**
  * The status report as a presentation-ready PDF (RP-01): A4 landscape, title, who and when,
@@ -11,46 +12,10 @@ import type { ReportLabels } from './report-labels.js';
  * embedded from the package: nothing is fetched at run time.
  */
 
-const require = createRequire(import.meta.url);
-const FONTS = {
-  regular: require.resolve('@fontsource/noto-sans/files/noto-sans-latin-400-normal.woff'),
-  bold: require.resolve('@fontsource/noto-sans/files/noto-sans-latin-700-normal.woff'),
-  arabic:
-    require.resolve('@fontsource/noto-sans-arabic/files/noto-sans-arabic-arabic-400-normal.woff'),
-};
-
-const ARABIC = /[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFE]/u;
-
-/** The font that has the glyphs: Arabic text in Noto Sans Arabic, everything else Noto Sans. */
-export function fontFor(text: string, bold = false): 'arabic' | 'bold' | 'regular' {
-  if (ARABIC.test(text)) return 'arabic';
-  return bold ? 'bold' : 'regular';
-}
-
-const MARGIN = 36;
 const ROW = 18;
-const INK = '#111827';
-const MUTED = '#6b7280';
-const LINE = '#e5e7eb';
 
 export async function incrementPdf(content: ReportContent, labels: ReportLabels): Promise<Buffer> {
-  const doc = new PDFDocument({
-    size: 'A4',
-    layout: 'landscape',
-    margin: MARGIN,
-    bufferPages: true,
-    info: { Title: `${labels.code} ${labels.title}`, Author: 'PeopleForge' },
-  });
-  doc.registerFont('regular', FONTS.regular);
-  doc.registerFont('bold', FONTS.bold);
-  doc.registerFont('arabic', FONTS.arabic);
-  const done = new Promise<Buffer>((resolve) => {
-    const chunks: Buffer[] = [];
-    doc.on('data', (chunk: Buffer) => chunks.push(chunk));
-    doc.on('end', () => {
-      resolve(Buffer.concat(chunks));
-    });
-  });
+  const { doc, done } = newPdf({ title: `${labels.code} ${labels.title}`, landscape: true });
 
   const width = doc.page.width - MARGIN * 2;
   const write = (text: string, size: number, options: { bold?: boolean; color?: string } = {}) => {
@@ -147,21 +112,6 @@ export async function incrementPdf(content: ReportContent, labels: ReportLabels)
   doc.moveDown(1);
   write(labels.tatNote, 8, { color: MUTED });
 
-  // Footer on every page: "Page n of m".
-  const range = doc.bufferedPageRange();
-  for (let index = 0; index < range.count; index += 1) {
-    doc.switchToPage(range.start + index);
-    const footer = labels.page(index + 1, range.count);
-    doc
-      .font(fontFor(footer))
-      .fontSize(8)
-      .fillColor(MUTED)
-      .text(footer, MARGIN, doc.page.height - MARGIN - 4, {
-        width,
-        align: 'right',
-        lineBreak: false,
-      });
-  }
-  doc.end();
+  finish(doc, labels.page);
   return done;
 }

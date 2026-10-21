@@ -7,11 +7,19 @@ import { NextResponse, type NextRequest } from 'next/server';
  * overlay injects <style> tags without the nonce; a nonce would make browsers ignore
  * 'unsafe-inline'). Production keeps nonce-only styles.
  */
+/**
+ * SHA-256 of `display:none`: React holds streamed chunks of a large page in a hidden container
+ * (`<svg style="display:none">`) until they move into place, and a nonce can't cover an
+ * attribute. Only that exact declaration is allowed on style attributes.
+ */
+const STREAMING_HIDDEN = "'sha256-aqNNdDLnnrDOnTNdkJpYlAxKVJtLt9CtFLklmInuUAE='";
+
 export function buildCsp(nonce: string, isDev: boolean): string {
   return [
     "default-src 'self'",
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${isDev ? " 'unsafe-eval'" : ''}`,
     isDev ? "style-src 'self' 'unsafe-inline'" : `style-src 'self' 'nonce-${nonce}'`,
+    ...(isDev ? [] : [`style-src-attr 'unsafe-hashes' ${STREAMING_HIDDEN}`]),
     "img-src 'self' blob: data:",
     "font-src 'self'",
     "connect-src 'self'",

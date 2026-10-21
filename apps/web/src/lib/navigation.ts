@@ -145,7 +145,9 @@ export const NAV_ITEMS: readonly NavItem[] = [
     href: '/reports',
     label: 'nav.reports',
     icon: 'chart',
-    anyOf: ['report:read_operational', 'report:read_executive'],
+    // Readers of a report they can run: RP-01 and RP-04 need compensation, RP-03 and RP-05
+    // employee data, RP-06 and RP-07 executive reporting (see report-view).
+    anyOf: ['employee_data:read', 'employee_data:read_compensation', 'report:read_executive'],
   },
 ];
 

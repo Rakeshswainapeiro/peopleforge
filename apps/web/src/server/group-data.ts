@@ -4,6 +4,9 @@ import {
   GroupOverviewSchema,
   type Compensation,
   type ExecutiveView,
+  GroupReportCodeSchema,
+  type GroupReportCode,
+  type ReportFormat,
   type GroupOverview,
   AnomalyRuleSchema,
   EmployeeHistorySchema,
@@ -238,4 +241,23 @@ export function getCompensation(filter: {
 /** DASH-D8 Executive / IHC view (R2-07). */
 export function getExecutiveView(period: string): Promise<ApiResult<ExecutiveView>> {
   return callApi(`${GROUP}/executive${query({ period })}`, ExecutiveViewSchema);
+}
+
+/** A group report (RP-03 … RP-07, R2-06/R2-07); the API checks permission and scope, and audits. */
+export function downloadGroupReport(report: {
+  code: GroupReportCode;
+  period: string;
+  format: ReportFormat;
+  entityId?: string | undefined;
+  locale: Locale;
+}): Promise<DownloadResult> {
+  return downloadFromApi(
+    `/api/v1/reports/${GroupReportCodeSchema.parse(report.code)}${query({
+      period: report.period,
+      format: report.format,
+      entityId: report.entityId === undefined ? undefined : Id.parse(report.entityId),
+      locale: report.locale,
+    })}`,
+    REPORT_TIMEOUT_MS,
+  );
 }

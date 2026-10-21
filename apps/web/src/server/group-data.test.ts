@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { FLAG_ID, RECORD_ID, SUB_A, UPLOAD_ID } from '@/test-support/group';
 import {
   downloadExtract,
+  downloadGroupReport,
   downloadTemplate,
   downloadUploadFile,
   downloadUploadIssues,
@@ -130,6 +131,23 @@ describe('group data client [R2-01 … R2-14]', () => {
       allVersions: true,
       locale: 'en',
     });
+    await downloadGroupReport({ code: 'rp-06', period: '2026-Q3', format: 'pdf', locale: 'ar' });
+    await downloadGroupReport({
+      code: 'rp-03',
+      period: '2026-09',
+      format: 'xlsx',
+      entityId: SUB_A,
+      locale: 'en',
+    });
+    expect(() =>
+      downloadGroupReport({
+        code: 'rp-03',
+        period: '2026-09',
+        format: 'xlsx',
+        entityId: '../x',
+        locale: 'en',
+      }),
+    ).toThrow();
     expect(vi.mocked(downloadFromApi).mock.calls).toEqual([
       ['/api/v1/group/template/file?locale=ar'],
       [`/api/v1/group/uploads/${UPLOAD_ID}/issues?locale=en`],
@@ -140,6 +158,11 @@ describe('group data client [R2-01 … R2-14]', () => {
       ],
       [
         `/api/v1/group/extract?format=palmhr&period=2026-09&entityId=${SUB_A}&allVersions=true&locale=en`,
+        REPORT_TIMEOUT_MS,
+      ],
+      ['/api/v1/reports/rp-06?period=2026-Q3&format=pdf&locale=ar', REPORT_TIMEOUT_MS],
+      [
+        `/api/v1/reports/rp-03?period=2026-09&format=xlsx&entityId=${SUB_A}&locale=en`,
         REPORT_TIMEOUT_MS,
       ],
     ]);
