@@ -30,7 +30,7 @@ import {
   NotFoundError,
   ValidationError,
 } from '../../errors/domain-errors.js';
-import { assessmentOf, effectiveMaxFileMb, missingFor } from './criteria.js';
+import { assessedResult, assessmentOf, effectiveMaxFileMb, missingFor } from './criteria.js';
 import { figuresOf, lineFigures, proposalProblem, requestTotals, toMoney } from './money.js';
 import { stageOf } from './stage.js';
 
@@ -190,6 +190,7 @@ function toDto(record: IncrementRequestRecord): IncrementRequest {
       return {
         criterionId: criterion.id,
         result: assessment.result,
+        measuredValue: assessment.measuredValue,
         justification: assessment.justification,
         evidence: assessment.evidence.map((file) => ({
           ...file,
@@ -388,7 +389,20 @@ export class IncrementRequestService {
           kind: proposal.kind,
           value: proposal.value === null ? null : toMoney(proposal.value),
         })),
-        assessment: input.assessment,
+        assessment:
+          input.assessment === undefined
+            ? undefined
+            : {
+                lineId: input.assessment.lineId,
+                results: input.assessment.results.map((result) => ({
+                  criterionId: result.criterionId,
+                  justification: result.justification,
+                  ...assessedResult(
+                    current.criteria.find((criterion) => criterion.id === result.criterionId),
+                    result,
+                  ),
+                })),
+              },
       }),
     );
     return this.get(caller, id);

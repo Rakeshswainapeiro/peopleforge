@@ -20,6 +20,7 @@ import {
   dashboardHref,
   dashboardState,
   entityOptions,
+  funnelPoints,
   kpiCards,
   lineRows,
   periodOptions,
@@ -164,6 +165,25 @@ describe('kpiCards', () => {
       ['Approved', '3'],
       ['Rejected', '1'],
     ]);
+  });
+});
+
+describe('funnelPoints [DASH-D2]', () => {
+  it('lists each criterion, the decision and decided, or nothing when nothing is submitted', () => {
+    const points = funnelPoints(dashboardSummaryFixture().funnel, 'en', t);
+    expect(points.map((point) => [point.id, point.label, point.value, point.display])).toEqual([
+      ['criterion-1', 'Criterion 1', 2, '2'],
+      ['criterion-2', 'Criterion 2', 1, '1'],
+      ['criterion-3', 'Criterion 3', 0, '0'],
+      ['criterion-4', 'Criterion 4', 0, '0'],
+      ['criterion-5', 'Criterion 5', 0, '0'],
+      ['decision', 'At decision', 1, '1'],
+      ['subsidiary', 'With the subsidiary', 0, '0'],
+      ['decided', 'Decided', 4, '4'],
+    ]);
+    expect(
+      funnelPoints({ criteria: [0, 0], decision: 0, withSubsidiary: 0, decided: 0 }, 'en', t),
+    ).toEqual([]);
   });
 });
 

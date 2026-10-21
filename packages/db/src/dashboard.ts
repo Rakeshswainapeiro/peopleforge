@@ -93,6 +93,12 @@ export interface DashboardSummaryRecord {
   /** Requests and employees matching every filter (the tab counts). */
   requests: number;
   employees: number;
+  /**
+   * Submitted requests' stage inputs (the stage funnel, DASH-D2): status, criteria in the
+   * pinned set, criteria verified for everyone still in review, and how many employees still
+   * wait for Sirius HR. Ignores status and search.
+   */
+  stages: { status: RequestStatus; criteria: number; verified: number; waiting: number }[];
 }
 
 export interface DashboardRepository {
@@ -179,6 +185,13 @@ export function lineConditions(
  * Criteria verified for every employee still pending review, per request (alias `r`): the
  * review stage, "Criterion n of 5" (R1-10). Same rule as the review repository.
  */
+const CRITERIA_COUNT = sql<number>`(select count(*)::int from increments.criterion c
+  where c.criteria_set_id = r.criteria_set_id)`;
+
+/** Live employees of the request still waiting for Sirius HR (review status pending). */
+const WAITING_LINES = sql<number>`(select count(*)::int from increments.request_line wl
+  where wl.request_id = r.id and wl.deleted_at is null and wl.review_status = 'pending')`;
+
 const VERIFIED_CRITERIA = sql<number>`(select count(*)::int from increments.criterion c
   where c.criteria_set_id = r.criteria_set_id and not exists (
     select 1 from increments.request_line vl
@@ -255,10 +268,21 @@ export function createDashboardRepository(
           .select((eb) => eb.fn.countAll<string>().as('n'))
           .where(lineConditions(filter))
           .executeTakeFirstOrThrow();
+        const stages = await trx
+          .selectFrom('increments.increment_request as r')
+          .select([
+            'r.status',
+            CRITERIA_COUNT.as('criteria'),
+            VERIFIED_CRITERIA.as('verified'),
+            WAITING_LINES.as('waiting'),
+          ])
+          .where(all([...requestConditions(filter, false), sql<boolean>`r.status <> 'draft'`]))
+          .execute();
         return {
           byStatus: Object.fromEntries(statuses.map((row) => [row.status, Number(row.n)])),
           requests: Number(requests.n),
           employees: Number(employees.n),
+          stages,
         };
       }),
 

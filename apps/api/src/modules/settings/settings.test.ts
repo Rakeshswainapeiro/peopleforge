@@ -190,10 +190,30 @@ describe('settings routes [NFR-SEC-01, NFR-CFG-01]', () => {
       justificationRequired: true,
       evidencePolicy: 'required',
       maxFileMb: 5,
+      threshold: null,
     });
     await request(http)
       .put('/api/v1/settings/criteria')
       .send({ version: 2, criteria: [{ ...edits[0], name: { en: '' } }] })
+      .expect(400);
+    // Adding a criterion (no code) with a threshold [R1-05]; a duplicate code is refused.
+    const { code: _code, ...newCriterion } = edits[0] ?? {};
+    await request(http)
+      .put('/api/v1/settings/criteria')
+      .send({
+        version: 2,
+        criteria: [
+          ...edits,
+          { ...newCriterion, threshold: { operator: 'gte', value: '95', unit: 'percent' } },
+        ],
+      })
+      .expect(200);
+    const added = repository.publishCriteria.mock.calls[1]?.[1].criteria.at(-1);
+    expect(added?.code).toBeUndefined();
+    expect(added?.threshold).toEqual({ operator: 'gte', value: '95', unit: 'percent' });
+    await request(http)
+      .put('/api/v1/settings/criteria')
+      .send({ version: 2, criteria: [edits[0], edits[0]] })
       .expect(400);
   });
 

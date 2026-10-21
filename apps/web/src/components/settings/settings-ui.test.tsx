@@ -17,6 +17,7 @@ const MESSAGES = [
 ] as const;
 
 const C1: CriterionFields = {
+  key: 'C1',
   code: 'C1',
   nameEn: 'Performance rating',
   nameAr: '',
@@ -25,6 +26,9 @@ const C1: CriterionFields = {
   justificationRequired: true,
   evidencePolicy: 'required',
   maxFileMb: '10',
+  thresholdOperator: '',
+  thresholdValue: '',
+  thresholdUnit: 'rating',
 };
 
 function criteriaForm() {
@@ -33,6 +37,7 @@ function criteriaForm() {
       version={1}
       criteria={[C1]}
       maxFileMb={10}
+      maxCriteria={2}
       messages={MESSAGES}
       labels={{
         nameEn: 'Name (English)',
@@ -49,6 +54,24 @@ function criteriaForm() {
           { value: 'optional', label: 'Optional' },
           { value: 'none', label: 'Not needed' },
         ],
+        passesOn: 'Passes on',
+        passModes: [
+          { value: '', label: 'Pass or Fail, by judgement' },
+          { value: 'gte', label: 'A measured value, at least' },
+          { value: 'lte', label: 'A measured value, at most' },
+        ],
+        thresholdValue: 'Threshold',
+        thresholdValueHint: 'e.g. 3.5',
+        thresholdUnit: 'Measured in',
+        units: [
+          { value: 'rating', label: 'Rating' },
+          { value: 'percent', label: 'Percent' },
+        ],
+        newCriterion: 'New criterion',
+        addCriterion: 'Add a criterion',
+        removeCriterion: 'Remove {code}',
+        removeNew: 'Remove this criterion',
+        limit: 'Up to 2 criteria.',
         note: 'Publishing creates version 2.',
         publish: 'Publish version 2',
         publishing: 'Publishing…',
@@ -103,6 +126,38 @@ describe('CriteriaSettingsForm [R1-05]', () => {
     expect(sent?.get('evidencePolicy')).toBe('optional');
     expect(sent?.get('justification-C1')).toBeNull();
     expect(sent?.get('version')).toBe('1');
+  });
+
+  it('adds a criterion with a threshold, up to the limit, and removes one [R1-05]', async () => {
+    const user = userEvent.setup();
+    criteriaForm();
+    expect(screen.getByRole('button', { name: 'Remove C1' })).toBeDisabled();
+    const add = screen.getByRole('button', { name: 'Add a criterion' });
+    await user.click(add);
+    expect(add).toBeDisabled();
+    expect(screen.getByRole('group', { name: 'New criterion' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Remove this criterion' })).toBeEnabled();
+    await user.type(screen.getByLabelText(/^Name \(English\) · New criterion/u), 'Attendance');
+    // The threshold fields appear once a measured value is chosen.
+    expect(screen.getByLabelText(/^Threshold · New criterion/u)).not.toBeVisible();
+    await user.selectOptions(screen.getByLabelText(/^Passes on · New criterion/u), 'gte');
+    expect(screen.getByLabelText(/^Threshold · New criterion/u)).toBeVisible();
+    await user.type(screen.getByLabelText(/^Threshold · New criterion/u), '95');
+    await user.selectOptions(screen.getByLabelText(/^Measured in · New criterion/u), 'percent');
+    await user.click(screen.getByRole('button', { name: 'Remove C1' }));
+    expect(screen.queryByRole('group', { name: 'C1' })).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Publish version 2' }));
+    await waitFor(() => {
+      expect(publishCriteriaAction).toHaveBeenCalled();
+    });
+    const sent = vi.mocked(publishCriteriaAction).mock.calls.at(-1)?.[1];
+    expect(sent?.getAll('rowKey')).toEqual(['new-1']);
+    expect(sent?.getAll('code')).toEqual(['']);
+    expect(sent?.get('nameEn')).toBe('Attendance');
+    expect(sent?.get('thresholdOperator')).toBe('gte');
+    expect(sent?.get('thresholdValue')).toBe('95');
+    expect(sent?.get('thresholdUnit')).toBe('percent');
+    expect(sent?.get('justification-new-1')).toBe('on');
   });
 
   it('shows a refusal and keeps what was typed', async () => {

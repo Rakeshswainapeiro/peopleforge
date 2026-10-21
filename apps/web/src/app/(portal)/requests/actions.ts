@@ -2,6 +2,7 @@
 
 import {
   CriterionResultSchema,
+  ThresholdValueSchema,
   DecimalString,
   MAX_COMMENT_LENGTH,
   MAX_EVIDENCE_FILE_MB,
@@ -127,6 +128,8 @@ export interface ProposalRowState {
 export interface CriterionTypedState {
   criterionId: string;
   result: string;
+  /** For a criterion with a threshold (R1-05); empty otherwise. */
+  measuredValue: string;
   justification: string;
 }
 
@@ -147,11 +150,14 @@ function readAssessment(formData: FormData) {
   for (const value of formData.getAll('criterionId')) {
     const criterionId = Id.parse(value);
     const result = field(formData, `result:${criterionId}`);
+    const measuredValue = field(formData, `measured:${criterionId}`);
     const justification = field(formData, `justification:${criterionId}`);
-    typed.push({ criterionId, result, justification });
+    typed.push({ criterionId, result, measuredValue, justification });
     results.push({
       criterionId,
       result: CriterionResultSchema.safeParse(result).data ?? null,
+      // A value that isn't a number counts as none: the card shows no result for it either.
+      measuredValue: ThresholdValueSchema.safeParse(measuredValue).data ?? null,
       // The textarea's maxLength stops longer text; the API refuses anything that slips past.
       justification: justification.normalize('NFC'),
     });

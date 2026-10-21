@@ -199,6 +199,7 @@ describe('criteria settings [R1-05]', () => {
       justificationRequired: index !== 4,
       evidencePolicy: index === 4 ? 'none' : 'required',
       maxFileMb: 5,
+      threshold: null,
     }));
 
   it('publishes a new version; requests created before keep theirs', async () => {
@@ -248,7 +249,14 @@ describe('criteria settings [R1-05]', () => {
     const [audit] = await asOwner<{ details: Record<string, unknown> }>(
       "SELECT details FROM audit.audit_log WHERE action = 'criteria_set.published'",
     );
-    expect(audit?.details).toEqual({ version: 2, previousVersion: 1, criteria: 5 });
+    expect(audit?.details).toEqual({
+      version: 2,
+      previousVersion: 1,
+      criteria: 5,
+      added: '',
+      removed: '',
+      thresholds: '',
+    });
   });
 
   it('refuses a stale version, other codes, and works only with an active set', async () => {
@@ -260,11 +268,11 @@ describe('criteria settings [R1-05]', () => {
       refusal(
         settings.publishCriteria(admin, {
           version: active.version,
-          criteria: edits(active.criteria).slice(0, 4),
+          criteria: edits([{ code: 'C9' }]),
         }),
       ),
     ).resolves.toMatchObject({ reason: 'criteria_mismatch' });
-    // One more than the set has is refused too.
+    // A code the set doesn't have is refused, even next to the set's own.
     await expect(
       refusal(
         settings.publishCriteria(admin, {
@@ -286,6 +294,77 @@ describe('criteria settings [R1-05]', () => {
         'active',
         active.id,
       ]);
+    }
+  });
+});
+
+describe('adding and removing criteria, thresholds [R1-05]', () => {
+  const edit = (
+    code: string | undefined,
+    overrides: Partial<CriterionEdit> = {},
+  ): CriterionEdit => ({
+    code,
+    name: { en: code === undefined ? 'Attendance' : `Rule ${code}` },
+    description: { en: 'What it checks.' },
+    justificationRequired: true,
+    evidencePolicy: 'optional',
+    maxFileMb: 5,
+    threshold: null,
+    ...overrides,
+  });
+
+  it('removes one, adds one with the next unused code, and reorders, with a threshold', async () => {
+    const active = await settings.activeCriteria(admin);
+    const published = await settings.publishCriteria(admin, {
+      version: active.version,
+      criteria: [
+        edit('C2'),
+        edit('C1', { threshold: { operator: 'gte', value: '3.5', unit: 'rating' } }),
+        edit(undefined, { threshold: { operator: 'gte', value: '95', unit: 'percent' } }),
+        edit('C3'),
+        edit('C4'),
+      ],
+    });
+    expect(published.criteria.map((criterion) => [criterion.code, criterion.threshold])).toEqual([
+      ['C2', null],
+      ['C1', { operator: 'gte', value: '3.5', unit: 'rating' }],
+      ['C6', { operator: 'gte', value: '95', unit: 'percent' }],
+      ['C3', null],
+      ['C4', null],
+    ]);
+    // A new criterion accepts the same file types as the others (a security control).
+    expect(published.criteria[2]?.allowedMediaTypes).toEqual(active.criteria[0]?.allowedMediaTypes);
+    const [audit] = await asOwner<{ details: Record<string, unknown> }>(
+      "SELECT details FROM audit.audit_log WHERE action = 'criteria_set.published' ORDER BY id DESC LIMIT 1",
+    );
+    expect(audit?.details).toMatchObject({ added: 'C6', removed: 'C5', thresholds: 'C1,C6' });
+    // C6 is never reused: removed and added again, the new one is C7.
+    const again = await settings.publishCriteria(admin, {
+      version: published.version,
+      criteria: [edit('C1'), edit(undefined)],
+    });
+    expect(again.criteria.map((criterion) => [criterion.code, criterion.threshold])).toEqual([
+      ['C1', null],
+      ['C7', null],
+    ]);
+  });
+
+  it('refuses a new code past C99', async () => {
+    const active = await settings.activeCriteria(admin);
+    await asOwner(
+      "UPDATE increments.criterion SET code = 'C99' WHERE code = 'C5' AND criteria_set_id IN (SELECT id FROM increments.criteria_set WHERE version = 1)",
+    );
+    try {
+      await expect(
+        refusal(
+          settings.publishCriteria(admin, {
+            version: active.version,
+            criteria: [edit('C1'), edit(undefined)],
+          }),
+        ),
+      ).resolves.toMatchObject({ reason: 'criteria_mismatch' });
+    } finally {
+      await asOwner("UPDATE increments.criterion SET code = 'C5' WHERE code = 'C99'");
     }
   });
 });

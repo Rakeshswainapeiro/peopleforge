@@ -11,11 +11,13 @@ import { callApi, downloadFromApi } from './session';
 
 /** Typed calls to the analytics API (R1-11, R1-12) and RP-02. IDs validated before use. */
 const Id = z.uuid();
+const Criterion = z.string().regex(/^C[0-9]{1,2}$/u);
 
 function filterParams(query: AnalyticsQuery): URLSearchParams {
   const params = new URLSearchParams();
   if (query.cycleId !== undefined) params.set('cycleId', Id.parse(query.cycleId));
   if (query.entityId !== undefined) params.set('entityId', Id.parse(query.entityId));
+  if (query.criterion !== undefined) params.set('criterion', Criterion.parse(query.criterion));
   return params;
 }
 

@@ -280,6 +280,11 @@ export default async function EmployeeStatusPage({
                           <Badge tone={row.result.tone} icon={row.result.icon}>
                             {row.result.label}
                           </Badge>
+                          {row.measured === null ? null : (
+                            <span className="mt-1 block text-xs text-ink-muted">
+                              {row.measured}
+                            </span>
+                          )}
                         </Td>
                         <Td className="max-w-md text-sm whitespace-pre-line text-ink">
                           {row.justification}

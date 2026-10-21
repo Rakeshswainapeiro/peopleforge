@@ -11,6 +11,9 @@ export async function actAs(page: Page, user: TestUser): Promise<void> {
 
 /** The full organisation sign-in journey, ending on the home page. */
 export async function signIn(page: Page, user: TestUser): Promise<void> {
+  // Signing in as someone else in the same test: drop the previous session first (the
+  // sign-in page sends a signed-in visitor home).
+  await page.context().clearCookies();
   await actAs(page, user);
   await page.goto('/sign-in');
   await page.getByRole('button', { name: 'Sign in with your organisation account' }).click();

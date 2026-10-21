@@ -158,6 +158,17 @@ describe('review notifications [R1-08 … R1-10]', () => {
         },
         {
           ...base,
+          kind: 'employees_rejected',
+          params: { reference: 'INC-2026-0152', employees: 3 },
+        },
+        {
+          ...base,
+          kind: 'employees_returned',
+          params: { reference: 'INC-2026-0152', employees: 1 },
+          actionNeeded: true,
+        },
+        {
+          ...base,
           kind: 'request_decided',
           params: { reference: 'INC-2026-0152', status: 'partly_approved' },
         },
@@ -174,11 +185,14 @@ describe('review notifications [R1-08 … R1-10]', () => {
     expect(rows.map((row) => row.message)).toEqual([
       'Sirius HR verified criterion 2 for every employee. Criterion 3 of 5 is under review.',
       'Aisha Rahman returned by Sirius HR with a question. Update and resubmit.',
+      'Sirius HR rejected the remaining 3 employees.',
+      'Sirius HR returned the remaining 1 employee with a question. Update and resubmit.',
       'Every employee decided. Final status: Partly approved.',
       'Every employee decided. Final status: .',
       'Sirius HR verified criterion 0 for every employee. Criterion 0 of 0 is under review.',
     ]);
     expect(rows[1]?.action).toBe('Respond');
+    expect(rows[3]?.action).toBe('Respond');
   });
 });
 

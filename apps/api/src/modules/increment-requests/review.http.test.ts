@@ -18,6 +18,7 @@ import {
 const base = `/api/v1/increment-requests/${REQUEST_ID}`;
 const VERIFY = `${base}/lines/${LINE_1}/verifications/${CRITERION_1}`;
 const DECIDE = `${base}/lines/${LINE_1}/decision`;
+const DECIDE_ALL = `${base}/decision`;
 const RESUBMIT = `${base}/resubmit`;
 const QUEUE = '/api/v1/review-queue';
 const KEY = 'b6a1d1c2-4d0e-4c47-9b8f-0b1d3a2f9e02';
@@ -62,6 +63,7 @@ describe('review routes [R1-07 … R1-09, NFR-SEC-01]', () => {
     ['PUT', VERIFY],
     ['DELETE', VERIFY],
     ['POST', DECIDE],
+    ['POST', DECIDE_ALL],
     ['POST', RESUBMIT],
     ['GET', QUEUE],
   ])('refuses %s %s without a session (401)', async (method, path) => {
@@ -76,9 +78,11 @@ describe('review routes [R1-07 … R1-09, NFR-SEC-01]', () => {
     [alphaHr, 'PUT', VERIFY],
     [alphaHr, 'DELETE', VERIFY],
     [alphaHr, 'POST', DECIDE],
+    [alphaHr, 'POST', DECIDE_ALL],
     [alphaHr, 'GET', QUEUE],
     [reviewer, 'POST', RESUBMIT],
     [executive, 'POST', DECIDE],
+    [executive, 'POST', DECIDE_ALL],
     [executive, 'GET', QUEUE],
   ] as const)('refuses %#: %s %s without the permission (403)', async (caller, method, path) => {
     const res = await request(await server(caller))
@@ -121,6 +125,34 @@ describe('review routes [R1-07 … R1-09, NFR-SEC-01]', () => {
       decision: 'returned',
       idempotencyKey: KEY,
     });
+  });
+
+  it('decides all remaining with an Idempotency-Key, never at another percentage', async () => {
+    const repository = review();
+    const http = await server(reviewer, repository);
+    await request(http).post(DECIDE_ALL).send({ decision: 'approved' }).expect(400);
+    const changed = await request(http)
+      .post(DECIDE_ALL)
+      .set('Idempotency-Key', KEY)
+      .send({ decision: 'approved', approvedPercent: '4.5' })
+      .expect(400);
+    expect(errorOf(changed).code).toBe('VALIDATION_FAILED');
+    const res = await request(http)
+      .post(DECIDE_ALL)
+      .set('Idempotency-Key', KEY)
+      .send({ decision: 'approved' })
+      .expect(200);
+    expect(IncrementRequestSchema.parse(res.body).id).toBe(REQUEST_ID);
+    expect(vi.mocked(repository.decide).mock.calls[0]?.[1]).toMatchObject({
+      requestId: REQUEST_ID,
+      lineId: null,
+      decision: 'approved',
+    });
+    await request(http)
+      .post(`/api/v1/increment-requests/not-a-uuid/decision`)
+      .set('Idempotency-Key', KEY)
+      .send({ decision: 'approved' })
+      .expect(400);
   });
 
   it('answers 409 when the employee is no longer pending', async () => {

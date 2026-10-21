@@ -365,3 +365,57 @@ export function decisionSummary(
       };
   }
 }
+
+/** The employees still waiting for Sirius HR's decision, in the request's order. */
+export function waitingLines(request: IncrementRequest): RequestLine[] {
+  return request.lines.filter((line) => line.reviewStatus === 'pending');
+}
+
+/** "Decide all remaining" (R1-09): the decision panel's words for every employee still waiting. */
+export function remainingDecisionLabels(
+  request: IncrementRequest,
+  locale: Locale,
+  t: Translate,
+): DecisionPanelLabels {
+  const number = new Intl.NumberFormat(locale);
+  const count = number.format(waitingLines(request).length);
+  const unchecked = waitingLines(request).filter((line) => unverified(line) > 0).length;
+  return {
+    tabs: t('decision.tabs'),
+    tab: {
+      approved: t('decision.approve'),
+      rejected: t('decision.reject'),
+      returned: t('decision.return'),
+    },
+    hint: {
+      approved: t('decision.all.approveHint'),
+      rejected: t('decision.all.rejectHint'),
+      returned: t('decision.all.returnHint'),
+    },
+    confirm: {
+      approved: t('decision.all.confirmApprove', { count }),
+      rejected: t('decision.all.confirmReject', { count }),
+      returned: t('decision.all.confirmReturn', { count }),
+    },
+    deciding: t('decision.deciding'),
+    // Approving another increment is per employee: these never show for everyone at once.
+    changeIncrement: '',
+    approvedPercent: '',
+    approvedPercentHint: '',
+    reason: t('decision.reasonLabel'),
+    reasonPlaceholder: t('decision.reasonPlaceholder'),
+    comment: t('decision.comment'),
+    commentRequired: t('decision.commentRequired'),
+    commentPlaceholder: {
+      approved: t('decision.commentPlaceholderApprove'),
+      rejected: t('decision.commentPlaceholderReject'),
+      returned: t('decision.commentPlaceholderReturn'),
+    },
+    verifyFirst:
+      unchecked === 0
+        ? null
+        : t(`decision.all.verifyFirst.${pluralForm(unchecked, locale)}`, {
+            count: number.format(unchecked),
+          }),
+  };
+}

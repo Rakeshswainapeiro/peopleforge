@@ -1,7 +1,11 @@
 'use client';
 
-import type { CriterionRule } from '@peopleforge/contracts';
-import { Field, SegmentedChoice, StatusMark, Textarea, cn } from '@peopleforge/ui';
+import {
+  thresholdResult,
+  type CriterionRule,
+  type CriterionThreshold,
+} from '@peopleforge/contracts';
+import { Field, Input, SegmentedChoice, StatusMark, Textarea, cn } from '@peopleforge/ui';
 import type { Locale } from '@sirius/shared-types';
 import { useState } from 'react';
 import { criterionStatus, type MissingLabels } from '@/lib/criterion-status';
@@ -18,6 +22,10 @@ export interface CriterionCardView {
   rule: CriterionRule;
   /** As saved. */
   result: 'pass' | 'fail' | null;
+  /** Passes on a measured value (R1-05), with its words; null for Pass or Fail by judgement. */
+  threshold: (CriterionThreshold & { text: string }) | null;
+  /** As saved; empty when none. */
+  measuredValue: string;
   justification: string;
   resultLegend: string;
   /** Null when the criterion takes no files. */
@@ -34,6 +42,13 @@ export interface CriterionCardView {
 export interface CriteriaEditorLabels {
   pass: string;
   fail: string;
+  measuredValue: string;
+  /** "enter the measured value": what a threshold criterion misses instead of a choice. */
+  missingValue: string;
+  /** "{threshold}. Enter a number, e.g. 3.5.", the placeholder kept for the card. */
+  measuredHint: string;
+  /** What a measured value gives: pass, fail, or none yet. */
+  outcome: { pass: string; fail: string; none: string };
   justification: string;
   justificationPlaceholder: string;
   missing: MissingLabels;
@@ -62,6 +77,7 @@ interface CriterionCardProps {
   lineId: string;
   formId: string;
   initialResult: 'pass' | 'fail' | undefined;
+  initialMeasured: string;
   initialJustification: string;
   labels: CriteriaEditorLabels;
   maxJustification: number;
@@ -81,22 +97,28 @@ function CriterionCard({
   lineId,
   formId,
   initialResult,
+  initialMeasured,
   initialJustification,
   labels,
   maxJustification,
   messages,
   locale,
 }: CriterionCardProps) {
-  const [result, setResult] = useState(initialResult);
+  const [chosen, setChosen] = useState(initialResult);
+  const [measured, setMeasured] = useState(initialMeasured);
   const [justification, setJustification] = useState(initialJustification);
   // A refused save brings back what was typed: start again from it (state reset during render,
   // React's pattern for props that replace state). The card itself stays, so focus isn't lost.
   const [seenKey, setSeenKey] = useState(resetKey);
   if (seenKey !== resetKey) {
     setSeenKey(resetKey);
-    setResult(initialResult);
+    setChosen(initialResult);
+    setMeasured(initialMeasured);
     setJustification(initialJustification);
   }
+  // With a threshold the value decides, by the same rule as the API (R1-05).
+  const { threshold } = criterion;
+  const result = threshold === null ? chosen : (thresholdResult(threshold, measured) ?? undefined);
   const status = criterionStatus(
     criterion.rule,
     {
@@ -104,7 +126,9 @@ function CriterionCard({
       justification,
       evidenceCount: criterion.evidence?.files.length ?? 0,
     },
-    labels.missing,
+    threshold === null
+      ? labels.missing
+      : { ...labels.missing, items: { ...labels.missing.items, result: labels.missingValue } },
     locale,
   );
   const hintId = `${criterion.id}-missing`;
@@ -129,22 +153,70 @@ function CriterionCard({
           </div>
         </div>
         <input type="hidden" name="criterionId" value={criterion.id} form={formId} />
-        <SegmentedChoice
-          key={resetKey}
-          name={`result:${criterion.id}`}
-          form={formId}
-          legend={criterion.resultLegend}
-          defaultValue={initialResult}
-          size="md"
-          onValueChange={(value) => {
-            setResult(resultOf(value));
-          }}
-          options={[
-            { value: 'pass', label: labels.pass, tone: 'success', icon: 'check' },
-            { value: 'fail', label: labels.fail, tone: 'danger', icon: 'x' },
-          ]}
-        />
+        {threshold === null ? (
+          <SegmentedChoice
+            key={resetKey}
+            name={`result:${criterion.id}`}
+            form={formId}
+            legend={criterion.resultLegend}
+            defaultValue={initialResult}
+            size="md"
+            onValueChange={(value) => {
+              setChosen(resultOf(value));
+            }}
+            options={[
+              { value: 'pass', label: labels.pass, tone: 'success', icon: 'check' },
+              { value: 'fail', label: labels.fail, tone: 'danger', icon: 'x' },
+            ]}
+          />
+        ) : null}
       </div>
+
+      {threshold === null ? null : (
+        <div className="mt-4 flex flex-col gap-2">
+          {/* A narrow field: the input fills its wrapper (its own width class can't be overridden). */}
+          <div className="w-full max-w-60">
+            <Field
+              label={labels.measuredValue}
+              hint={labels.measuredHint.replace('{threshold}', threshold.text)}
+              required
+            >
+              {({ id, describedBy }) => (
+                <Input
+                  key={resetKey}
+                  id={id}
+                  name={`measured:${criterion.id}`}
+                  form={formId}
+                  inputMode="decimal"
+                  autoComplete="off"
+                  defaultValue={initialMeasured}
+                  aria-describedby={describedBy}
+                  className="tabular-nums"
+                  onChange={(event) => {
+                    setMeasured(event.target.value);
+                  }}
+                />
+              )}
+            </Field>
+          </div>
+          <p
+            className={cn(
+              'text-sm font-medium',
+              result === 'pass'
+                ? 'text-success-700'
+                : result === 'fail'
+                  ? 'text-danger-700'
+                  : 'text-ink-muted',
+            )}
+          >
+            {result === 'pass'
+              ? labels.outcome.pass
+              : result === 'fail'
+                ? labels.outcome.fail
+                : labels.outcome.none}
+          </p>
+        </div>
+      )}
 
       <Field
         label={labels.justification}
@@ -221,16 +293,22 @@ export function CriteriaEditor({
         const result =
           entry === undefined ? (criterion.result ?? undefined) : resultOf(entry.result);
         const justification = entry?.justification ?? criterion.justification;
+        const measured = entry?.measuredValue ?? criterion.measuredValue;
         return (
           <CriterionCard
             key={criterion.id}
             // Changes after a refused save, so the controls start again from the typed values.
-            resetKey={entry === undefined ? 'saved' : `${entry.result}:${entry.justification}`}
+            resetKey={
+              entry === undefined
+                ? 'saved'
+                : `${entry.result}:${entry.measuredValue}:${entry.justification}`
+            }
             criterion={criterion}
             requestId={requestId}
             lineId={lineId}
             formId={formId}
             initialResult={result}
+            initialMeasured={measured}
             initialJustification={justification}
             labels={labels}
             maxJustification={maxJustification}

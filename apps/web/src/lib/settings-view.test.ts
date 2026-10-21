@@ -3,6 +3,7 @@ import { criteriaSettings } from '@/test-support/requests';
 import {
   criteriaFields,
   fieldsFromForm,
+  newCriterionFields,
   publishBody,
   reminderKindOf,
   settingsErrorFor,
@@ -26,6 +27,7 @@ describe('settings views [R1-05, R1-13]', () => {
     });
     expect(criteriaFields(withArabic)).toEqual([
       {
+        key: 'C1',
         code: 'C1',
         nameEn: 'Rating',
         nameAr: 'التقييم',
@@ -34,28 +36,56 @@ describe('settings views [R1-05, R1-13]', () => {
         justificationRequired: true,
         evidencePolicy: 'required',
         maxFileMb: '10',
+        thresholdOperator: '',
+        thresholdValue: '',
+        thresholdUnit: 'rating',
       },
     ]);
     expect(criteriaFields(settings)[0]?.nameAr).toBe('');
+    const rated = criteriaSettings({
+      criteria: [{ ...first, threshold: { operator: 'lte', value: '5', unit: 'days' } }],
+    });
+    expect(criteriaFields(rated)[0]).toMatchObject({
+      thresholdOperator: 'lte',
+      thresholdValue: '5',
+      thresholdUnit: 'days',
+    });
+    expect(newCriterionFields('new-1', 10)).toMatchObject({
+      key: 'new-1',
+      code: '',
+      justificationRequired: true,
+      evidencePolicy: 'required',
+      maxFileMb: '10',
+      thresholdOperator: '',
+    });
   });
 
-  it('reads the form back per criterion, unticked boxes as false, missing fields as empty', () => {
+  it('reads the form back per row, unticked boxes as false, missing fields as empty', () => {
     const fields = fieldsFromForm(
       form([
+        ['rowKey', 'C1'],
+        ['rowKey', 'new-1'],
         ['code', 'C1'],
-        ['code', 'C2'],
+        ['code', ''],
         ['nameEn', 'Rating'],
-        ['nameEn', 'Service'],
+        ['nameEn', 'Attendance'],
         ['nameAr', ''],
         ['descriptionEn', 'Latest appraisal.'],
         ['evidencePolicy', 'required'],
         ['evidencePolicy', 'none'],
         ['maxFileMb', '5'],
+        ['thresholdOperator', ''],
+        ['thresholdOperator', 'gte'],
+        ['thresholdValue', ''],
+        ['thresholdValue', ' 95 %'],
+        ['thresholdUnit', 'rating'],
+        ['thresholdUnit', 'percent'],
         ['justification-C1', 'on'],
       ]),
     );
     expect(fields).toEqual([
       {
+        key: 'C1',
         code: 'C1',
         nameEn: 'Rating',
         nameAr: '',
@@ -64,21 +94,30 @@ describe('settings views [R1-05, R1-13]', () => {
         justificationRequired: true,
         evidencePolicy: 'required',
         maxFileMb: '5',
+        thresholdOperator: '',
+        thresholdValue: '',
+        thresholdUnit: 'rating',
       },
       {
-        code: 'C2',
-        nameEn: 'Service',
+        key: 'new-1',
+        code: '',
+        nameEn: 'Attendance',
         nameAr: '',
         descriptionEn: '',
         descriptionAr: '',
         justificationRequired: false,
         evidencePolicy: 'none',
         maxFileMb: '',
+        thresholdOperator: 'gte',
+        thresholdValue: ' 95 %',
+        thresholdUnit: 'percent',
       },
     ]);
     const files = new FormData();
+    files.append('rowKey', 'x');
     files.append('code', new File(['x'], 'x.txt'));
     expect(fieldsFromForm(files)[0]?.code).toBe('');
+    // A new criterion has no code; a threshold travels as one object, "95 %" as "95".
     expect(publishBody(2, fields)).toEqual({
       version: 2,
       criteria: [
@@ -89,14 +128,15 @@ describe('settings views [R1-05, R1-13]', () => {
           justificationRequired: true,
           evidencePolicy: 'required',
           maxFileMb: '5',
+          threshold: null,
         },
         {
-          code: 'C2',
-          name: { en: 'Service', ar: '' },
+          name: { en: 'Attendance', ar: '' },
           description: { en: '', ar: '' },
           justificationRequired: false,
           evidencePolicy: 'none',
           maxFileMb: '',
+          threshold: { operator: 'gte', value: '95', unit: 'percent' },
         },
       ],
     });

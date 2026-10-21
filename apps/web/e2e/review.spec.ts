@@ -379,6 +379,21 @@ test('Sirius HR sees TAT and back-and-forth, and downloads RP-02 [R1-11, R1-12]'
     reference,
   );
   await expect(page.getByRole('table', { name: 'TAT by criterion' })).toContainText('C1');
+  // DASH-D3: median, the 12-month trend, and one criterion at a time.
+  await expect(page.getByRole('list', { name: 'Key figures' })).toContainText('Median');
+  await expect(page.getByRole('table', { name: 'TAT trend, last 12 months' })).toBeVisible();
+  await page.goto('/analytics?criterion=C1');
+  await expect(page.getByRole('heading', { name: 'C1 TAT trend, last 12 months' })).toBeVisible();
+  await expect(page.getByRole('combobox', { name: 'Criterion' })).toHaveValue('C1');
+  await expect(page.getByRole('table', { name: 'TAT by criterion' }).getByRole('row')).toHaveCount(
+    2,
+  );
+  // DASH-D2: where submitted requests are, on the Request Tracker.
+  await page.goto('/');
+  await expect(
+    page.getByRole('table', { name: 'Review stages' }).getByRole('row', { name: /^Decided \d+$/u }),
+  ).toBeVisible();
+  await page.goto('/analytics');
   await page.getByRole('link', { name: 'Back-and-forth' }).click();
   await page.waitForURL(/view=flow/u);
   const flows = page.getByRole('table', {
@@ -405,4 +420,64 @@ test('another subsidiary can’t review or see any of it', async ({ page }) => {
     await page.goto(path);
     await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible();
   }
+});
+
+test('Sirius HR returns every remaining employee at once [R1-09]', async ({ page }) => {
+  const errors = watchForErrors(page);
+  await signIn(page, 'alphaHr');
+  await page.goto('/requests/new');
+  for (const [label, name] of [
+    ['Mariam Saleh · EMP-1103 · G4', 'Mariam Saleh'],
+    ['Aisha Rahman · EMP-1101 · G5', 'Aisha Rahman'],
+  ] as const) {
+    await page.getByRole('combobox', { name: 'Add employee' }).selectOption({ label });
+    await page.getByRole('button', { name: 'Add' }).click();
+    // Wait for the row itself: the page is already on /edit after the first employee.
+    await expect(
+      page.getByRole('textbox', { name: `Proposed increase for ${name}` }),
+    ).toBeVisible();
+  }
+  const url = page.url().replace(/\/edit$/u, '');
+  await page.getByRole('textbox', { name: 'Proposed increase for Mariam Saleh' }).fill('4');
+  await page.getByRole('textbox', { name: 'Proposed increase for Aisha Rahman' }).fill('3');
+  await completeCriteria(page);
+  await page.getByRole('button', { name: 'Assess criteria for Aisha Rahman' }).click();
+  await expect(
+    page.getByRole('heading', { name: '2. Eligibility criteria for Aisha Rahman' }),
+  ).toBeVisible();
+  await completeCriteria(page);
+  await page.getByRole('button', { name: 'Save draft' }).click();
+  await expect(page.getByText('Draft saved.')).toBeVisible();
+  await page.getByRole('button', { name: 'Submit to Sirius HR' }).click();
+  await page.getByRole('button', { name: 'Yes, submit to Sirius HR' }).click();
+  await page.waitForURL(`${url}?submitted=1`);
+
+  await signIn(page, 'reviewer');
+  await page.goto(url);
+  const all = page.getByRole('region', { name: 'Decide all remaining' });
+  await expect(all).toContainText('2 employees are still waiting for a decision.');
+  // Nothing verified yet: approving all waits, returning doesn't.
+  await expect(all.getByRole('button', { name: 'Approve all 2' })).toBeDisabled();
+  await all.getByRole('tab', { name: 'Return' }).click();
+  await all.getByRole('combobox', { name: /Reason/u }).selectOption({ label: 'Missing evidence' });
+  await all
+    .getByRole('textbox', { name: /Comment/u })
+    .fill('Attach the signed 2026 appraisals for everyone.');
+  await all.getByRole('button', { name: 'Return all 2' }).click();
+  await page.waitForURL(`${url}?decided=returned`);
+  await expect(
+    page.getByRole('status').filter({ hasText: 'Every remaining employee returned to SUB-A.' }),
+  ).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Decide all remaining' })).toHaveCount(0);
+
+  await signIn(page, 'alphaHr');
+  await page.goto('/notifications');
+  await expect(
+    page
+      .getByText(
+        'Sirius HR returned the remaining 2 employees with a question. Update and resubmit.',
+      )
+      .first(),
+  ).toBeVisible();
+  expect(errors).toEqual([]);
 });

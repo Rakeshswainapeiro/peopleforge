@@ -21,9 +21,9 @@ describe('analytics client [R1-11, R1-12, R1-14]', () => {
       '/api/v1/analytics/increments',
       `/api/v1/analytics/increments?cycleId=${CYCLE}&entityId=${ENTITY}`,
     ]);
-    await downloadTatReport({ entityId: ENTITY }, 'ar');
+    await downloadTatReport({ entityId: ENTITY, criterion: 'C3' }, 'ar');
     expect(downloadFromApi).toHaveBeenCalledWith(
-      `/api/v1/reports/tat-back-and-forth?entityId=${ENTITY}&format=xlsx&locale=ar`,
+      `/api/v1/reports/tat-back-and-forth?entityId=${ENTITY}&criterion=C3&format=xlsx&locale=ar`,
       REPORT_TIMEOUT_MS,
     );
     expect(() => getIncrementAnalytics({ cycleId: '../x' })).toThrow();

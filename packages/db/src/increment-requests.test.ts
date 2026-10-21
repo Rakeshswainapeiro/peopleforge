@@ -469,8 +469,9 @@ async function rawResult(lineId: string, criterionId: string) {
     id: string;
     result: string | null;
     justification: Buffer | null;
+    measured_value: Buffer | null;
   }>(
-    'SELECT id, result, justification FROM increments.criterion_result WHERE line_id = $1 AND criterion_id = $2',
+    'SELECT id, result, justification, measured_value FROM increments.criterion_result WHERE line_id = $1 AND criterion_id = $2',
     [lineId, criterionId],
   );
   await owner.query('COMMIT');
@@ -486,6 +487,8 @@ describe('criteria configuration on a request [R1-03, R1-05]', () => {
       justificationRequired: true,
       evidencePolicy: 'required',
       maxFileMb: 10,
+      // The seeded placeholders are judged Pass or Fail: no threshold.
+      threshold: null,
     });
     expect(request.criteria[0]?.allowedMediaTypes).toContain('application/pdf');
     expect(request.criteria[4]?.evidencePolicy).toBe('optional');
@@ -493,6 +496,7 @@ describe('criteria configuration on a request [R1-03, R1-05]', () => {
       request.criteria.map((criterion) => ({
         criterionId: criterion.id,
         result: null,
+        measuredValue: null,
         justification: '',
         evidence: [],
         verification: null,
@@ -539,6 +543,41 @@ describe('saving criteria with the draft [R1-03]', () => {
     expect((await rawResult(lineId, String(c2)))?.justification).toBeNull();
   });
 
+  it('stores a measured value encrypted, and clears it [R1-05]', async () => {
+    const { id, lineId, criteria } = await draftWithLine();
+    const c1 = String(criteria[0]);
+    await repo.saveDraft(alpha, id, {
+      version: 1,
+      proposals: [],
+      assessment: {
+        lineId,
+        results: [{ criterionId: c1, result: 'pass', measuredValue: '4.25', justification: '' }],
+      },
+    });
+    expect((await repo.get(alpha, id))?.lines[0]?.criteria[0]).toMatchObject({
+      result: 'pass',
+      measuredValue: '4.25',
+    });
+    const row = await rawResult(lineId, c1);
+    expect(row?.measured_value?.toString('latin1')).not.toContain('4.25');
+    expect(
+      testCipher.decrypt(row?.measured_value ?? Buffer.alloc(0), {
+        table: 'increments.criterion_result',
+        column: 'measured_value',
+        rowId: String(row?.id),
+      }),
+    ).toBe('4.25');
+    await repo.saveDraft(alpha, id, {
+      version: 2,
+      proposals: [],
+      assessment: {
+        lineId,
+        results: [{ criterionId: c1, result: null, measuredValue: null, justification: '' }],
+      },
+    });
+    expect((await repo.get(alpha, id))?.lines[0]?.criteria[0]?.measuredValue).toBeNull();
+  });
+
   it('updates a result in place, keeping its row and clearing an emptied justification', async () => {
     const { id, lineId, criteria } = await draftWithLine();
     const c1 = String(criteria[0]);
@@ -554,7 +593,12 @@ describe('saving criteria with the draft [R1-03]', () => {
       assessment: { lineId, results: [{ criterionId: c1, result: 'fail', justification: ' ' }] },
     });
     const after = await rawResult(lineId, c1);
-    expect(after).toEqual({ id: before?.id, result: 'fail', justification: null });
+    expect(after).toEqual({
+      id: before?.id,
+      result: 'fail',
+      justification: null,
+      measured_value: null,
+    });
     await repo.saveDraft(alpha, id, {
       version: 3,
       proposals: [],

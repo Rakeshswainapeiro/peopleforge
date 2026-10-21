@@ -5,7 +5,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { decideAction } from '@/app/(portal)/review/actions';
 import { createTranslator } from '@/i18n/translator';
 import { markStateLabels, saveMessages } from '@/lib/request-view';
-import { decisionPanelLabels, queueRows, reasonOptions } from '@/lib/review-view';
+import {
+  decisionPanelLabels,
+  queueRows,
+  reasonOptions,
+  remainingDecisionLabels,
+} from '@/lib/review-view';
 import {
   LINE_1,
   must,
@@ -46,6 +51,37 @@ const posted = () => vi.mocked(decideAction).mock.calls.at(-1)?.[1];
 
 beforeEach(() => {
   vi.mocked(decideAction).mockResolvedValue({});
+});
+
+describe('DecisionPanel for all remaining [R1-09]', () => {
+  it('posts no employee and offers no different increment', async () => {
+    const request = submittedRequest();
+    const verified = {
+      ...request,
+      lines: request.lines.map((line) => ({
+        ...line,
+        criteria: line.criteria.map((criterion) => ({ ...criterion, verification: VERIFIED })),
+      })),
+    };
+    render(
+      <DecisionPanel
+        requestId={REQUEST_ID}
+        lineId={null}
+        decisionKey="decision-key-2"
+        reasons={reasonOptions(t)}
+        maxComment={2000}
+        labels={remainingDecisionLabels(verified, 'en', t)}
+        messages={saveMessages(t)}
+      />,
+    );
+    expect(screen.queryByRole('checkbox', { name: /different increment/u })).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: /^Approve all \d+$/u }));
+    await waitFor(() => {
+      expect(decideAction).toHaveBeenCalled();
+    });
+    expect(posted()?.has('lineId')).toBe(false);
+    expect(posted()?.get('decisionKey')).toBe('decision-key-2');
+  });
 });
 
 describe('DecisionPanel [R1-08, R1-09]', () => {

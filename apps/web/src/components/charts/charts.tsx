@@ -68,14 +68,18 @@ export function BarList(props: ChartProps) {
             <span className="truncate text-xs text-ink-muted" title={point.label}>
               {point.label}
             </span>
-            <svg viewBox="0 0 100 8" preserveAspectRatio="none" className="h-2.5 w-full">
-              <rect x={0} y={0} width={100} height={8} rx={4} className="fill-surface-muted" />
+            {/* Stretched to the row: rounded by clipping, as an rx would become an ellipse. */}
+            <svg
+              viewBox="0 0 100 8"
+              preserveAspectRatio="none"
+              className="h-2.5 w-full overflow-hidden rounded-full"
+            >
+              <rect x={0} y={0} width={100} height={8} className="fill-surface-muted" />
               <rect
                 x={0}
                 y={0}
                 width={share(point.value ?? 0, largest)}
                 height={8}
-                rx={4}
                 className="fill-brand-500"
               >
                 <title>{`${point.label}: ${point.display}`}</title>
@@ -177,7 +181,6 @@ export function RangeChart({
                   y={1}
                   width={Math.max(0.5, at(row.band.max) - at(row.band.min))}
                   height={8}
-                  rx={2}
                   className="fill-brand-100"
                 >
                   <title>{row.bandDisplay}</title>

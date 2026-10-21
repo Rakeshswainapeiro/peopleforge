@@ -1,6 +1,13 @@
 import type { CriterionRecord } from '@peopleforge/db';
 import { describe, expect, it } from 'vitest';
-import { assessmentOf, effectiveMaxFileMb, markOf, missingFor, withFacts } from './criteria.js';
+import {
+  assessedResult,
+  assessmentOf,
+  effectiveMaxFileMb,
+  markOf,
+  missingFor,
+  withFacts,
+} from './criteria.js';
 
 const criterion: CriterionRecord = {
   id: '44444444-4444-4444-8444-444444444440',
@@ -11,6 +18,7 @@ const criterion: CriterionRecord = {
   evidencePolicy: 'required',
   allowedMediaTypes: ['application/pdf'],
   maxFileMb: 10,
+  threshold: null,
 };
 const file = {
   id: '55555555-5555-4555-8555-555555555550',
@@ -34,6 +42,7 @@ describe('missingFor [R1-03, R1-06]', () => {
       missingFor(criterion, {
         criterionId: criterion.id,
         result,
+        measuredValue: null,
         justification: 'Reason',
         evidence: [file],
         verification: null,
@@ -46,6 +55,7 @@ describe('missingFor [R1-03, R1-06]', () => {
       missingFor(criterion, {
         criterionId: criterion.id,
         result: 'pass',
+        measuredValue: null,
         justification: '   ',
         evidence: [file],
         verification: null,
@@ -62,6 +72,7 @@ describe('missingFor [R1-03, R1-06]', () => {
     const assessment = {
       criterionId: criterion.id,
       result: 'pass' as const,
+      measuredValue: null,
       justification: '',
       evidence: [],
       verification: null,
@@ -121,10 +132,42 @@ describe('assessmentOf', () => {
     const saved = {
       criterionId: criterion.id,
       result: 'fail' as const,
+      measuredValue: null,
       justification: 'x',
       evidence: [],
       verification: null,
     };
     expect(assessmentOf(criterion, [saved])).toBe(saved);
+  });
+});
+
+describe('assessedResult [R1-05]', () => {
+  const rated = { threshold: { operator: 'gte', value: '3.5', unit: 'rating' } } as const;
+
+  it('lets the measured value decide a threshold criterion, whatever result was sent', () => {
+    expect(assessedResult(rated, { result: 'fail', measuredValue: '4' })).toEqual({
+      result: 'pass',
+      measuredValue: '4',
+    });
+    expect(assessedResult(rated, { result: 'pass', measuredValue: '3.49' })).toEqual({
+      result: 'fail',
+      measuredValue: '3.49',
+    });
+    expect(assessedResult(rated, { result: 'pass' })).toEqual({
+      result: null,
+      measuredValue: null,
+    });
+  });
+
+  it('keeps the judgement and drops any value without a threshold', () => {
+    expect(assessedResult(criterion, { result: 'pass', measuredValue: '9' })).toEqual({
+      result: 'pass',
+      measuredValue: null,
+    });
+    // A criterion not in the set: the API refuses it before saving; nothing is derived.
+    expect(assessedResult(undefined, { result: null })).toEqual({
+      result: null,
+      measuredValue: null,
+    });
   });
 });

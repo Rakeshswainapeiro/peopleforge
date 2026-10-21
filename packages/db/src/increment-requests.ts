@@ -7,6 +7,7 @@ import {
   APPROVED_VALUE,
   DECISION_COMMENT,
   JUSTIFICATION,
+  MEASURED_VALUE,
   PROPOSED,
   SALARY,
 } from './encrypted-fields.js';
@@ -66,6 +67,8 @@ export interface VerificationRecord {
 export interface CriterionAssessmentRecord {
   criterionId: string;
   result: CriterionResultValue | null;
+  /** Decimal string, for a criterion with a threshold; null when none (R1-05). */
+  measuredValue: string | null;
   /** Plain text; empty when none. */
   justification: string;
   evidence: EvidenceRecord[];
@@ -137,6 +140,8 @@ export interface Proposal {
 export interface CriterionInput {
   criterionId: string;
   result: CriterionResultValue | null;
+  /** Decimal string for a threshold criterion; null clears it (R1-05). */
+  measuredValue?: string | null | undefined;
   /** Plain text; empty clears it. Length is checked by the API contract. */
   justification: string;
 }
@@ -338,6 +343,9 @@ export function createIncrementRequestRepository(
       const text = input.justification.trim();
       const justification =
         text === '' ? null : cipher.encrypt(text, { ...JUSTIFICATION, rowId: id });
+      const measured = input.measuredValue ?? null;
+      const measuredValue =
+        measured === null ? null : cipher.encrypt(measured, { ...MEASURED_VALUE, rowId: id });
       await trx
         .insertInto('increments.criterion_result')
         .values({
@@ -347,6 +355,7 @@ export function createIncrementRequestRepository(
           criterion_id: input.criterionId,
           result: input.result,
           justification,
+          measured_value: measuredValue,
           created_by: actor,
           updated_by: actor,
         })
@@ -354,6 +363,7 @@ export function createIncrementRequestRepository(
           oc.columns(['line_id', 'criterion_id']).doUpdateSet({
             result: input.result,
             justification,
+            measured_value: measuredValue,
             updated_at: sql`now()`,
             updated_by: actor,
           }),
@@ -624,7 +634,14 @@ export function createIncrementRequestRepository(
         const results = await trx
           .selectFrom('increments.criterion_result as cr')
           .innerJoin('increments.request_line as l', 'l.id', 'cr.line_id')
-          .select(['cr.id', 'cr.line_id', 'cr.criterion_id', 'cr.result', 'cr.justification'])
+          .select([
+            'cr.id',
+            'cr.line_id',
+            'cr.criterion_id',
+            'cr.result',
+            'cr.justification',
+            'cr.measured_value',
+          ])
           .where('l.request_id', '=', id)
           .where('l.deleted_at', 'is', null)
           .execute();
@@ -697,6 +714,10 @@ export function createIncrementRequestRepository(
                 row.justification === null
                   ? ''
                   : cipher.decrypt(row.justification, { ...JUSTIFICATION, rowId: row.id }),
+              measuredValue:
+                row.measured_value === null
+                  ? null
+                  : cipher.decrypt(row.measured_value, { ...MEASURED_VALUE, rowId: row.id }),
             },
           ]),
         );
@@ -706,6 +727,7 @@ export function createIncrementRequestRepository(
             return {
               criterionId: criterion.id,
               result: entry?.result ?? null,
+              measuredValue: entry?.measuredValue ?? null,
               justification: entry?.justification ?? '',
               verification: verified.get(`${lineId}:${criterion.id}`) ?? null,
               evidence: files

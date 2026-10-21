@@ -287,11 +287,24 @@ describe('saveDraft', () => {
       assessment: {
         lineId: LINE_1,
         results: [
-          { criterionId: C1, result: 'pass', justification: 'café rated 4' },
-          { criterionId: C2, result: null, justification: '' },
+          { criterionId: C1, result: 'pass', measuredValue: null, justification: 'café rated 4' },
+          { criterionId: C2, result: null, measuredValue: null, justification: '' },
         ],
       },
     });
+  });
+
+  it('sends a measured value, and none for one that is not a number [R1-05]', async () => {
+    await expect(
+      saveDraft(
+        { rows: [] },
+        withCriteria({ [`measured:${C1}`]: ' 4.5 ', [`measured:${C2}`]: '3,5' }),
+      ),
+    ).rejects.toThrow('NEXT_REDIRECT');
+    expect(vi.mocked(saveDraftChanges).mock.calls.at(-1)?.[1].assessment?.results).toEqual([
+      { criterionId: C1, result: 'pass', measuredValue: '4.5', justification: 'café rated 4' },
+      { criterionId: C2, result: null, measuredValue: null, justification: '' },
+    ]);
   });
 
   it('opens the next employee’s criteria after saving from a row’s pencil', async () => {
@@ -312,8 +325,8 @@ describe('saveDraft', () => {
     expect(state.criteria).toEqual({
       lineId: LINE_1,
       results: [
-        { criterionId: C1, result: 'pass', justification: 'cafe\u0301 rated 4' },
-        { criterionId: C2, result: 'maybe', justification: '' },
+        { criterionId: C1, result: 'pass', measuredValue: '', justification: 'cafe\u0301 rated 4' },
+        { criterionId: C2, result: 'maybe', measuredValue: '', justification: '' },
       ],
     });
     const invalid = await saveDraft(

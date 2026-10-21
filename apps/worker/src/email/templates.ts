@@ -65,6 +65,10 @@ const PARAMS = {
   employee_approved: z.object({ reference, employee: line(200) }),
   employee_rejected: z.object({ reference, employee: line(200) }),
   employee_returned: z.object({ reference, employee: line(200) }),
+  // "Decide all remaining" (R1-09): one email for everyone, with how many.
+  employees_approved: z.object({ reference, employees }),
+  employees_rejected: z.object({ reference, employees }),
+  employees_returned: z.object({ reference, employees }),
   request_decided: z.object({
     reference,
     status: z.enum(['approved', 'partly_approved', 'rejected']),

@@ -32,6 +32,7 @@ export function notStarted(criterionId: string): CriterionAssessment {
   return {
     criterionId,
     result: null,
+    measuredValue: null,
     justification: '',
     evidence: [],
     missing: ['result', 'justification', 'evidence'],
@@ -46,6 +47,7 @@ export function omarCriteria(): CriterionAssessment[] {
     {
       criterionId: String(c1),
       result: 'pass',
+      measuredValue: null,
       justification: 'Rated 4 of 5 in the 2026 appraisal.',
       evidence: [
         {
@@ -62,6 +64,7 @@ export function omarCriteria(): CriterionAssessment[] {
     {
       criterionId: String(c2),
       result: 'fail',
+      measuredValue: null,
       justification: 'Joined in March 2026.',
       evidence: [
         {
@@ -78,6 +81,7 @@ export function omarCriteria(): CriterionAssessment[] {
     {
       criterionId: String(c3),
       result: 'pass',
+      measuredValue: null,
       justification: '',
       evidence: [],
       missing: ['justification', 'evidence'],
@@ -104,6 +108,7 @@ export function draftRequest(overrides: Partial<IncrementRequest> = {}): Increme
       evidencePolicy: index === 4 ? ('optional' as const) : ('required' as const),
       allowedMediaTypes: [PDF, 'image/png', 'image/jpeg', XLSX],
       maxFileMb: 10,
+      threshold: null,
     })),
     version: 3,
     createdAt: '2026-10-14T07:00:00.000Z',
@@ -212,6 +217,7 @@ export function dashboardSummaryFixture(
     },
     requests: 3,
     employees: 7,
+    funnel: { criteria: [2, 1, 0, 0, 0], decision: 1, withSubsidiary: 0, decided: 4 },
     ...overrides,
   };
 }
@@ -452,13 +458,19 @@ export function incrementAnalytics(
       requests: 2,
       decided: 1,
       averageDays: '4.5',
+      medianDays: '4.5',
       open: 1,
       openAverageDays: '2.5',
       longestOpen: longest,
       byCriterion: [
-        { code: 'C1', verified: 3, averageDays: '0.8', maxDays: '1.0' },
-        { code: 'C2', verified: 1, averageDays: '2.0', maxDays: '2.0' },
+        { code: 'C1', verified: 3, averageDays: '0.8', medianDays: '0.5', maxDays: '1.0' },
+        { code: 'C2', verified: 1, averageDays: '2.0', medianDays: '2.0', maxDays: '2.0' },
       ],
+      trend: [
+        { month: '2026-09', count: 0, averageDays: null, medianDays: null },
+        { month: '2026-10', count: 1, averageDays: '4.5', medianDays: '4.5' },
+      ],
+      criteria: ['C1', 'C2'],
       byEntity: [
         {
           entityCode: 'SUB-A',

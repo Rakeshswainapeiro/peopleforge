@@ -3,6 +3,7 @@ import {
   ApprovedPercentSchema,
   DashboardFilterSchema,
   DecideLineSchema,
+  DecideRemainingSchema,
   FINAL_STATUSES,
   IN_REVIEW_STATUSES,
   MAX_COMMENT_LENGTH,
@@ -30,6 +31,28 @@ describe('statuses [R1-09]', () => {
     expect(FINAL_STATUSES).toEqual(['approved', 'partly_approved', 'rejected']);
     expect(IN_REVIEW_STATUSES).toEqual(['submitted', 'under_review', 'returned']);
     expect(NotificationKindSchema.options).toContain('employee_returned');
+  });
+});
+
+describe('DecideRemainingSchema [R1-09]', () => {
+  const ok = (body: unknown) => DecideRemainingSchema.safeParse(body).success;
+
+  it('approves everyone as proposed, rejects or returns with a reason and a comment', () => {
+    expect(DecideRemainingSchema.parse({ decision: 'approved', comment: ' Fine. ' })).toEqual({
+      decision: 'approved',
+      comment: 'Fine.',
+    });
+    expect(ok({ decision: 'approved' })).toBe(true);
+    // Another percentage is decided per employee, never for everyone at once.
+    expect(ok({ decision: 'approved', approvedPercent: '4.5' })).toBe(false);
+    expect(ok({ decision: 'rejected', reasonCode: 'budget', comment: 'Over budget.' })).toBe(true);
+    expect(ok({ decision: 'rejected', reasonCode: 'budget' })).toBe(false);
+    expect(ok({ decision: 'returned', reasonCode: 'missing_evidence', comment: 'Add C1.' })).toBe(
+      true,
+    );
+    expect(NotificationKindSchema.options).toEqual(
+      expect.arrayContaining(['employees_approved', 'employees_rejected', 'employees_returned']),
+    );
   });
 });
 

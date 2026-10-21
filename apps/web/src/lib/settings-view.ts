@@ -13,6 +13,9 @@ import type { MessageKey } from '@/i18n/translator';
 
 /** One criterion's fields as typed (strings, so a refused form shows them back unchanged). */
 export interface CriterionFields {
+  /** Stable row key in the form: the code, or `new-…` for a criterion being added. */
+  key: string;
+  /** Empty for a criterion added in this version (the API gives it the next code). */
   code: string;
   nameEn: string;
   nameAr: string;
@@ -21,6 +24,10 @@ export interface CriterionFields {
   justificationRequired: boolean;
   evidencePolicy: string;
   maxFileMb: string;
+  /** '' (Pass or Fail by judgement), 'gte' or 'lte' (R1-05). */
+  thresholdOperator: string;
+  thresholdValue: string;
+  thresholdUnit: string;
 }
 
 export type SettingsErrorKey = Extract<
@@ -37,6 +44,7 @@ export const SETTINGS_ERROR_KEYS: readonly SettingsErrorKey[] = [
 /** The fields of the active criteria, to start the form with. */
 export function criteriaFields(settings: CriteriaSettings): CriterionFields[] {
   return settings.criteria.map((criterion) => ({
+    key: criterion.code,
     code: criterion.code,
     nameEn: criterion.name.en,
     nameAr: criterion.name.ar ?? '',
@@ -45,7 +53,28 @@ export function criteriaFields(settings: CriteriaSettings): CriterionFields[] {
     justificationRequired: criterion.justificationRequired,
     evidencePolicy: criterion.evidencePolicy,
     maxFileMb: String(criterion.maxFileMb),
+    thresholdOperator: criterion.threshold?.operator ?? '',
+    thresholdValue: criterion.threshold?.value ?? '',
+    thresholdUnit: criterion.threshold?.unit ?? 'rating',
   }));
+}
+
+/** A blank criterion to add (R1-05): judged Pass or Fail, evidence required, like C1–C5. */
+export function newCriterionFields(key: string, maxFileMb: number): CriterionFields {
+  return {
+    key,
+    code: '',
+    nameEn: '',
+    nameAr: '',
+    descriptionEn: '',
+    descriptionAr: '',
+    justificationRequired: true,
+    evidencePolicy: 'required',
+    maxFileMb: String(maxFileMb),
+    thresholdOperator: '',
+    thresholdValue: '',
+    thresholdUnit: 'rating',
+  };
 }
 
 function strings(formData: FormData, name: string): string[] {
@@ -54,27 +83,35 @@ function strings(formData: FormData, name: string): string[] {
 
 /** The criteria form, one entry per criterion in the order shown. */
 export function fieldsFromForm(formData: FormData): CriterionFields[] {
-  const codes = strings(formData, 'code');
+  const keys = strings(formData, 'rowKey');
   const column = (name: string) => {
     const values = strings(formData, name);
     return (index: number) => values.at(index) ?? '';
   };
+  const code = column('code');
   const nameEn = column('nameEn');
   const nameAr = column('nameAr');
   const descriptionEn = column('descriptionEn');
   const descriptionAr = column('descriptionAr');
   const evidence = column('evidencePolicy');
   const maxFileMb = column('maxFileMb');
-  return codes.map((code, index) => ({
-    code,
+  const operator = column('thresholdOperator');
+  const value = column('thresholdValue');
+  const unit = column('thresholdUnit');
+  return keys.map((key, index) => ({
+    key,
+    code: code(index),
     nameEn: nameEn(index),
     nameAr: nameAr(index),
     descriptionEn: descriptionEn(index),
     descriptionAr: descriptionAr(index),
-    // One checkbox per criterion, named after its code (unticked boxes aren't submitted).
-    justificationRequired: formData.get(`justification-${code}`) === 'on',
+    // One checkbox per row, named after its key (unticked boxes aren't submitted).
+    justificationRequired: formData.get(`justification-${key}`) === 'on',
     evidencePolicy: evidence(index),
     maxFileMb: maxFileMb(index),
+    thresholdOperator: operator(index),
+    thresholdValue: value(index),
+    thresholdUnit: unit(index),
   }));
 }
 
@@ -83,12 +120,21 @@ export function publishBody(version: number, fields: readonly CriterionFields[])
   return {
     version,
     criteria: fields.map((field) => ({
-      code: field.code,
+      // A new criterion has no code yet: the API gives it the next one.
+      ...(field.code === '' ? {} : { code: field.code }),
       name: { en: field.nameEn, ar: field.nameAr },
       description: { en: field.descriptionEn, ar: field.descriptionAr },
       justificationRequired: field.justificationRequired,
       evidencePolicy: field.evidencePolicy,
       maxFileMb: field.maxFileMb,
+      threshold:
+        field.thresholdOperator === ''
+          ? null
+          : {
+              operator: field.thresholdOperator,
+              value: field.thresholdValue.replace(/[\s%]/gu, ''),
+              unit: field.thresholdUnit,
+            },
     })),
   };
 }

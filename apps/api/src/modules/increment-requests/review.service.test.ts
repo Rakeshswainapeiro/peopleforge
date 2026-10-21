@@ -124,6 +124,7 @@ describe('ReviewService.decide [R1-08, R1-09]', () => {
     requestId: REQUEST_ID,
     submittedBy: 'alpha',
     employeeName: 'Omar Haddad',
+    employees: 1,
     requestStatus: 'under_review' as const,
   };
 
@@ -201,6 +202,71 @@ describe('ReviewService.decide [R1-08, R1-09]', () => {
   });
 });
 
+describe('ReviewService.decideRemaining [R1-09]', () => {
+  const context = {
+    reference: 'INC-2026-0001',
+    entityId: SUB_A,
+    requestId: REQUEST_ID,
+    submittedBy: 'alpha',
+    employeeName: 'Omar Haddad',
+    employees: 3,
+    requestStatus: 'rejected' as const,
+  };
+
+  it('decides every employee still waiting, and tells the submitter once with the count', async () => {
+    const review = fakeReview();
+    await service(review).decideRemaining(
+      reviewer,
+      REQUEST_ID,
+      { decision: 'rejected', reasonCode: 'budget', comment: 'Over budget.' },
+      KEY,
+    );
+    expect(review.decide).toHaveBeenCalledWith(scopeGroup, {
+      requestId: REQUEST_ID,
+      lineId: null,
+      idempotencyKey: KEY,
+      decision: 'rejected',
+      reasonCode: 'budget',
+      comment: 'Over budget.',
+      approved: null,
+      actorName: 'Reviewer',
+      notifications: expect.any(Function) as unknown,
+    });
+    expect(noticesOf(review.decide, context)).toEqual([
+      {
+        recipient: { userId: 'alpha' },
+        entityId: SUB_A,
+        requestId: REQUEST_ID,
+        kind: 'employees_rejected',
+        params: { reference: 'INC-2026-0001', employees: 3 },
+        actionNeeded: false,
+      },
+      expect.objectContaining({ kind: 'request_decided' }),
+    ]);
+  });
+
+  it('approves all as proposed, and asks for action on a return', async () => {
+    const review = fakeReview();
+    await service(review).decideRemaining(reviewer, REQUEST_ID, { decision: 'approved' }, KEY);
+    expect(review.decide.mock.calls[0]?.[1]).toMatchObject({
+      decision: 'approved',
+      reasonCode: null,
+      comment: '',
+      approved: null,
+    });
+    const returning = fakeReview();
+    await service(returning).decideRemaining(
+      reviewer,
+      REQUEST_ID,
+      { decision: 'returned', reasonCode: 'missing_evidence', comment: 'Add C1.' },
+      KEY,
+    );
+    expect(noticesOf(returning.decide, { ...context, requestStatus: 'returned' })).toEqual([
+      expect.objectContaining({ kind: 'employees_returned', actionNeeded: true }),
+    ]);
+  });
+});
+
 describe('ReviewService.resubmit [R1-08]', () => {
   function returnedRequest(complete: boolean) {
     const base = record({ status: 'returned', version: 6 });
@@ -210,6 +276,7 @@ describe('ReviewService.resubmit [R1-08]', () => {
     omar.criteria = base.criteria.map((criterion) => ({
       criterionId: criterion.id,
       result: 'pass',
+      measuredValue: null,
       justification: 'Done.',
       evidence: complete
         ? [
@@ -401,13 +468,21 @@ describe('verifiedForAll [R1-10]', () => {
     omar.criteria = request.criteria.map((criterion) => ({
       criterionId: criterion.id,
       result: 'pass',
+      measuredValue: null,
       justification: 'x',
       evidence: [],
       verification,
     }));
     expect(verifiedForAll(request)).toBe(0);
     neha.criteria = [
-      { criterionId: CRITERION_1, result: 'pass', justification: 'x', evidence: [], verification },
+      {
+        criterionId: CRITERION_1,
+        result: 'pass',
+        measuredValue: null,
+        justification: 'x',
+        evidence: [],
+        verification,
+      },
     ];
     expect(verifiedForAll(request)).toBe(1);
     neha.reviewStatus = 'approved';

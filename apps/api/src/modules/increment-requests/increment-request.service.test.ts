@@ -53,6 +53,7 @@ describe('IncrementRequestService', () => {
     expect(c1).toEqual({
       criterionId: CRITERION_1,
       result: 'pass',
+      measuredValue: null,
       justification: 'Rated 4 of 5 in the 2026 appraisal.',
       evidence: [
         {
@@ -80,6 +81,7 @@ describe('IncrementRequestService', () => {
     omar.criteria = complete.criteria.map((criterion) => ({
       criterionId: criterion.id,
       result: 'fail' as const,
+      measuredValue: null,
       justification: 'Reason',
       evidence: [evidenceRecord],
       verification: null,
@@ -250,7 +252,45 @@ describe('IncrementRequestService', () => {
     expect(repository.saveDraft).toHaveBeenCalledWith(scopeA, REQUEST_ID, {
       version: 3,
       proposals: [],
-      assessment,
+      assessment: {
+        lineId: LINE_2,
+        results: [
+          { criterionId: CRITERION_1, result: 'pass', measuredValue: null, justification: 'Yes' },
+        ],
+      },
+    });
+  });
+
+  it('lets the measured value decide a criterion with a threshold [R1-05]', async () => {
+    const repository = workingRepository();
+    const base = record();
+    repository.get.mockResolvedValue({
+      ...base,
+      criteria: base.criteria.map((criterion, index) =>
+        index === 0
+          ? { ...criterion, threshold: { operator: 'gte', value: '3.5', unit: 'rating' } }
+          : criterion,
+      ),
+    });
+    await new IncrementRequestService(repository).saveDraft(alphaHr, REQUEST_ID, {
+      version: 3,
+      proposals: [],
+      assessment: {
+        lineId: LINE_2,
+        results: [
+          { criterionId: CRITERION_1, result: 'pass', measuredValue: '3.4', justification: '' },
+        ],
+      },
+    });
+    expect(repository.saveDraft).toHaveBeenCalledWith(scopeA, REQUEST_ID, {
+      version: 3,
+      proposals: [],
+      assessment: {
+        lineId: LINE_2,
+        results: [
+          { criterionId: CRITERION_1, result: 'fail', measuredValue: '3.4', justification: '' },
+        ],
+      },
     });
   });
 
@@ -331,6 +371,7 @@ function readyRecord() {
     criteria: ready.criteria.map((criterion) => ({
       criterionId: criterion.id,
       result: 'pass' as const,
+      measuredValue: null,
       justification: 'Reason',
       evidence: [evidenceRecord],
       verification: null,
@@ -481,6 +522,7 @@ describe('decisions and verification in a request [R1-09, R1-10]', () => {
       {
         criterionId: CRITERION_1,
         result: 'pass',
+        measuredValue: null,
         justification: 'x',
         evidence: [],
         verification: { verifiedAt: new Date('2026-10-15T09:00:00Z'), verifiedByName: 'Sara' },

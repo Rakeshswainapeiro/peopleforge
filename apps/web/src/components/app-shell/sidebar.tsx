@@ -53,8 +53,11 @@ export function Sidebar({ me, locale, t, unread }: SidebarProps) {
           tagline={t('signIn.brand.tagline')}
         />
       </div>
-      <NavLinks items={items} label={t('nav.main')} />
-      <div className="flex flex-col gap-4 lg:mt-auto">
+      {/* On short screens the list scrolls, so the account footer (Sign out) stays in view. */}
+      <div className="lg:-mx-1 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:px-1">
+        <NavLinks items={items} label={t('nav.main')} />
+      </div>
+      <div className="flex flex-col gap-4">
         <div className="px-2">
           <LanguageSwitcher locale={locale} t={t} tone="dark" />
         </div>

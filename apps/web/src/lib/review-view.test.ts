@@ -21,8 +21,10 @@ import {
   queueRows,
   queueState,
   reasonOptions,
+  remainingDecisionLabels,
   unverified,
   verificationView,
+  waitingLines,
   type QueueState,
 } from './review-view';
 
@@ -213,6 +215,45 @@ describe('one employee in review [R1-07 … R1-09]', () => {
         'en',
         t,
       ).verifyFirst,
+    ).toBeNull();
+  });
+});
+
+describe('decide all remaining [R1-09]', () => {
+  const request = submittedRequest({ status: 'under_review' });
+  const verify = (line: (typeof request.lines)[number]) => ({
+    ...line,
+    criteria: line.criteria.map((criterion) => ({ ...criterion, verification: VERIFIED })),
+  });
+
+  it('counts the employees still waiting, and those not yet fully verified', () => {
+    const omar = must(request.lines[0]);
+    const second = must(request.lines[1]);
+    const mixed = {
+      ...request,
+      lines: [
+        verify(omar),
+        second,
+        { ...omar, id: 'decided-line', reviewStatus: 'approved' as const },
+      ],
+    };
+    expect(waitingLines(mixed).map((line) => line.id)).toEqual([LINE_1, second.id]);
+    const labels = remainingDecisionLabels(mixed, 'en', t);
+    expect(labels.confirm).toEqual({
+      approved: 'Approve all 2',
+      rejected: 'Reject all 2',
+      returned: 'Return all 2',
+    });
+    expect(labels.verifyFirst).toBe(
+      'Verify every criterion of 1 more employee before approving all.',
+    );
+    expect(labels.changeIncrement).toBe('');
+    expect(remainingDecisionLabels({ ...request, lines: request.lines }, 'en', t).verifyFirst).toBe(
+      `Verify every criterion of ${String(request.lines.length)} more employees before approving all.`,
+    );
+    expect(
+      remainingDecisionLabels({ ...request, lines: request.lines.map(verify) }, 'en', t)
+        .verifyFirst,
     ).toBeNull();
   });
 });

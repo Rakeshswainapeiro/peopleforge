@@ -34,7 +34,10 @@ export interface DecisionContext {
   requestId: string;
   /** The subsidiary user who submitted the request: who hears about decisions. */
   submittedBy: string | null;
+  /** The (first) employee decided; with several, see `employees`. */
   employeeName: string;
+  /** How many employees this decision covered (several for "decide all remaining"). */
+  employees: number;
   /** The request's status after this decision (final once every employee is decided). */
   requestStatus: RequestStatus;
 }
@@ -59,7 +62,8 @@ export interface StageContext {
 
 export interface DecisionInput {
   requestId: string;
-  lineId: string;
+  /** One employee, or null for every employee still waiting for a decision (R1-09). */
+  lineId: string | null;
   idempotencyKey: string;
   decision: LineDecisionValue;
   reasonCode: string | null;
@@ -137,7 +141,10 @@ export interface ReviewRepository {
       notifications: (context: StageContext) => readonly NewNotification[];
     },
   ) => Promise<void>;
-  /** Approves, rejects or returns one employee (R1-09); a repeated key is a replay. */
+  /**
+   * Approves, rejects or returns one employee, or every employee still waiting (R1-09), in one
+   * transaction; a repeated key is a replay.
+   */
   decide: (scope: Scope, input: DecisionInput) => Promise<{ replayed: boolean }>;
   /** The subsidiary sends its returned employees back to Sirius HR (R1-08). */
   resubmit: (
@@ -314,6 +321,29 @@ function contains(search: string): string {
   return `%${search.replace(/[\\%_]/gu, (char) => `\\${char}`)}%`;
 }
 
+/**
+ * The employees a decision covers: the one given (which must still be waiting), or every
+ * employee still waiting, in the request's order. Never empty.
+ */
+async function decisionLines(
+  trx: Transaction<Database>,
+  requestId: string,
+  lineId: string | null,
+): Promise<{ id: string; full_name: string }[]> {
+  let query = trx
+    .selectFrom('increments.request_line')
+    .select(['id', 'review_status', 'full_name'])
+    .where('request_id', '=', requestId)
+    .where('deleted_at', 'is', null);
+  query =
+    lineId === null ? query.where('review_status', '=', 'pending') : query.where('id', '=', lineId);
+  const lines = await query.orderBy('created_at').orderBy('id').execute();
+  if (lineId !== null && lines.length === 0) throw new RequestDataError('line_not_found', lineId);
+  const waiting = lines.filter((line) => line.review_status === 'pending');
+  if (waiting.length === 0) throw new RequestDataError('line_not_pending', lineId ?? undefined);
+  return waiting;
+}
+
 export function createReviewRepository(
   db: Kysely<Database>,
   cipher: FieldCipher,
@@ -398,50 +428,61 @@ export function createReviewRepository(
         }
         const request = await lockRequest(trx, input.requestId);
         if (!IN_REVIEW.includes(request.status)) throw new RequestDataError('not_in_review');
-        const line = await trx
-          .selectFrom('increments.request_line')
-          .select(['id', 'review_status', 'full_name'])
-          .where('id', '=', input.lineId)
-          .where('request_id', '=', input.requestId)
-          .where('deleted_at', 'is', null)
-          .executeTakeFirst();
-        if (line === undefined) throw new RequestDataError('line_not_found', input.lineId);
-        if (line.review_status !== 'pending') {
-          throw new RequestDataError('line_not_pending', input.lineId);
-        }
+        const lines = await decisionLines(trx, request.id, input.lineId);
         if (input.decision === 'approved') {
           // Approving means Sirius HR checked every criterion (R1-07): all must be verified.
           const of = await criteriaCount(trx, request.criteria_set_id);
           const verified = await trx
             .selectFrom('increments.criterion_verification')
-            .select((eb) => eb.fn.countAll<string>().as('n'))
-            .where('line_id', '=', input.lineId)
-            .executeTakeFirstOrThrow();
-          if (Number(verified.n) < of) throw new RequestDataError('not_verified', input.lineId);
+            .select(['line_id', (eb) => eb.fn.countAll<string>().as('n')])
+            .where(
+              'line_id',
+              'in',
+              lines.map((line) => line.id),
+            )
+            .groupBy('line_id')
+            .execute();
+          const counts = new Map(verified.map((row) => [row.line_id, Number(row.n)]));
+          const unverified = lines.find((line) => (counts.get(line.id) ?? 0) < of);
+          if (unverified !== undefined) throw new RequestDataError('not_verified', unverified.id);
         }
-        // The row ID is the ciphertexts' associated data, so it is chosen first.
-        const id = randomUUID();
         const comment = input.comment.trim();
-        await trx
-          .insertInto('increments.line_decision')
-          .values({
-            id,
-            line_id: input.lineId,
-            entity_id: request.entity_id,
-            request_id: request.id,
-            decision: input.decision,
-            reason_code: input.reasonCode,
-            comment:
-              comment === '' ? null : cipher.encrypt(comment, { ...DECISION_COMMENT, rowId: id }),
-            approved_kind: input.approved?.kind ?? null,
-            approved_value:
-              input.approved === null
-                ? null
-                : cipher.encrypt(input.approved.value, { ...APPROVED_VALUE, rowId: id }),
-            decided_by: scope.userId,
-            decided_by_name: input.actorName,
-          })
-          .execute();
+        for (const line of lines) {
+          // The row ID is the ciphertexts' associated data, so it is chosen first.
+          const id = randomUUID();
+          await trx
+            .insertInto('increments.line_decision')
+            .values({
+              id,
+              line_id: line.id,
+              entity_id: request.entity_id,
+              request_id: request.id,
+              decision: input.decision,
+              reason_code: input.reasonCode,
+              comment:
+                comment === '' ? null : cipher.encrypt(comment, { ...DECISION_COMMENT, rowId: id }),
+              approved_kind: input.approved?.kind ?? null,
+              approved_value:
+                input.approved === null
+                  ? null
+                  : cipher.encrypt(input.approved.value, { ...APPROVED_VALUE, rowId: id }),
+              decided_by: scope.userId,
+              decided_by_name: input.actorName,
+            })
+            .execute();
+          await recordAudit(trx, scope.userId, {
+            action: `request_line.${input.decision}`,
+            entityId: request.entity_id,
+            subjectType: 'request_line',
+            subjectId: line.id,
+            details: {
+              requestId: request.id,
+              reasonCode: input.reasonCode,
+              changedIncrement: input.approved !== null,
+              allRemaining: input.lineId === null,
+            },
+          });
+        }
         await trx
           .updateTable('increments.request_line')
           .set({
@@ -450,19 +491,12 @@ export function createReviewRepository(
             updated_at: sql`now()`,
             updated_by: scope.userId,
           })
-          .where('id', '=', input.lineId)
+          .where(
+            'id',
+            'in',
+            lines.map((line) => line.id),
+          )
           .execute();
-        await recordAudit(trx, scope.userId, {
-          action: `request_line.${input.decision}`,
-          entityId: request.entity_id,
-          subjectType: 'request_line',
-          subjectId: input.lineId,
-          details: {
-            requestId: request.id,
-            reasonCode: input.reasonCode,
-            changedIncrement: input.approved !== null,
-          },
-        });
         const to = statusFromLines(await lineStatuses(trx, request.id));
         await changeStatus(trx, scope.userId, request, to, input.reasonCode);
         await insertNotifications(
@@ -472,7 +506,10 @@ export function createReviewRepository(
             entityId: request.entity_id,
             requestId: request.id,
             submittedBy: request.submitted_by,
-            employeeName: line.full_name,
+            // decisionLines never returns an empty list.
+            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+            employeeName: lines[0]!.full_name,
+            employees: lines.length,
             requestStatus: to,
           }),
         );

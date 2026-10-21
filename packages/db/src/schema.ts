@@ -82,7 +82,8 @@ export interface CriterionTable {
   evidence_policy: 'required' | 'optional' | 'none';
   allowed_media_types: string[];
   max_file_mb: number;
-  pass_rule: { kind: 'manual' } | Record<string, unknown>;
+  /** How the criterion passes (R1-05): the preparer's judgement, or a measured value. */
+  pass_rule: PassRule;
   created_at: Timestamp;
   created_by: string;
   updated_at: Timestamp;
@@ -151,6 +152,17 @@ export interface RequestLineTable {
 
 export type CriterionResultValue = 'pass' | 'fail';
 
+/** A criterion's pass rule (R1-05), stored in `increments.criterion.pass_rule`. */
+export type PassRule =
+  | { kind: 'manual' }
+  | {
+      kind: 'threshold';
+      operator: 'gte' | 'lte';
+      /** Decimal string, e.g. "3.5". */
+      value: string;
+      unit: 'rating' | 'score' | 'percent' | 'months' | 'years' | 'days';
+    };
+
 export interface CriterionResultTable {
   id: string;
   line_id: string;
@@ -159,6 +171,8 @@ export interface CriterionResultTable {
   result: CriterionResultValue | null;
   /** Ciphertext of the justification text (ADR-008); null when empty. */
   justification: Buffer | null;
+  /** Ciphertext of the measured value (decimal string) for a threshold criterion; null when none. */
+  measured_value: Buffer | null;
   created_at: Timestamp;
   created_by: string;
   updated_at: Timestamp;

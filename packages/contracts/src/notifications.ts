@@ -16,6 +16,13 @@ export const NotificationKindSchema = z.enum([
   'employee_rejected',
   /** To the submitter, action needed: an employee is back with a question (R1-08). */
   'employee_returned',
+  /**
+   * To the submitter: Sirius HR decided every employee still waiting at once ("Decide all
+   * remaining", R1-09); `employees` says how many. Returned ones need action.
+   */
+  'employees_approved',
+  'employees_rejected',
+  'employees_returned',
   /** To the submitter: every employee is decided; the request has its final status. */
   'request_decided',
   /** To Sirius HR reviewers: returned employees came back, fixed. */

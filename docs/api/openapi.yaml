@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: PeopleForge API
-  version: 0.14.0
+  version: 0.15.0
   description: >
     Phase 1 API (BRD SIRIUS-HR-BRD-001). Every /api/v1 route requires an access token from the
     Sirius identity provider (Microsoft Entra ID; Keycloak locally) sent as
@@ -347,7 +347,14 @@ paths:
                         required: [criterionId, result, justification]
                         properties:
                           criterionId: { type: string, format: uuid }
-                          result: { type: [string, 'null'], enum: [pass, fail, null] }
+                          result:
+                            type: [string, 'null']
+                            enum: [pass, fail, null]
+                            description: Ignored for a criterion with a threshold (the value decides, R1-05)
+                          measuredValue:
+                            type: [string, 'null']
+                            pattern: '^\d{1,6}(\.\d{1,2})?$'
+                            description: The employee's measured value for a criterion with a threshold (R1-05); stored encrypted
                           justification: { type: string, maxLength: 2000 }
       responses:
         '200':
@@ -526,6 +533,55 @@ paths:
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: '#/components/schemas/DecideLine' } } }
+      responses:
+        '200':
+          {
+            description: The request,
+            content:
+              { application/json: { schema: { $ref: '#/components/schemas/IncrementRequest' } } },
+          }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/increment-requests/{id}/decision:
+    post:
+      tags: [review]
+      summary: Decide every employee still waiting at once (R1-09)
+      description: >
+        Needs `increment_request:decide`. One decision, reason and comment for each employee still
+        waiting, at the proposed increments (another percentage is decided per employee).
+        Approving needs every criterion verified for each (409 `criteria`/`not_verified`, naming
+        the first); nobody waiting is 409 `lineId`/`not_pending`. One transaction, one status
+        change; the submitter gets one notification (`employees_approved|rejected|returned`) with
+        the count. Idempotent per user and `Idempotency-Key`. Audited per employee
+        (`allRemaining: true`).
+      parameters:
+        - { $ref: '#/components/parameters/RequestId' }
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: { type: string, pattern: '^[A-Za-z0-9_-]{8,128}$' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: object
+                  additionalProperties: false
+                  required: [decision]
+                  properties:
+                    decision: { const: approved }
+                    comment: { type: string, maxLength: 2000 }
+                - type: object
+                  additionalProperties: false
+                  required: [decision, reasonCode, comment]
+                  properties:
+                    decision: { enum: [rejected, returned] }
+                    reasonCode: { type: string }
+                    comment: { type: string, minLength: 1, maxLength: 2000 }
       responses:
         '200':
           {
@@ -831,9 +887,11 @@ paths:
       summary: Publishes the edited criteria as the next version (R1-05)
       description: >
         Needs `criteria:configure`. `version` is the active version that was edited (409 `version`
-        `stale` otherwise); the criteria keep their codes and order (400 `criteria` `mismatch`).
-        File types carry over. Requests already created keep their version. Audited
-        (`criteria_set.published`).
+        `stale` otherwise). The list becomes the next version in its order (1–10): a criterion
+        with a `code` keeps it (an unknown code is 400 `criteria` `mismatch`); one left out is
+        removed; one without a `code` is added with the next code never used before (ADR-016).
+        File types carry over (a new criterion takes the current ones'). Requests already
+        created keep their version. Audited (`criteria_set.published`).
       requestBody:
         required: true
         content:
@@ -851,10 +909,13 @@ paths:
                   items:
                     type: object
                     additionalProperties: false
-                    required:
-                      [code, name, description, justificationRequired, evidencePolicy, maxFileMb]
+                    required: [name, description, justificationRequired, evidencePolicy, maxFileMb]
                     properties:
-                      code: { type: string, pattern: '^C[0-9]{1,2}$' }
+                      code:
+                        type: string
+                        pattern: '^C[0-9]{1,2}$'
+                        description: An existing criterion's code; leave out for a new criterion. Unique in the list
+                      threshold: { $ref: '#/components/schemas/NullableThreshold' }
                       name:
                         type: object
                         required: [en]
@@ -891,6 +952,10 @@ paths:
       parameters:
         - { $ref: '#/components/parameters/CycleFilter' }
         - { name: entityId, in: query, schema: { type: string, format: uuid } }
+        - name: criterion
+          in: query
+          description: A criterion code (DASH-D3 filter); narrows criterion TAT and the trend
+          schema: { type: string, pattern: '^C[0-9]{1,2}$' }
       responses:
         '200':
           description: The measures
@@ -2159,16 +2224,29 @@ components:
           evidencePolicy,
           allowedMediaTypes,
           maxFileMb,
+          threshold,
         ]
       properties:
         id: { type: string, format: uuid }
         code: { type: string, example: C1 }
+        threshold: { $ref: '#/components/schemas/NullableThreshold' }
         name: { $ref: '#/components/schemas/LocalisedText' }
         description: { $ref: '#/components/schemas/LocalisedText' }
         justificationRequired: { type: boolean }
         evidencePolicy: { type: string, enum: [required, optional, none] }
         allowedMediaTypes: { type: array, items: { type: string }, example: [application/pdf] }
         maxFileMb: { type: integer, description: "Effective limit: the criterion's, capped at 10" }
+    NullableThreshold:
+      description: Passes on a measured value (R1-05, ADR-016); null for Pass or Fail by judgement
+      oneOf:
+        - type: 'null'
+        - type: object
+          additionalProperties: false
+          required: [operator, value, unit]
+          properties:
+            operator: { type: string, enum: [gte, lte] }
+            value: { type: string, pattern: '^\d{1,6}(\.\d{1,2})?$', example: '3.5' }
+            unit: { type: string, enum: [rating, score, percent, months, years, days] }
     EvidenceFile:
       type: object
       required: [id, fileName, mediaType, sizeBytes, createdAt]
@@ -2180,10 +2258,13 @@ components:
         createdAt: { type: string, format: date-time }
     CriterionAssessment:
       type: object
-      required: [criterionId, result, justification, evidence, missing, verification]
+      required: [criterionId, result, measuredValue, justification, evidence, missing, verification]
       properties:
         criterionId: { type: string, format: uuid }
         result: { type: [string, 'null'], enum: [pass, fail, null] }
+        measuredValue:
+          type: [string, 'null']
+          description: The measured value for a criterion with a threshold (R1-05); null otherwise
         justification: { type: string }
         evidence: { type: array, items: { $ref: '#/components/schemas/EvidenceFile' } }
         missing:
@@ -2552,8 +2633,21 @@ components:
             of: { type: integer, minimum: 1 }
     DashboardSummary:
       type: object
-      required: [byStatus, requests, employees]
+      required: [byStatus, requests, employees, funnel]
       properties:
+        funnel:
+          type: object
+          description: >
+            The stage funnel (DASH-D2): submitted requests at each criterion (index 0 = criterion
+            1), at the decision, and decided; ignores the status and search filters
+          required: [criteria, decision, withSubsidiary, decided]
+          properties:
+            criteria: { type: array, items: { type: integer } }
+            decision: { type: integer }
+            withSubsidiary:
+              type: integer
+              description: Open requests whose every remaining employee is returned to the subsidiary
+            decided: { type: integer }
         byStatus:
           type: object
           required: [draft, submitted, under_review, returned, approved, partly_approved, rejected]
@@ -2705,10 +2799,29 @@ components:
             requests: { type: integer }
             decided: { type: integer }
             averageDays: { oneOf: [{ $ref: '#/components/schemas/Days' }, { type: 'null' }] }
+            medianDays: { oneOf: [{ $ref: '#/components/schemas/Days' }, { type: 'null' }] }
             open: { type: integer }
             openAverageDays: { oneOf: [{ $ref: '#/components/schemas/Days' }, { type: 'null' }] }
             longestOpen: { type: [object, 'null'] }
-            byCriterion: { type: array, items: { type: object } }
+            byCriterion:
+              type: array
+              description: 'Per criterion (filtered by `criterion`): verified, average, median and longest days'
+              items: { type: object }
+            trend:
+              type: array
+              description: >
+                The 12 months up to now (Asia/Dubai): decided requests' TAT by decision month, or
+                with a criterion filter that criterion's TAT by verification month (DASH-D3)
+              items:
+                type: object
+                required: [month, count, averageDays, medianDays]
+                properties:
+                  month: { type: string, pattern: '^\d{4}-(0[1-9]|1[0-2])$' }
+                  count: { type: integer }
+                  averageDays: { oneOf: [{ $ref: '#/components/schemas/Days' }, { type: 'null' }] }
+                  medianDays: { oneOf: [{ $ref: '#/components/schemas/Days' }, { type: 'null' }] }
+            criteria:
+              { type: array, items: { type: string }, description: Criterion codes for the filter }
             byEntity: { type: array, items: { type: object } }
             byRequest: { type: array, items: { type: object } }
         backAndForth:
@@ -2739,6 +2852,9 @@ components:
               employee_approved,
               employee_rejected,
               employee_returned,
+              employees_approved,
+              employees_rejected,
+              employees_returned,
               request_decided,
               request_resubmitted,
               question_asked,

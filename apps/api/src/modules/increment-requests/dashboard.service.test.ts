@@ -11,7 +11,7 @@ import {
   reviewer,
   workingDashboard,
 } from '../../test-support/increment-requests.js';
-import { DashboardService } from './dashboard.service.js';
+import { DashboardService, stageFunnel } from './dashboard.service.js';
 
 const scopeA = { userId: 'alpha', userName: 'Alpha HR', kind: 'entity', entityIds: [SUB_A] };
 const scopeGroup = { userId: 'reviewer', userName: 'Reviewer', kind: 'group' };
@@ -32,11 +32,13 @@ describe('DashboardService.summary', () => {
       },
       requests: 2,
       employees: 3,
+      funnel: { criteria: [], decision: 0, withSubsidiary: 0, decided: 0 },
     });
     repository.summary.mockResolvedValueOnce({
       byStatus: { submitted: 4, partly_approved: 1 },
       requests: 4,
       employees: 9,
+      stages: [{ status: 'partly_approved', criteria: 5, verified: 5, waiting: 0 }],
     });
     await expect(service.summary(reviewer, {})).resolves.toEqual({
       byStatus: {
@@ -50,11 +52,40 @@ describe('DashboardService.summary', () => {
       },
       requests: 4,
       employees: 9,
+      funnel: { criteria: [0, 0, 0, 0, 0], decision: 0, withSubsidiary: 0, decided: 1 },
     });
     expect(repository.summary.mock.calls).toEqual([
       [scopeA, { cycleId: CYCLE_ID, search: 'omar', includeDrafts: true }],
       [scopeGroup, { includeDrafts: false }],
     ]);
+  });
+});
+
+describe('stageFunnel [DASH-D2, R1-10]', () => {
+  it('places each submitted request at its stage, as long as the longest criteria set', () => {
+    expect(
+      stageFunnel([
+        { status: 'submitted', criteria: 5, verified: 0, waiting: 2 },
+        { status: 'under_review', criteria: 5, verified: 2, waiting: 1 },
+        { status: 'under_review', criteria: 5, verified: 2, waiting: 1 },
+        // Partly returned: the employees still waiting are at their stage.
+        { status: 'returned', criteria: 3, verified: 3, waiting: 1 },
+        { status: 'under_review', criteria: 4, verified: 4, waiting: 2 },
+        { status: 'approved', criteria: 5, verified: 0, waiting: 0 },
+        { status: 'rejected', criteria: 5, verified: 5, waiting: 0 },
+      ]),
+    ).toEqual({ criteria: [1, 0, 2, 0, 0], decision: 2, withSubsidiary: 0, decided: 2 });
+    expect(stageFunnel([])).toEqual({ criteria: [], decision: 0, withSubsidiary: 0, decided: 0 });
+  });
+
+  it('counts a request whose every remaining employee is back with the subsidiary apart', () => {
+    // Nobody waits for Sirius HR: "every criterion verified" would be vacuously true.
+    expect(stageFunnel([{ status: 'returned', criteria: 5, verified: 5, waiting: 0 }])).toEqual({
+      criteria: [0, 0, 0, 0, 0],
+      decision: 0,
+      withSubsidiary: 1,
+      decided: 0,
+    });
   });
 });
 

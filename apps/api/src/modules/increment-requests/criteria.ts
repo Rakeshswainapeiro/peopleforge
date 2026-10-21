@@ -2,6 +2,8 @@ import {
   hasText,
   MAX_EVIDENCE_FILE_MB,
   missingFor as sharedMissingFor,
+  thresholdResult,
+  type CriterionInput,
   type CriterionMark,
   type CriterionMissing,
 } from '@peopleforge/contracts';
@@ -69,9 +71,25 @@ export function assessmentOf(
     saved.find((entry) => entry.criterionId === criterion.id) ?? {
       criterionId: criterion.id,
       result: null,
+      measuredValue: null,
       justification: '',
       evidence: [],
       verification: null,
     }
   );
+}
+
+/**
+ * What is saved for a criterion (R1-03, R1-05). With a threshold, the measured value decides
+ * the result (whatever was sent as the result); without one, Pass or Fail is the preparer's
+ * judgement and no value is kept.
+ */
+export function assessedResult(
+  criterion: Pick<CriterionRecord, 'threshold'> | undefined,
+  input: Pick<CriterionInput, 'result' | 'measuredValue'>,
+): { result: CriterionResultValue | null; measuredValue: string | null } {
+  const threshold = criterion?.threshold ?? null;
+  if (threshold === null) return { result: input.result, measuredValue: null };
+  const measuredValue = input.measuredValue ?? null;
+  return { result: thresholdResult(threshold, measuredValue), measuredValue };
 }

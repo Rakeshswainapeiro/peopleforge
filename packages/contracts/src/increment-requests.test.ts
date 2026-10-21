@@ -220,6 +220,7 @@ describe('IncrementRequestSchema', () => {
           evidencePolicy: 'required',
           allowedMediaTypes: ['application/pdf'],
           maxFileMb: 10,
+          threshold: { operator: 'gte', value: '3.5', unit: 'rating' },
         },
       ],
       version: 2,
@@ -248,6 +249,7 @@ describe('IncrementRequestSchema', () => {
             {
               criterionId: ID,
               result: 'pass',
+              measuredValue: '4',
               justification: 'Rated 4 of 5.',
               evidence: [
                 {

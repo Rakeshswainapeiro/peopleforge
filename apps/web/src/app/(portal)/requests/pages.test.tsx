@@ -35,6 +35,7 @@ vi.mock('./actions', () => ({
   uploadEvidenceAction: vi.fn(),
   removeEvidenceAction: vi.fn(),
 }));
+vi.mock('@/app/(portal)/review/actions', () => ({ decideAction: vi.fn() }));
 vi.mock('next/navigation', () => ({
   notFound: vi.fn(() => {
     throw new Error('NEXT_NOT_FOUND');
@@ -417,6 +418,62 @@ describe('Request detail [R1-06, R1-07]', () => {
     render(await detailPage());
     expect(screen.getByRole('heading', { level: 1, name: 'INC-2026-0152' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'New increment request' })).toBeNull();
+  });
+
+  it('offers a decider "Decide all remaining" while two or more employees wait [R1-09]', async () => {
+    const decider = {
+      ...SIRIUS_REVIEWER,
+      permissions: [
+        'increment_request:read',
+        'increment_request:review',
+        'increment_request:decide',
+      ] as Me['permissions'],
+    };
+    vi.mocked(requireViewer).mockResolvedValue(decider);
+    vi.mocked(getRequest).mockResolvedValue({
+      kind: 'ok',
+      data: submittedRequest({ status: 'under_review' }),
+    });
+    render(await detailPage());
+    const card = screen.getByRole('region', { name: 'Decide all remaining' });
+    expect(
+      within(card).getByText(/^2 employees are still waiting for a decision\./u),
+    ).toBeInTheDocument();
+    expect(within(card).getByRole('button', { name: 'Approve all 2' })).toBeDisabled();
+    cleanup();
+    // One employee waiting: decided on their own page; a reviewer who can't decide: no card.
+    const one = submittedRequest({ status: 'under_review' });
+    vi.mocked(getRequest).mockResolvedValue({
+      kind: 'ok',
+      data: {
+        ...one,
+        lines: one.lines.map((line, index) =>
+          index === 0 ? line : { ...line, reviewStatus: 'approved' as const },
+        ),
+      },
+    });
+    render(await detailPage());
+    expect(screen.queryByRole('region', { name: 'Decide all remaining' })).toBeNull();
+    cleanup();
+    vi.mocked(requireViewer).mockResolvedValue({
+      ...decider,
+      permissions: ['increment_request:read', 'increment_request:review'],
+    });
+    vi.mocked(getRequest).mockResolvedValue({ kind: 'ok', data: submittedRequest() });
+    render(await detailPage());
+    expect(screen.queryByRole('region', { name: 'Decide all remaining' })).toBeNull();
+  });
+
+  it('confirms a decision for all remaining, and ignores an unknown one', async () => {
+    vi.mocked(requireViewer).mockResolvedValue(SIRIUS_REVIEWER);
+    vi.mocked(getRequest).mockResolvedValue({ kind: 'ok', data: submittedRequest() });
+    render(await detailPage(REQUEST, { decided: 'returned' }));
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Every remaining employee returned to SUB-A.',
+    );
+    cleanup();
+    render(await detailPage(REQUEST, { decided: 'escalated' }));
+    expect(screen.queryByText(/Every remaining employee/u)).toBeNull();
   });
 
   it('opens a draft in the editor for its preparer, and is not found for anyone else', async () => {

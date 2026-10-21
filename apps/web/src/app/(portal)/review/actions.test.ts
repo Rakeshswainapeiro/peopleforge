@@ -1,12 +1,13 @@
 import { revalidatePath } from 'next/cache';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ApiResult } from '@/server/api-client';
-import { decideEmployee, verifyCriterion } from '@/server/increment-requests';
+import { decideEmployee, decideRemaining, verifyCriterion } from '@/server/increment-requests';
 import { refreshPortalShell } from '@/server/portal-shell';
 import { decideAction, verifyAction } from './actions';
 
 vi.mock('@/server/increment-requests', () => ({
   decideEmployee: vi.fn(),
+  decideRemaining: vi.fn(),
   verifyCriterion: vi.fn(),
 }));
 vi.mock('@/server/portal-shell', () => ({ refreshPortalShell: vi.fn() }));
@@ -36,6 +37,7 @@ const deciding = (fields: Record<string, string>) =>
 beforeEach(() => {
   vi.mocked(verifyCriterion).mockResolvedValue(ok);
   vi.mocked(decideEmployee).mockResolvedValue(ok);
+  vi.mocked(decideRemaining).mockResolvedValue(ok);
   vi.mocked(refreshPortalShell).mockClear();
 });
 
@@ -166,5 +168,45 @@ describe('decideAction [R1-08, R1-09]', () => {
     await expect(decideAction({}, deciding({ decision: 'approved' }))).rejects.toThrow(
       'NEXT_REDIRECT /session-ended',
     );
+  });
+});
+
+describe('decideAction without an employee: decide all remaining [R1-09]', () => {
+  const all = (fields: Record<string, string>) =>
+    form({ requestId: REQUEST, decisionKey: KEY, ...fields });
+
+  it('decides every employee still waiting and goes back to the request', async () => {
+    await expect(
+      decideAction(
+        {},
+        all({ decision: 'rejected', reasonCode: 'budget', comment: 'Over budget.' }),
+      ),
+    ).rejects.toThrow(`NEXT_REDIRECT /requests/${REQUEST}?decided=rejected`);
+    expect(decideRemaining).toHaveBeenCalledWith(
+      REQUEST,
+      { decision: 'rejected', reasonCode: 'budget', comment: 'Over budget.' },
+      KEY,
+    );
+    await expect(decideAction({}, all({ decision: 'approved' }))).rejects.toThrow(
+      `NEXT_REDIRECT /requests/${REQUEST}?decided=approved`,
+    );
+    expect(decideEmployee).not.toHaveBeenCalled();
+  });
+
+  it('never approves everyone at another percentage, and keeps what was typed', async () => {
+    vi.mocked(decideRemaining).mockClear();
+    await expect(
+      decideAction(
+        {},
+        all({
+          decision: 'approved',
+          change: 'on',
+          approvedPercent: '4',
+          reasonCode: 'budget',
+          comment: 'x',
+        }),
+      ),
+    ).resolves.toMatchObject({ attempt: 1, error: 'request.errors.decisionInvalid' });
+    expect(decideRemaining).not.toHaveBeenCalled();
   });
 });

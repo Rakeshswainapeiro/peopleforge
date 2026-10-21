@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { CriterionThresholdSchema, ThresholdValueSchema } from './thresholds.js';
 import { EntitySummarySchema, LocalisedTextSchema } from './me.js';
 
 /**
@@ -128,8 +129,10 @@ export const ProposalInputSchema = z
 
 export const CriterionInputSchema = z.strictObject({
   criterionId: z.uuid(),
-  /** Null: not decided yet. */
+  /** Null: not decided yet. Ignored for a criterion with a threshold: the value decides. */
   result: CriterionResultSchema.nullable(),
+  /** The employee's measured value, for a criterion with a threshold (R1-05); null clears it. */
+  measuredValue: ThresholdValueSchema.nullable().optional(),
   /** Empty clears it. NFC-normalised, so Arabic text compares and counts consistently. */
   justification: z
     .string()
@@ -186,6 +189,17 @@ export const ApprovedPercentSchema = DecimalString.refine(
  * POST …/{id}/lines/{lineId}/decision (with an Idempotency-Key header, R1-09). Approving at
  * another percentage needs a reason and a comment; rejecting and returning always do.
  */
+const RejectDecision = z.strictObject({
+  decision: z.literal('rejected'),
+  reasonCode: RejectReasonSchema,
+  comment: requiredComment,
+});
+const ReturnDecision = z.strictObject({
+  decision: z.literal('returned'),
+  reasonCode: ReturnReasonSchema,
+  comment: requiredComment,
+});
+
 export const DecideLineSchema = z.discriminatedUnion('decision', [
   z
     .strictObject({
@@ -203,18 +217,21 @@ export const DecideLineSchema = z.discriminatedUnion('decision', [
         context.addIssue({ code: 'custom', path: ['comment'], message: 'required' });
       }
     }),
-  z.strictObject({
-    decision: z.literal('rejected'),
-    reasonCode: RejectReasonSchema,
-    comment: requiredComment,
-  }),
-  z.strictObject({
-    decision: z.literal('returned'),
-    reasonCode: ReturnReasonSchema,
-    comment: requiredComment,
-  }),
+  RejectDecision,
+  ReturnDecision,
 ]);
 export type DecideLine = z.infer<typeof DecideLineSchema>;
+
+/**
+ * POST …/{id}/decision: one decision for every employee still waiting (R1-09, "Decide all
+ * remaining"). Approval is at the proposed increments (changing one is per employee).
+ */
+export const DecideRemainingSchema = z.discriminatedUnion('decision', [
+  z.strictObject({ decision: z.literal('approved'), comment: comment.optional() }),
+  RejectDecision,
+  ReturnDecision,
+]);
+export type DecideRemaining = z.infer<typeof DecideRemainingSchema>;
 
 /** POST …/{id}/resubmit (Idempotency-Key header): returned employees go back to Sirius HR. */
 export const ResubmitRequestSchema = z.strictObject({
@@ -328,6 +345,8 @@ export const CriterionSchema = z.object({
   allowedMediaTypes: z.array(z.string()),
   /** Effective per-file limit: the criterion's, capped at MAX_EVIDENCE_FILE_MB. */
   maxFileMb: z.number().int().min(1),
+  /** Passes on a measured value (R1-05); null: Pass or Fail is the preparer's judgement. */
+  threshold: CriterionThresholdSchema.nullable(),
 });
 export type Criterion = z.infer<typeof CriterionSchema>;
 
@@ -343,6 +362,8 @@ export type EvidenceFile = z.infer<typeof EvidenceFileSchema>;
 export const CriterionAssessmentSchema = z.object({
   criterionId: z.uuid(),
   result: CriterionResultSchema.nullable(),
+  /** The measured value for a criterion with a threshold (R1-05); null otherwise or not given. */
+  measuredValue: z.string().nullable(),
   justification: z.string(),
   evidence: z.array(EvidenceFileSchema),
   /** Empty when the criterion is complete for this employee (R1-06). */
@@ -477,6 +498,18 @@ export const DashboardSummarySchema = z.object({
   /** Requests and employees matching every filter. */
   requests: z.number().int().min(0),
   employees: z.number().int().min(0),
+  /**
+   * The stage funnel (DASH-D2): submitted requests at each criterion (index 0 = criterion 1,
+   * as long as the longest criteria set), at the decision, with the subsidiary (every
+   * remaining employee returned), and decided. Like `byStatus`, it ignores the status and
+   * search filters.
+   */
+  funnel: z.object({
+    criteria: z.array(z.number().int().min(0)),
+    decision: z.number().int().min(0),
+    withSubsidiary: z.number().int().min(0),
+    decided: z.number().int().min(0),
+  }),
 });
 export type DashboardSummary = z.infer<typeof DashboardSummarySchema>;
 

@@ -1,4 +1,4 @@
-import type { IncrementAnalytics } from '@peopleforge/contracts';
+import { BUSINESS_TIME_ZONE, type IncrementAnalytics } from '@peopleforge/contracts';
 import type { AnalyticsFacts, AnalyticsRequestFact, MessageFact } from '@peopleforge/db';
 
 /**
@@ -32,6 +32,56 @@ export function averageDays(values: readonly number[]): string | null {
     : days(values.reduce((sum, value) => sum + value, 0) / values.length);
 }
 
+/** The median of some durations (the mean of the middle two for an even count), or null. */
+export function medianDays(values: readonly number[]): string | null {
+  if (values.length === 0) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  // The middle one (odd count) or two (even count).
+  const middle = sorted.slice(
+    Math.floor((sorted.length - 1) / 2),
+    Math.floor(sorted.length / 2) + 1,
+  );
+  return days(middle.reduce((sum, value) => sum + value, 0) / middle.length);
+}
+
+const MONTH = new Intl.DateTimeFormat('en-CA', {
+  timeZone: BUSINESS_TIME_ZONE,
+  year: 'numeric',
+  month: '2-digit',
+});
+
+/** "2026-09": an instant's month in the business time zone (Asia/Dubai). */
+export function businessMonth(at: Date): string {
+  return MONTH.format(at).slice(0, 7);
+}
+
+/** The 12 months up to `now`'s month, oldest first. */
+export function lastTwelveMonths(now: Date): string[] {
+  const [year, month] = businessMonth(now).split('-').map(Number) as [number, number];
+  return Array.from({ length: 12 }, (_, index) => {
+    const date = new Date(Date.UTC(year, month - 12 + index, 1));
+    return date.toISOString().slice(0, 7);
+  });
+}
+
+/** Durations by the month they ended in, as the trend's rows. */
+function trendOf(
+  ended: readonly { at: Date; value: number }[],
+  now: Date,
+): IncrementAnalytics['tat']['trend'] {
+  return lastTwelveMonths(now).map((month) => {
+    const values = ended
+      .filter((item) => businessMonth(item.at) === month)
+      .map((item) => item.value);
+    return {
+      month,
+      count: values.length,
+      averageDays: averageDays(values),
+      medianDays: medianDays(values),
+    };
+  });
+}
+
 /** Groups items by a key, keeping the first-seen order of keys. */
 function groupBy<T>(items: readonly T[], key: (item: T) => string): Map<string, T[]> {
   const groups = new Map<string, T[]>();
@@ -59,7 +109,11 @@ function answerTimes(messages: readonly MessageFact[]): { asked: number; answere
   return { asked, answered };
 }
 
-export function incrementAnalytics(facts: AnalyticsFacts, now: Date): IncrementAnalytics {
+export function incrementAnalytics(
+  facts: AnalyticsFacts,
+  now: Date,
+  criterion?: string,
+): IncrementAnalytics {
   const tatOf = (request: AnalyticsRequestFact) =>
     elapsedDays(request.submittedAt, request.decidedAt ?? now);
   const requestRows = facts.requests
@@ -80,21 +134,35 @@ export function incrementAnalytics(facts: AnalyticsFacts, now: Date): IncrementA
   const open = requestRows.filter((row) => row.open);
   const longest = byRequest.find((row) => row.open) ?? null;
 
-  const byCriterion = [
-    ...groupBy(
-      [...facts.verifications].sort((a, b) => a.position - b.position),
-      (verification) => verification.code,
-    ),
-  ].map(([code, items]) => {
-    const values = items.map((item) => elapsedDays(item.waitingSince, item.verifiedAt));
-    return {
-      code,
-      verified: items.length,
-      averageDays: averageDays(values),
-      // A group always has at least one verification.
-      maxDays: days(Math.max(...values)),
-    };
-  });
+  const sortedVerifications = [...facts.verifications].sort((a, b) => a.position - b.position);
+  const codes = [...new Set(sortedVerifications.map((verification) => verification.code))];
+  const verifications = sortedVerifications.filter(
+    (verification) => criterion === undefined || verification.code === criterion,
+  );
+  const byCriterion = [...groupBy(verifications, (verification) => verification.code)].map(
+    ([code, items]) => {
+      const values = items.map((item) => elapsedDays(item.waitingSince, item.verifiedAt));
+      return {
+        code,
+        verified: items.length,
+        averageDays: averageDays(values),
+        medianDays: medianDays(values),
+        // A group always has at least one verification.
+        maxDays: days(Math.max(...values)),
+      };
+    },
+  );
+  const trend = trendOf(
+    criterion === undefined
+      ? facts.requests.flatMap((request) =>
+          request.decidedAt === null ? [] : [{ at: request.decidedAt, value: tatOf(request) }],
+        )
+      : verifications.map((item) => ({
+          at: item.verifiedAt,
+          value: elapsedDays(item.waitingSince, item.verifiedAt),
+        })),
+    now,
+  );
 
   const byEntityTat = [...groupBy(requestRows, (row) => row.entityCode)]
     .sort(([a], [b]) => a.localeCompare(b))
@@ -139,10 +207,13 @@ export function incrementAnalytics(facts: AnalyticsFacts, now: Date): IncrementA
       requests: requestRows.length,
       decided: decided.length,
       averageDays: averageDays(decided.map((row) => row.value)),
+      medianDays: medianDays(decided.map((row) => row.value)),
       open: open.length,
       openAverageDays: averageDays(open.map((row) => row.value)),
       longestOpen: longest,
       byCriterion,
+      trend,
+      criteria: codes,
       byEntity: byEntityTat,
       byRequest,
     },

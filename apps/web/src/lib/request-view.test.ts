@@ -160,6 +160,14 @@ describe('criteriaCards [R1-03, R1-04, R1-06]', () => {
     expect(criteriaLabels(t)).toEqual({
       pass: 'Pass',
       fail: 'Fail',
+      measuredValue: 'Measured value',
+      missingValue: 'enter the measured value',
+      measuredHint: '{threshold}. Enter a number, e.g. 3.5.',
+      outcome: {
+        pass: 'Pass: meets the threshold.',
+        fail: "Fail: doesn't meet the threshold.",
+        none: 'The result follows from the value.',
+      },
       justification: 'Justification',
       justificationPlaceholder: 'Why does this employee pass or fail this criterion?',
       missing: {

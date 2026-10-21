@@ -104,6 +104,31 @@ describe('review emails [R1-08, R1-09, R1-10]', () => {
     expect(email.text).toContain('Aisha Rahman');
   });
 
+  it.each([
+    [
+      'employees_approved',
+      'INC-2026-0152: remaining employees approved (3)',
+      'approved the remaining 3 employees',
+    ],
+    [
+      'employees_rejected',
+      'INC-2026-0152: remaining employees rejected (3)',
+      'rejected the remaining 3 employees',
+    ],
+    [
+      'employees_returned',
+      'Action needed: remaining employees returned in INC-2026-0152 (3)',
+      'returned the remaining 3 employees',
+    ],
+  ])('words %s for everyone decided at once [R1-09]', (kind, subject, body) => {
+    const email = job(kind, { reference: 'INC-2026-0152', employees: 3 });
+    expect(email.subject).toBe(subject);
+    expect(email.text).toContain(body);
+    expect(job(kind, { reference: 'INC-2026-0152', employees: 1 }).text).toContain(
+      'the remaining 1 employee in',
+    );
+  });
+
   it('names the final status in words', () => {
     const email = job('request_decided', { reference: 'INC-2026-0152', status: 'partly_approved' });
     expect(email.subject).toBe('INC-2026-0152 decided: Partly approved');

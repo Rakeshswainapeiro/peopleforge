@@ -28,13 +28,14 @@ export class AnalyticsService {
   }
 
   async increments(caller: Principal, query: AnalyticsQuery): Promise<IncrementAnalytics> {
-    const facts = await this.repository.facts(this.groupScope(caller), query);
-    return incrementAnalytics(facts, this.now());
+    const { criterion, ...filter } = query;
+    const facts = await this.repository.facts(this.groupScope(caller), filter);
+    return incrementAnalytics(facts, this.now(), criterion);
   }
 
   /** RP-02 as Excel, in the reader's language; the download is audited. */
   async tatReport(caller: Principal, query: TatReportQuery): Promise<ReportFile> {
-    const { format, locale, ...filter } = query;
+    const { format, locale, criterion, ...filter } = query;
     const scope = this.groupScope(caller);
     const t = apiTranslator(locale);
     const [facts, cycles] = await Promise.all([
@@ -42,7 +43,7 @@ export class AnalyticsService {
       this.requests.openCycles(caller),
     ]);
     const generatedAt = this.now();
-    const analytics = incrementAnalytics(facts, generatedAt);
+    const analytics = incrementAnalytics(facts, generatedAt, criterion);
     const cycle = cycles.find((candidate) => candidate.id === filter.cycleId);
     const parts = [
       ...(filter.cycleId === undefined
@@ -55,6 +56,7 @@ export class AnalyticsService {
               value: facts.requests[0]?.entityCode ?? t('reports.none'),
             }),
           ]),
+      ...(criterion === undefined ? [] : [t('analytics.filterCriterion', { value: criterion })]),
     ];
     const body = await tatWorkbook(analytics, t, {
       locale,

@@ -12,6 +12,7 @@ import {
 import type { BadgeTone, CriterionState, StageMeterProps, StatCardProps } from '@peopleforge/ui';
 import type { Locale } from '@sirius/shared-types';
 import { z } from 'zod';
+import type { ChartPoint } from '@/components/charts/charts';
 import type { Translate } from '@/i18n/translator';
 import { daysBetween, formatAge, formatDate, formatPercent } from './format';
 import { pluralForm } from '@peopleforge/i18n';
@@ -416,4 +417,39 @@ export function actionRows(
         action: returned ? t('dashboard.respond') : t('dashboard.continueDraft'),
       };
     });
+}
+
+/**
+ * The stage funnel (DASH-D2) as chart points: submitted requests at each criterion, at the
+ * decision and decided; empty when nothing is submitted.
+ */
+export function funnelPoints(
+  funnel: DashboardSummary['funnel'],
+  locale: Locale,
+  t: Translate,
+): ChartPoint[] {
+  const number = new Intl.NumberFormat(locale);
+  const point = (id: string, label: string, value: number): ChartPoint => ({
+    id,
+    label,
+    value,
+    display: number.format(value),
+  });
+  const points = [
+    ...funnel.criteria.map((value, index) =>
+      point(
+        `criterion-${String(index + 1)}`,
+        t('dashboard.funnel.criterion', { number: number.format(index + 1) }),
+        value,
+      ),
+    ),
+    point('decision', t('dashboard.funnel.decision'), funnel.decision),
+    point('subsidiary', t('dashboard.funnel.withSubsidiary'), funnel.withSubsidiary),
+    point('decided', t('dashboard.funnel.decided'), funnel.decided),
+  ];
+  const total = [...funnel.criteria, funnel.decision, funnel.withSubsidiary, funnel.decided].reduce(
+    (a, b) => a + b,
+    0,
+  );
+  return total > 0 ? points : [];
 }

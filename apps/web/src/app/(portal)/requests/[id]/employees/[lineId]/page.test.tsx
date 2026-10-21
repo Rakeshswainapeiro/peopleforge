@@ -101,6 +101,29 @@ describe('Employee status [R1-06, R1-07]', () => {
     expect(screen.queryByRole('link', { name: 'Continue draft' })).toBeNull();
   });
 
+  it('shows a measured value against its threshold [R1-05]', async () => {
+    vi.mocked(getRequest).mockResolvedValue({
+      kind: 'ok',
+      data: {
+        ...SUBMITTED,
+        criteria: SUBMITTED.criteria.map((criterion, index) =>
+          index === 0
+            ? { ...criterion, threshold: { operator: 'gte', value: '3.5', unit: 'rating' } }
+            : criterion,
+        ),
+        lines: SUBMITTED.lines.map((line) => ({
+          ...line,
+          criteria: line.criteria.map((entry, index) =>
+            index === 0 ? { ...entry, measuredValue: '4' } : entry,
+          ),
+        })),
+      },
+    });
+    render(await statusPage());
+    const table = screen.getByRole('table', { name: 'Eligibility criteria for Omar Haddad' });
+    expect(table).toHaveTextContent('Measured value 4 · Passes at 3.5 or more (rating)');
+  });
+
   it('says a draft isn’t with Sirius HR yet, and lets its preparer continue it', async () => {
     vi.mocked(getRequest).mockResolvedValue({ kind: 'ok', data: draftRequest() });
     render(await statusPage(LINE_2));

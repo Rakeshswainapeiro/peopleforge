@@ -35,6 +35,15 @@ test.describe('portal shell', () => {
     await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible();
   });
 
+  test('keeps Sign out on screen on a short window, the navigation scrolling', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 560 });
+    await signIn(page, 'reviewer');
+    await expect(page.getByRole('button', { name: 'Sign out' })).toBeInViewport();
+    const nav = page.getByRole('navigation', { name: 'Main' });
+    await nav.getByRole('link', { name: 'Reports' }).scrollIntoViewIfNeeded();
+    await expect(nav.getByRole('link', { name: 'Reports' })).toBeInViewport();
+  });
+
   test('scopes subsidiary HR to its own subsidiary and opens New Request', async ({ page }) => {
     await signIn(page, 'alphaHr');
     await expect(page.getByText('Subsidiary HR · Subsidiary A')).toBeVisible();

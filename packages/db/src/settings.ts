@@ -1,7 +1,13 @@
 import { randomUUID } from 'node:crypto';
 import { sql, type Kysely } from 'kysely';
 import { recordAudit } from './audit.js';
-import { loadCriteriaSets, type CriterionRecord, type EvidencePolicy } from './criteria-sets.js';
+import {
+  loadCriteriaSets,
+  passRuleOf,
+  type CriterionRecord,
+  type EvidencePolicy,
+  type Threshold,
+} from './criteria-sets.js';
 import type { Database, LocalisedText } from './schema.js';
 import { withScope, type Scope } from './scope.js';
 
@@ -22,6 +28,9 @@ export const REMINDER_KINDS: readonly ReminderKind[] = [
   'upload_due',
   'flag_open',
 ];
+
+/** The highest criterion code ("C99", the code's CHECK allows two digits). */
+const MAX_CODE = 99;
 
 export interface ReminderRuleRecord {
   kind: ReminderKind;
@@ -45,12 +54,15 @@ export interface EditedText {
 }
 
 export interface CriterionEdit {
-  code: string;
+  /** An existing criterion's code; absent for a criterion added in this version. */
+  code?: string | undefined;
   name: EditedText;
   description: EditedText;
   justificationRequired: boolean;
   evidencePolicy: EvidencePolicy;
   maxFileMb: number;
+  /** Passes on a measured value (R1-05); null for Pass or Fail by judgement. */
+  threshold: Threshold | null;
 }
 
 export type SettingsErrorReason = 'not_found' | 'version_conflict' | 'criteria_mismatch';
@@ -72,8 +84,11 @@ export interface SettingsRepository {
   ) => Promise<ReminderRuleRecord>;
   activeCriteria: (scope: Scope) => Promise<ActiveCriteriaRecord>;
   /**
-   * Publishes the edited criteria as the next version and retires the active one. `version` is
-   * the version the admin edited; the codes must be the active set's, in order (C1…C5 stay).
+   * Publishes the edited criteria as the next version and retires the active one (R1-05).
+   * `version` is the version the admin edited. Each code given must be one of the active set's;
+   * a criterion left out is removed; one without a code is added with the next unused code
+   * (codes are never reused, so "C6" means the same criterion in every version). The list's
+   * order becomes the criteria's order. Requests already created keep their pinned set.
    */
   publishCriteria: (
     scope: Scope,
@@ -170,18 +185,34 @@ export function createSettingsRepository(db: Kysely<Database>): SettingsReposito
         if (active.version !== input.version) throw new SettingsDataError('version_conflict');
         const current = await trx
           .selectFrom('increments.criterion')
-          .select(['position', 'code', 'allowed_media_types', 'pass_rule'])
+          .select(['code', 'allowed_media_types'])
           .where('criteria_set_id', '=', active.id)
           .orderBy('position')
           .execute();
-        // Each edit beside the criterion it changes: same codes, same order (C1…C5 stay).
-        const pairs = current.flatMap((row, index) => {
-          const edit = input.criteria.at(index);
-          return edit?.code === row.code ? [{ row, edit }] : [];
-        });
-        if (pairs.length !== current.length || input.criteria.length !== current.length) {
+        const known = new Map(current.map((row) => [row.code, row]));
+        if (input.criteria.some((edit) => edit.code !== undefined && !known.has(edit.code))) {
           throw new SettingsDataError('criteria_mismatch');
         }
+        // Codes are never reused: a new criterion takes the next number after any ever used.
+        const used = await trx
+          .selectFrom('increments.criterion')
+          .select(sql<number>`coalesce(max(substring(code from 2)::int), 0)`.as('n'))
+          .executeTakeFirstOrThrow();
+        let next = used.n;
+        // File types are a security control, not an admin setting: carried over, and a new
+        // criterion takes those the current criteria accept.
+        const defaultTypes = [...new Set(current.flatMap((row) => row.allowed_media_types))];
+        const rows = input.criteria.map((edit, index) => {
+          const existing = edit.code === undefined ? undefined : known.get(edit.code);
+          if (existing === undefined) next += 1;
+          return {
+            position: index + 1,
+            code: existing?.code ?? `C${String(next)}`,
+            allowedMediaTypes: existing?.allowed_media_types ?? defaultTypes,
+            edit,
+          };
+        });
+        if (next > MAX_CODE) throw new SettingsDataError('criteria_mismatch');
         const latest = await trx
           .selectFrom('increments.criteria_set')
           .select(sql<number>`max(version)::int`.as('version'))
@@ -207,23 +238,20 @@ export function createSettingsRepository(db: Kysely<Database>): SettingsReposito
         await trx
           .insertInto('increments.criterion')
           .values(
-            pairs.map(({ row, edit }) => {
-              return {
-                criteria_set_id: id,
-                position: row.position,
-                code: row.code,
-                name: localised(edit.name),
-                description: localised(edit.description),
-                justification_required: edit.justificationRequired,
-                evidence_policy: edit.evidencePolicy,
-                // File types are a security control, not an admin setting: carried over.
-                allowed_media_types: row.allowed_media_types,
-                max_file_mb: edit.maxFileMb,
-                pass_rule: row.pass_rule,
-                created_by: scope.userId,
-                updated_by: scope.userId,
-              };
-            }),
+            rows.map((row) => ({
+              criteria_set_id: id,
+              position: row.position,
+              code: row.code,
+              name: localised(row.edit.name),
+              description: localised(row.edit.description),
+              justification_required: row.edit.justificationRequired,
+              evidence_policy: row.edit.evidencePolicy,
+              allowed_media_types: row.allowedMediaTypes,
+              max_file_mb: row.edit.maxFileMb,
+              pass_rule: passRuleOf(row.edit.threshold),
+              created_by: scope.userId,
+              updated_by: scope.userId,
+            })),
           )
           .execute();
         await recordAudit(trx, scope.userId, {
@@ -231,7 +259,23 @@ export function createSettingsRepository(db: Kysely<Database>): SettingsReposito
           entityId: null,
           subjectType: 'criteria_set',
           subjectId: id,
-          details: { version, previousVersion: active.version, criteria: current.length },
+          details: {
+            version,
+            previousVersion: active.version,
+            criteria: rows.length,
+            added: rows
+              .filter((row) => !known.has(row.code))
+              .map((row) => row.code)
+              .join(','),
+            removed: current
+              .filter((row) => !rows.some((kept) => kept.code === row.code))
+              .map((row) => row.code)
+              .join(','),
+            thresholds: rows
+              .filter((row) => row.edit.threshold !== null)
+              .map((row) => row.code)
+              .join(','),
+          },
         });
         const sets = await loadCriteriaSets(trx, [id]);
         const set = await trx

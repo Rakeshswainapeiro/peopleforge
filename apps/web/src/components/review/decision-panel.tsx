@@ -54,7 +54,8 @@ export interface DecisionPanelLabels {
 
 export interface DecisionPanelProps {
   requestId: string;
-  lineId: string;
+  /** One employee, or null for every employee still waiting ("Decide all remaining", R1-09). */
+  lineId: string | null;
   /** Idempotency key for this page view: a double click can't decide twice. */
   decisionKey: string;
   /** Reasons per decision; approving at another percentage uses the "approved" list. */
@@ -83,14 +84,15 @@ function forTab<T>(values: Readonly<Record<DecisionTab, T>>, tab: DecisionTab): 
  * Figma "Review employee" decision panel (R1-08, R1-09): Approve, Reject or Return in tabs.
  * Approving as proposed needs nothing more; approving another percentage, rejecting and
  * returning need a reason and a comment, which the subsidiary sees. Approve stays disabled
- * until every criterion is verified (the API refuses it anyway).
+ * until every criterion is verified (the API refuses it anyway). Without an employee it decides
+ * every employee still waiting, at the proposed increments.
  */
 export function DecisionPanel(props: DecisionPanelProps) {
   const [state, formAction, pending] = useActionState(decideAction, INITIAL);
   return (
     <form action={formAction} noValidate className="flex flex-col gap-4">
       <input type="hidden" name="requestId" value={props.requestId} />
-      <input type="hidden" name="lineId" value={props.lineId} />
+      {props.lineId === null ? null : <input type="hidden" name="lineId" value={props.lineId} />}
       <input type="hidden" name="decisionKey" value={props.decisionKey} />
       {/* Afresh after each refusal, from what was typed (React resets a form after its action). */}
       <DecisionFields key={state.attempt ?? 0} {...props} state={state} pending={pending} />
@@ -99,6 +101,7 @@ export function DecisionPanel(props: DecisionPanelProps) {
 }
 
 function DecisionFields({
+  lineId,
   reasons,
   maxComment,
   labels,
@@ -175,7 +178,7 @@ function DecisionFields({
         <p className="text-sm text-ink-muted">{forTab(labels.hint, tab)}</p>
         {error === undefined ? null : <Alert role="alert" tone="danger" title={error} />}
         {blocked ? <Alert tone="warning" title={labels.verifyFirst} /> : null}
-        {tab === 'approved' ? (
+        {tab === 'approved' && lineId !== null ? (
           <label className="flex cursor-pointer items-center gap-2 text-sm text-ink">
             <input
               type="checkbox"

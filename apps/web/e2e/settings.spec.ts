@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { signIn } from './support/sign-in';
 
 // Settings (R1-05, R1-13, NFR-CFG-01): an admin changes a reminder trigger and publishes the
@@ -56,6 +56,64 @@ test('an admin publishes the criteria as a new version', async ({ page }) => {
     .fill(original);
   await page.getByRole('button', { name: `Publish version ${String(version + 2)}` }).click();
   await expect(page.getByRole('status').filter({ hasText: 'published' })).toBeVisible();
+});
+
+/** The active version, read from the criteria card's intro. */
+async function activeVersion(page: Page): Promise<number> {
+  const intro = page.getByText(/^Version (\d+), active since/u);
+  return Number(/Version (\d+)/u.exec((await intro.textContent()) ?? '')?.[1]);
+}
+
+test('an admin adds a criterion with a threshold; the request page takes a measured value, then it is removed [R1-05]', async ({
+  page,
+}) => {
+  await signIn(page, 'admin');
+  await page.goto('/settings');
+  let version = await activeVersion(page);
+  await page.getByRole('button', { name: 'Add a criterion' }).click();
+  const added = page.getByRole('group', { name: 'New criterion' });
+  await added.getByLabel(/^Name \(English\) · New criterion/u).fill('Attendance');
+  await added
+    .getByLabel(/^Description \(English\) · New criterion/u)
+    .fill('Attendance over the last 12 months.');
+  await added.getByLabel(/^Passes on · New criterion/u).selectOption('gte');
+  await added.getByLabel(/^Threshold · New criterion/u).fill('95');
+  await added.getByLabel(/^Measured in · New criterion/u).selectOption('percent');
+  await page.getByRole('button', { name: `Publish version ${String(version + 1)}` }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'published' })).toBeVisible();
+  version += 1;
+  await expect(page.getByRole('group', { name: 'C6' })).toBeVisible();
+
+  // A new request pins this version: C6 asks for the attendance figure.
+  await signIn(page, 'alphaHr');
+  await page.goto('/requests/new');
+  await page
+    .getByRole('combobox', { name: 'Add employee' })
+    .selectOption({ label: 'Mariam Saleh · EMP-1103 · G4' });
+  await page.getByRole('button', { name: 'Add' }).click();
+  await page.waitForURL(/\/requests\/[0-9a-f-]{36}\/edit$/u);
+  const c6 = page.getByRole('article', { name: /^C6 · Attendance/u });
+  const value = c6.getByRole('textbox', { name: /Measured value/u });
+  await expect(value).toHaveAccessibleDescription(/Passes at 95 or more \(percent\)/u);
+  await value.fill('94.5');
+  await expect(c6.getByText("Fail: doesn't meet the threshold.")).toBeVisible();
+  await value.fill('96');
+  await expect(c6.getByText('Pass: meets the threshold.')).toBeVisible();
+  await page.getByRole('button', { name: 'Save draft' }).first().click();
+  await expect(value).toHaveValue('96');
+  await expect(c6.getByText('Pass: meets the threshold.')).toBeVisible();
+  // Discard the draft so the other journeys start clean.
+  await page.getByRole('button', { name: 'Remove Mariam Saleh' }).click();
+  await page.waitForURL('/?discarded=1');
+
+  // Removing C6 publishes the next version; its code is never reused.
+  await signIn(page, 'admin');
+  await page.goto('/settings');
+  await page.getByRole('button', { name: 'Remove C6' }).click();
+  await expect(page.getByRole('group', { name: 'C6' })).toHaveCount(0);
+  await page.getByRole('button', { name: `Publish version ${String(version + 1)}` }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'published' })).toBeVisible();
+  await expect(page.getByRole('group', { name: /^C\d$/u })).toHaveCount(5);
 });
 
 test('Sirius HR reviewers and subsidiary HR have no settings', async ({ page }) => {

@@ -27,6 +27,10 @@ describe('BarList', () => {
     const bars = Array.from(container.querySelectorAll('rect.fill-brand-500'));
     expect(bars.map((bar) => bar.getAttribute('width'))).toEqual(['100', '2', '0', '0']);
     expect(bars.at(0)?.textContent).toBe('SUB-A: 200');
+    // The SVG stretches to the row's width: an rx would stretch into an ellipse, so the ends are
+    // rounded by clipping the SVG itself.
+    expect(bars.every((bar) => !bar.hasAttribute('rx'))).toBe(true);
+    expect(bars.at(0)?.closest('svg')).toHaveClass('overflow-hidden', 'rounded-full');
     const table = screen.getByRole('table', { name: 'By subsidiary' });
     expect(
       within(table)
@@ -110,6 +114,7 @@ describe('RangeChart', () => {
     );
     const bands = container.querySelectorAll('rect.fill-brand-100');
     expect(bands).toHaveLength(1);
+    expect(bands[0]?.hasAttribute('rx')).toBe(false);
     expect(bands[0]).toHaveAttribute('x', '75');
     expect(bands[0]).toHaveAttribute('width', '25');
     const markers = Array.from(container.querySelectorAll('rect.fill-brand-700'));

@@ -11,6 +11,7 @@ import {
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { MeasureTable } from '@/components/analytics/measure-table';
+import { ColumnChart } from '@/components/charts/charts';
 import { DashboardFilters } from '@/components/dashboard/dashboard-filters';
 import { getRequestLocale } from '@/i18n/request-locale';
 import { createTranslator } from '@/i18n/translator';
@@ -18,11 +19,13 @@ import {
   ANALYTICS_PATH,
   analyticsHref,
   analyticsState,
+  criterionOptions,
   flowCards,
   flowTables,
   rp02Href,
   tatCards,
   tatTables,
+  trendPoints,
 } from '@/lib/analytics-view';
 import {
   ALL_PERIODS,
@@ -64,6 +67,7 @@ export default async function AnalyticsPage({ searchParams }: AnalyticsPageProps
   const query: AnalyticsQuery = {
     ...(cycleId === undefined ? {} : { cycleId }),
     ...(state.entity === undefined ? {} : { entityId: state.entity }),
+    ...(state.criterion === undefined ? {} : { criterion: state.criterion }),
   };
   const data = required(await getIncrementAnalytics(query));
   const flow = state.view === 'flow';
@@ -102,7 +106,14 @@ export default async function AnalyticsPage({ searchParams }: AnalyticsPageProps
           />
           <DashboardFilters
             path={ANALYTICS_PATH}
-            hidden={flow ? { view: 'flow' } : {}}
+            hidden={
+              flow
+                ? {
+                    view: 'flow',
+                    ...(state.criterion === undefined ? {} : { criterion: state.criterion }),
+                  }
+                : {}
+            }
             selects={[
               {
                 name: 'cycle',
@@ -116,6 +127,17 @@ export default async function AnalyticsPage({ searchParams }: AnalyticsPageProps
                 value: state.entity ?? '',
                 options: entityOptions(me.entities, t),
               },
+              // The criterion narrows TAT only (DASH-D3); back-and-forth keeps it in the URL.
+              ...(flow
+                ? []
+                : [
+                    {
+                      name: 'criterion',
+                      label: t('analytics.criterion'),
+                      value: state.criterion ?? '',
+                      options: criterionOptions(data, t),
+                    },
+                  ]),
             ]}
             labels={{
               filters: t('analytics.filters'),
@@ -151,6 +173,27 @@ export default async function AnalyticsPage({ searchParams }: AnalyticsPageProps
             <FlowSections data={flowTables(data, locale, t)} empty={t('analytics.emptyFlow')} />
           ) : (
             <TatSections
+              trend={
+                <Section
+                  title={
+                    state.criterion === undefined
+                      ? t('analytics.trendTitle')
+                      : t('analytics.trendTitleCriterion', { criterion: state.criterion })
+                  }
+                  description={
+                    state.criterion === undefined
+                      ? t('analytics.trendIntro')
+                      : t('analytics.trendIntroCriterion', { criterion: state.criterion })
+                  }
+                >
+                  <ColumnChart
+                    label={t('analytics.trendTitle')}
+                    columns={{ label: t('analytics.colMonth'), value: t('analytics.colAverage') }}
+                    emptyLabel={t('analytics.none')}
+                    points={trendPoints(data, locale, t)}
+                  />
+                </Section>
+              }
               data={tatTables(data, locale, t)}
               criteriaIntro={t('analytics.criteriaIntro')}
               emptyCriteria={t('analytics.emptyCriteria')}
@@ -180,16 +223,19 @@ function Section({
 }
 
 function TatSections({
+  trend,
   data,
   criteriaIntro,
   emptyCriteria,
 }: {
+  trend: React.ReactNode;
   data: ReturnType<typeof tatTables>;
   criteriaIntro: string;
   emptyCriteria: string;
 }) {
   return (
     <>
+      {trend}
       <Section title={data.criteria.caption} description={criteriaIntro}>
         {data.criteria.rows.length === 0 ? (
           <p className="text-sm text-ink-muted">{emptyCriteria}</p>

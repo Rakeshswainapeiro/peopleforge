@@ -2,6 +2,8 @@ import {
   FINAL_STATUSES,
   ROLES,
   type DecideLine,
+  type DecideRemaining,
+  type LineDecisionValue,
   type IncrementRequest,
   type ResubmitRequest,
   type ReviewQueuePage,
@@ -110,6 +112,34 @@ export class ReviewService {
       input.decision === 'approved' && input.approvedPercent !== undefined
         ? { kind: 'percent' as const, value: toMoney(input.approvedPercent) }
         : null;
+    return this.record(caller, target, input, approved, idempotencyKey);
+  }
+
+  /**
+   * "Decide all remaining" (R1-09): one decision, reason and comment for every employee still
+   * waiting, at the proposed increments. Approving needs every criterion verified for each; the
+   * submitter hears once, with the number of employees.
+   */
+  async decideRemaining(
+    caller: Principal,
+    requestId: string,
+    input: DecideRemaining,
+    idempotencyKey: string,
+  ): Promise<IncrementRequest> {
+    return this.record(caller, { requestId, lineId: null }, input, null, idempotencyKey);
+  }
+
+  private async record(
+    caller: Principal,
+    target: { requestId: string; lineId: string | null },
+    input: {
+      decision: LineDecisionValue;
+      reasonCode?: string | undefined;
+      comment?: string | undefined;
+    },
+    approved: { kind: 'percent'; value: string } | null,
+    idempotencyKey: string,
+  ): Promise<IncrementRequest> {
     await guard(
       this.repository.decide(scopeOf(caller), {
         ...target,
@@ -121,12 +151,18 @@ export class ReviewService {
         actorName: actorName(caller),
         notifications: (context) => {
           const about = { entityId: context.entityId, requestId: context.requestId };
-          const params = { reference: context.reference, employee: context.employeeName };
           return [
             ...toSubmitter(context.submittedBy, {
               ...about,
-              kind: `employee_${input.decision}`,
-              params,
+              ...(target.lineId === null
+                ? {
+                    kind: `employees_${input.decision}`,
+                    params: { reference: context.reference, employees: context.employees },
+                  }
+                : {
+                    kind: `employee_${input.decision}`,
+                    params: { reference: context.reference, employee: context.employeeName },
+                  }),
               actionNeeded: input.decision === 'returned',
             }),
             ...(FINAL_STATUSES.includes(context.requestStatus)

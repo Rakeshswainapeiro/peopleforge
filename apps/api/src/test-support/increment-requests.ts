@@ -76,6 +76,7 @@ export function record(overrides: Partial<IncrementRequestRecord> = {}): Increme
       evidencePolicy: index === 4 ? ('optional' as const) : ('required' as const),
       allowedMediaTypes: ['application/pdf', 'image/png'],
       maxFileMb: 10,
+      threshold: null,
     })),
     version: 3,
     createdAt: new Date('2026-10-14T07:00:00Z'),
@@ -103,6 +104,7 @@ export function record(overrides: Partial<IncrementRequestRecord> = {}): Increme
           {
             criterionId: CRITERION_1,
             result: 'pass',
+            measuredValue: null,
             justification: 'Rated 4 of 5 in the 2026 appraisal.',
             evidence: [evidenceRecord],
             verification: null,
@@ -261,7 +263,9 @@ export function workingDashboard(): DashboardRepository & {
   [K in keyof DashboardRepository]: Mock;
 } {
   return {
-    summary: vi.fn(() => Promise.resolve({ byStatus: { draft: 2 }, requests: 2, employees: 3 })),
+    summary: vi.fn(() =>
+      Promise.resolve({ byStatus: { draft: 2 }, requests: 2, employees: 3, stages: [] }),
+    ),
     requests: vi.fn(() => Promise.resolve({ items: [dashboardRequest()], total: 1 })),
     lines: vi.fn(() => Promise.resolve({ items: [dashboardLine()], total: 1 })),
   };

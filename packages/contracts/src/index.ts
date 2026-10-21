@@ -20,6 +20,7 @@ export {
   ApprovedPercentSchema,
   ChangeReasonSchema,
   DecideLineSchema,
+  DecideRemainingSchema,
   DecisionReasonSchema,
   FINAL_STATUSES,
   IN_REVIEW_STATUSES,
@@ -35,6 +36,7 @@ export {
   ReviewQueuePageSchema,
   ReviewQueueQuerySchema,
   type DecideLine,
+  type DecideRemaining,
   type DecisionReason,
   type LineDecisionValue,
   type LineReviewStatus,
@@ -167,6 +169,7 @@ export {
   CriteriaSettingsSchema,
   CriterionSettingsInputSchema,
   MAX_REMINDER_DAYS,
+  MAX_CRITERIA,
   PublishCriteriaSchema,
   ReminderKindSchema,
   ReminderRuleSchema,
@@ -189,3 +192,12 @@ export {
 export * from './group-data.js';
 export * from './data-quality.js';
 export * from './group-analytics.js';
+export {
+  CriterionThresholdSchema,
+  meetsThreshold,
+  THRESHOLD_OPERATORS,
+  THRESHOLD_UNITS,
+  thresholdResult,
+  ThresholdValueSchema,
+  type CriterionThreshold,
+} from './thresholds.js';

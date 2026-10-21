@@ -128,7 +128,13 @@ describe('summary', () => {
   it('counts a subsidiary’s requests by status, and the requests and employees matching', async () => {
     await expect(
       dashboard.summary(alpha, { cycleId: CYCLE, includeDrafts: true }),
-    ).resolves.toEqual({ byStatus: { draft: 1, submitted: 1 }, requests: 2, employees: 4 });
+    ).resolves.toEqual({
+      byStatus: { draft: 1, submitted: 1 },
+      requests: 2,
+      employees: 4,
+      // The stage funnel counts submitted requests only (DASH-D2).
+      stages: [{ status: 'submitted', criteria: 5, verified: 0, waiting: 1 }],
+    });
   });
 
   it('keeps the cards to the cycle while the tab counts follow every filter', async () => {
@@ -138,7 +144,12 @@ describe('summary', () => {
       search: 'mariam',
       includeDrafts: true,
     });
-    expect(filtered).toEqual({ byStatus: { draft: 1, submitted: 1 }, requests: 1, employees: 1 });
+    expect(filtered).toEqual({
+      byStatus: { draft: 1, submitted: 1 },
+      requests: 1,
+      employees: 1,
+      stages: [{ status: 'submitted', criteria: 5, verified: 0, waiting: 1 }],
+    });
   });
 
   it('shows Sirius every subsidiary’s submitted requests, never drafts', async () => {
@@ -146,13 +157,18 @@ describe('summary', () => {
       byStatus: { submitted: 2 },
       requests: 2,
       employees: 3,
+      // Subsidiary A's request has one employee, B's two (in no particular order).
+      stages: expect.arrayContaining([
+        { status: 'submitted', criteria: 5, verified: 0, waiting: 1 },
+        { status: 'submitted', criteria: 5, verified: 0, waiting: 2 },
+      ]) as unknown,
     });
   });
 
   it('counts nothing in another cycle', async () => {
     await expect(
       dashboard.summary(alpha, { cycleId: randomUUID(), includeDrafts: true }),
-    ).resolves.toEqual({ byStatus: {}, requests: 0, employees: 0 });
+    ).resolves.toEqual({ byStatus: {}, requests: 0, employees: 0, stages: [] });
   });
 });
 

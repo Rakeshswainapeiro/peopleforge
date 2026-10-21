@@ -123,6 +123,7 @@ describe('EvidenceService.upload [R1-04]', () => {
       {
         criterionId: CRITERION_1,
         result: 'pass',
+        measuredValue: null,
         justification: 'x',
         evidence: [0, 1, 2, 3, 4].map(() => evidenceRecord),
         verification: null,

@@ -21,6 +21,7 @@ import type { SubmitDialogView } from '@/components/requests/submit-control';
 import type { MessageKey, Translate } from '@/i18n/translator';
 import { formatDate, formatFileSize, formatMoney, formatPercent, trimDecimal } from './format';
 import { pluralForm } from '@peopleforge/i18n';
+import { thresholdText } from './threshold-view';
 import { requestFigures } from './request-figures';
 import { EVIDENCE_ERROR_KEYS, REQUEST_ERROR_KEYS } from './request-errors';
 import { localised } from './viewer-display';
@@ -113,6 +114,11 @@ export function criteriaCards(
         evidencePolicy: criterion.evidencePolicy,
       },
       result: assessment?.result ?? null,
+      threshold:
+        criterion.threshold === null
+          ? null
+          : { ...criterion.threshold, text: thresholdText(criterion.threshold, locale, t) },
+      measuredValue: assessment?.measuredValue ?? '',
       justification: assessment?.justification ?? '',
       resultLegend: t('request.resultFor', { code: criterion.code }),
       evidence:
@@ -154,6 +160,15 @@ export function criteriaLabels(t: Translate): CriteriaEditorLabels {
   return {
     pass: t('request.pass'),
     fail: t('request.fail'),
+    measuredValue: t('request.measuredValue'),
+    missingValue: t('request.missing.value'),
+    // The card fills in its threshold.
+    measuredHint: t('request.measuredHint', { threshold: '{threshold}' }),
+    outcome: {
+      pass: t('request.thresholdOutcome.pass'),
+      fail: t('request.thresholdOutcome.fail'),
+      none: t('request.thresholdOutcome.none'),
+    },
     justification: t('request.justification'),
     justificationPlaceholder: t('request.justificationPlaceholder'),
     missing: {

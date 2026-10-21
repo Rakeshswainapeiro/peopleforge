@@ -21,6 +21,7 @@ import type { Locale } from '@sirius/shared-types';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { redirect } from 'next/navigation';
+import { BarList } from '@/components/charts/charts';
 import { DashboardFilters } from '@/components/dashboard/dashboard-filters';
 import { EmployeesTable } from '@/components/dashboard/employees-table';
 import { NeedsYourAction } from '@/components/dashboard/needs-your-action';
@@ -35,6 +36,7 @@ import {
   dashboardState,
   actionRows,
   entityOptions,
+  funnelPoints,
   kpiCards,
   lineRows,
   periodOptions,
@@ -185,6 +187,7 @@ async function Dashboard({ me, state, locale, t, notice }: DashboardProps) {
   const returnedCount = summary.byStatus.returned;
   const actionTotal = (drafts?.total ?? 0) + (returned?.total ?? 0);
   const actions = actionRows(actionItems, now, locale, t);
+  const funnel = funnelPoints(summary.funnel, locale, t);
 
   return (
     <>
@@ -272,6 +275,25 @@ async function Dashboard({ me, state, locale, t, notice }: DashboardProps) {
           </li>
         ))}
       </ul>
+
+      {funnel.length === 0 ? null : (
+        <Card className="mt-6" label={t('dashboard.funnel.title')}>
+          <CardHeader
+            title={t('dashboard.funnel.title')}
+            description={t('dashboard.funnel.intro')}
+          />
+          <div className="px-6 pt-4 pb-6">
+            <BarList
+              label={t('dashboard.funnel.title')}
+              columns={{
+                label: t('dashboard.funnel.colStage'),
+                value: t('dashboard.funnel.colRequests'),
+              }}
+              points={funnel}
+            />
+          </div>
+        </Card>
+      )}
 
       <Card className="mt-6">
         <div className="flex flex-col gap-5 p-4 sm:p-6">

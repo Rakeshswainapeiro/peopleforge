@@ -19,3 +19,4 @@ Significant technical decisions, one file each: context, decision, alternatives,
 | [0013](0013-review-decisions-and-returns.md)                 | Sirius HR's review: verification, decisions per employee, returns      | Accepted (reason lists: to confirm) |
 | [0014](0014-settings-and-reminders.md)                       | Settings: versioned criteria and reminders on configured triggers      | Accepted (default days: to confirm) |
 | [0015](0015-group-data-versions-and-anomaly-flags.md)        | Group employee data: uploads, versions, aggregates and anomaly flags   | Accepted (fields A3, Palm HR A7)    |
+| [0016](0016-criteria-add-remove-and-thresholds.md)           | Criteria: adding, removing and thresholds on measured values           | Accepted (real criteria A1)         |

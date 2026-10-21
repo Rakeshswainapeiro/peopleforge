@@ -62,12 +62,14 @@
     "notes": {
       "tat": "TAT: elapsed days (24 hours each) from submission to the final decision, or to now while open.",
       "criterion": "Criterion TAT: from when a criterion started waiting for Sirius HR (submission, or the employee's resubmission after a return) to its verification.",
-      "backAndForth": "Back-and-forth: time employees spent returned to the subsidiary, and the time from a Sirius HR question to the subsidiary's answer."
+      "backAndForth": "Back-and-forth: time employees spent returned to the subsidiary, and the time from a Sirius HR question to the subsidiary's answer.",
+      "trend": "TAT trend: the last 12 months (Asia/Dubai), decided requests by the month of their decision; with a criterion filter, that criterion's verifications by the month verified."
     },
     "figures": {
       "requests": "Requests submitted",
       "decided": "Decided",
       "averageTat": "Average TAT (days), decided",
+      "medianTat": "Median TAT (days), decided",
       "open": "Open",
       "openAverage": "Average age (days), open",
       "returns": "Employees returned",
@@ -82,7 +84,8 @@
       "tatCriteria": "TAT by criterion",
       "tatEntities": "TAT by subsidiary",
       "flowRequests": "Back-and-forth",
-      "flowEntities": "Back-and-forth by subsidiary"
+      "flowEntities": "Back-and-forth by subsidiary",
+      "trend": "TAT trend"
     },
     "columns": {
       "criterion": "Criterion",
@@ -102,9 +105,13 @@
       "questions": "Questions",
       "answers": "Answered",
       "averageAnswer": "Average answer (days)",
-      "averageReturn": "Average return (days)"
+      "averageReturn": "Average return (days)",
+      "median": "Median (days)",
+      "month": "Month",
+      "count": "Decided or verified"
     },
-    "filterNone": "none (every subsidiary, every period)"
+    "filterNone": "none (every subsidiary, every period)",
+    "filterCriterion": "criterion {value}"
   },
   "groupData": {
     "templateSheet": "Employee data",

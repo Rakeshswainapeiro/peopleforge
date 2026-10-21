@@ -8,11 +8,19 @@ import {
   ProgressSteps,
   StatCard,
 } from '@peopleforge/ui';
+import {
+  IN_REVIEW_STATUSES,
+  LineDecisionValueSchema,
+  MAX_COMMENT_LENGTH,
+} from '@peopleforge/contracts';
+import { pluralForm } from '@peopleforge/i18n';
+import { randomUUID } from 'node:crypto';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { z } from 'zod';
 import { HistoryTable } from '@/components/audit/history-table';
 import { RequestEmployeesTable } from '@/components/requests/request-employees-table';
+import { DecisionPanel } from '@/components/review/decision-panel';
 import { getRequestLocale } from '@/i18n/request-locale';
 import { createTranslator } from '@/i18n/translator';
 import { hasAnyPermission } from '@/lib/navigation';
@@ -28,14 +36,15 @@ import { formatDate } from '@/lib/format';
 import { historyRows } from '@/lib/history-view';
 import { statusBadge } from '@/lib/request-status';
 import { requestFigures } from '@/lib/request-figures';
-import { markStateLabels } from '@/lib/request-view';
+import { markStateLabels, saveMessages } from '@/lib/request-view';
+import { reasonOptions, remainingDecisionLabels, waitingLines } from '@/lib/review-view';
 import { editRequestHref, employeeStatusHref, requestHref } from '@/lib/routes';
 import { getHistory, getRequest } from '@/server/increment-requests';
 import { requireViewer } from '@/server/session';
 
 interface RequestDetailPageProps {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ submitted?: string; resubmitted?: string }>;
+  searchParams: Promise<{ submitted?: string; resubmitted?: string; decided?: string }>;
 }
 
 /**
@@ -69,6 +78,14 @@ export default async function RequestDetailPage({ params, searchParams }: Reques
   const returned = returnedView(request, locale, t, group);
   const canResubmit = me.permissions.includes('increment_request:submit');
   const reviewer = me.permissions.includes('increment_request:review');
+  // "Decide all remaining" (R1-09): for deciders, while two or more employees still wait.
+  const waiting = waitingLines(request);
+  const decideAll =
+    reviewer &&
+    me.permissions.includes('increment_request:decide') &&
+    IN_REVIEW_STATUSES.includes(request.status) &&
+    waiting.length > 1;
+  const decided = LineDecisionValueSchema.safeParse(query.decided).data;
 
   return (
     <>
@@ -124,6 +141,15 @@ export default async function RequestDetailPage({ params, searchParams }: Reques
         >
           {banner.body}
         </Alert>
+      )}
+
+      {decided === undefined ? null : (
+        <Alert
+          role="status"
+          tone="success"
+          title={t(`decision.all.saved.${decided}`, { entity: request.entity.code })}
+          className="mt-6"
+        />
       )}
 
       {query.resubmitted === '1' ? (
@@ -218,6 +244,29 @@ export default async function RequestDetailPage({ params, searchParams }: Reques
           />
         </div>
       </Card>
+
+      {decideAll ? (
+        <Card className="mt-6" label={t('decision.all.title')}>
+          <CardHeader
+            title={t('decision.all.title')}
+            description={t(`decision.all.intro.${pluralForm(waiting.length, locale)}`, {
+              count: new Intl.NumberFormat(locale).format(waiting.length),
+            })}
+          />
+          <div className="max-w-xl px-6 pt-4 pb-6">
+            <DecisionPanel
+              requestId={request.id}
+              lineId={null}
+              // A fresh idempotency key per page view: a double click can't decide twice.
+              decisionKey={randomUUID()}
+              reasons={reasonOptions(t)}
+              maxComment={MAX_COMMENT_LENGTH}
+              labels={remainingDecisionLabels(request, locale, t)}
+              messages={saveMessages(t)}
+            />
+          </div>
+        </Card>
+      ) : null}
 
       {/* Secondary: if the trail can't be read just now, the request still shows. */}
       {history.kind === 'ok' ? (

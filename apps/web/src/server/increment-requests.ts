@@ -13,6 +13,7 @@ import {
   type IncrementReportQuery,
   type CreateIncrementRequest,
   type DecideLine,
+  type DecideRemaining,
   type ReviewQueuePage,
   type ReviewQueueQuery,
   type Cycle,
@@ -192,6 +193,19 @@ export function decideEmployee(
   idempotencyKey: string,
 ): Promise<ApiResult<IncrementRequest>> {
   return callApi(requestPath(id, `/lines/${Id.parse(lineId)}/decision`), IncrementRequestSchema, {
+    method: 'POST',
+    body,
+    idempotencyKey,
+  });
+}
+
+/** "Decide all remaining" (R1-09): every employee still waiting; a repeated key is a replay. */
+export function decideRemaining(
+  id: string,
+  body: DecideRemaining,
+  idempotencyKey: string,
+): Promise<ApiResult<IncrementRequest>> {
+  return callApi(requestPath(id, '/decision'), IncrementRequestSchema, {
     method: 'POST',
     body,
     idempotencyKey,

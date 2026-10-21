@@ -52,7 +52,13 @@ describe('Analytics [R1-11, R1-12; DASH-D3, DASH-D4]', () => {
     ).toBeInTheDocument();
     expect(getIncrementAnalytics).toHaveBeenCalledWith({ cycleId: CYCLE_ID });
     const cards = screen.getByRole('list', { name: 'Key figures' });
-    expect(cards).toHaveTextContent('Average TAT4.5 days1 decided');
+    expect(cards).toHaveTextContent('Average TAT4.5 daysMedian 4.5 days · 1 decided');
+    const trend = screen.getByRole('table', { name: 'TAT trend, last 12 months' });
+    expect(within(trend).getByRole('row', { name: 'Oct 26 4.5 days' })).toBeInTheDocument();
+    expect(
+      screen.getByText('Average days from submission to decision, by the month decided.'),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'Criterion' })).toHaveValue('');
     expect(
       within(screen.getByRole('table', { name: 'TAT by criterion' })).getAllByRole('row'),
     ).toHaveLength(3);
@@ -83,7 +89,27 @@ describe('Analytics [R1-11, R1-12; DASH-D3, DASH-D4]', () => {
       }),
     ).toHaveTextContent('INC-2026-0152');
     expect(container.querySelector('input[type="hidden"][name="view"]')).toHaveValue('flow');
+    expect(screen.queryByRole('combobox', { name: 'Criterion' })).toBeNull();
     expect(screen.getByRole('combobox', { name: 'Subsidiary' })).toHaveValue(SUB_A);
+  });
+
+  it('narrows TAT to one criterion, keeping it across views and in RP-02 [DASH-D3]', async () => {
+    render(await page({ criterion: 'C2' }));
+    expect(getIncrementAnalytics).toHaveBeenCalledWith({ cycleId: CYCLE_ID, criterion: 'C2' });
+    expect(
+      screen.getByRole('heading', { name: 'C2 TAT trend, last 12 months' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('Average days to verify C2, by the month verified.'),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'Criterion' })).toHaveValue('C2');
+    expect(screen.getByRole('link', { name: 'Download RP-02 (Excel)' })).toHaveAttribute(
+      'href',
+      `/analytics/rp-02?cycle=${CYCLE_ID}&criterion=C2`,
+    );
+    cleanup();
+    const { container } = render(await page({ view: 'flow', criterion: 'C2' }));
+    expect(container.querySelector('input[type="hidden"][name="criterion"]')).toHaveValue('C2');
   });
 
   it('says so when there is nothing to measure, or nothing verified or returned yet', async () => {

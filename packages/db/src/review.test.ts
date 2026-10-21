@@ -120,7 +120,7 @@ async function verifyAll(id: string, lineId: string, criteria: readonly string[]
 
 function decision(
   id: string,
-  lineId: string,
+  lineId: string | null,
   overrides: Partial<DecisionInput> = {},
 ): DecisionInput {
   return {
@@ -138,7 +138,7 @@ function decision(
         kind: `employee_${context.requestStatus}`,
         entityId: context.entityId,
         requestId: context.requestId,
-        params: { employee: context.employeeName },
+        params: { employee: context.employeeName, employees: context.employees },
       },
     ],
     ...overrides,
@@ -378,6 +378,85 @@ describe('decide [R1-09]', () => {
     await expect(
       refusal(review.decide(reviewer, decision(third.id, randomUUID()))),
     ).resolves.toMatchObject({ reason: 'line_not_found' });
+  });
+});
+
+describe('decide all remaining [R1-09]', () => {
+  it('decides every employee still waiting at once, with one status change and one notice', async () => {
+    const { id, lines, criteria } = await submitted();
+    const [first, second] = lines.map(String);
+    // Approving all needs every criterion verified for every one of them.
+    await verifyAll(id, String(first), criteria);
+    await expect(refusal(review.decide(reviewer, decision(id, null)))).resolves.toMatchObject({
+      reason: 'not_verified',
+      subject: second,
+    });
+    // One employee decided on their own first: "all remaining" leaves them as they are.
+    await review.decide(
+      reviewer,
+      decision(id, String(first), {
+        decision: 'returned',
+        reasonCode: 'missing_evidence',
+        comment: 'Q?',
+      }),
+    );
+    await review.decide(
+      reviewer,
+      decision(id, null, {
+        decision: 'rejected',
+        reasonCode: 'budget',
+        comment: ' Over budget this cycle. ',
+        idempotencyKey: 'key-remaining',
+      }),
+    );
+    const request = await requests.get(reviewer, id);
+    expect(request?.lines.map((line) => [line.id, line.reviewStatus])).toEqual([
+      [first, 'returned'],
+      [second, 'rejected'],
+    ]);
+    expect(request?.lines.at(1)?.decision).toMatchObject({
+      decision: 'rejected',
+      reasonCode: 'budget',
+      comment: 'Over budget this cycle.',
+    });
+    const audits = await asOwner<{ details: { allRemaining: boolean } }>(
+      "SELECT details FROM audit.audit_log WHERE action = 'request_line.rejected' AND subject_id = $1",
+      [second],
+    );
+    expect(audits.map((row) => row.details.allRemaining)).toEqual([true]);
+    const notices = await asOwner<{ params: { employees: number } }>(
+      "SELECT params FROM notify.notification WHERE request_id = $1 AND kind = 'employee_returned' ORDER BY created_at",
+      [id],
+      SEED_ASSIGNMENTS[0].userId,
+    );
+    expect(notices.map((row) => row.params.employees)).toEqual([1, 1]);
+    // Nothing left waiting: refused, and a replay of the same key is still a replay.
+    await expect(
+      refusal(
+        review.decide(reviewer, decision(id, null, { decision: 'rejected', reasonCode: 'budget' })),
+      ),
+    ).resolves.toMatchObject({ reason: 'line_not_pending' });
+    await expect(
+      review.decide(reviewer, decision(id, null, { idempotencyKey: 'key-remaining' })),
+    ).resolves.toEqual({ replayed: true });
+  });
+
+  it('approves all remaining once each is verified, and the request is final', async () => {
+    const { id, lines, criteria } = await submitted();
+    for (const lineId of lines) await verifyAll(id, lineId, criteria);
+    await review.decide(reviewer, decision(id, null));
+    expect(await statusOf(id)).toBe('approved');
+    const notices = await asOwner<{ params: { employees: number } }>(
+      "SELECT params FROM notify.notification WHERE request_id = $1 AND kind = 'employee_approved'",
+      [id],
+      SEED_ASSIGNMENTS[0].userId,
+    );
+    expect(notices.map((row) => row.params.employees)).toEqual([2]);
+    // Another subsidiary can't decide anything (RLS: the request isn't there for them).
+    const other = await submitted();
+    await expect(refusal(review.decide(beta, decision(other.id, null)))).resolves.toMatchObject({
+      reason: 'not_found',
+    });
   });
 });
 

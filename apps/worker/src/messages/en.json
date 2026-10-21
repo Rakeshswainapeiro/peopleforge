@@ -37,6 +37,27 @@
       "subject": "Action needed: {employee} returned in {reference}",
       "body": "Sirius HR returned {employee} in request {reference} with a question. Update the employee and resubmit."
     },
+    "employees_approved": {
+      "subject": "{reference}: remaining employees approved ({count})",
+      "body": {
+        "one": "Sirius HR approved the remaining {count} employee in increment request {reference} at the proposed increment. Open the request to see the figures.",
+        "other": "Sirius HR approved the remaining {count} employees in increment request {reference} at the proposed increments. Open the request to see the figures."
+      }
+    },
+    "employees_rejected": {
+      "subject": "{reference}: remaining employees rejected ({count})",
+      "body": {
+        "one": "Sirius HR rejected the remaining {count} employee in increment request {reference}. Open the request to see the reason.",
+        "other": "Sirius HR rejected the remaining {count} employees in increment request {reference}. Open the request to see the reason."
+      }
+    },
+    "employees_returned": {
+      "subject": "Action needed: remaining employees returned in {reference} ({count})",
+      "body": {
+        "one": "Sirius HR returned the remaining {count} employee in increment request {reference} with a question. Update and resubmit.",
+        "other": "Sirius HR returned the remaining {count} employees in increment request {reference} with a question. Update and resubmit."
+      }
+    },
     "request_decided": {
       "subject": "{reference} decided: {status}",
       "body": "Sirius HR decided every employee in increment request {reference}. Final status: {status}."

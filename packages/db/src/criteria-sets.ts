@@ -1,5 +1,5 @@
 import type { Kysely, Transaction } from 'kysely';
-import type { Database, LocalisedText } from './schema.js';
+import type { Database, LocalisedText, PassRule } from './schema.js';
 
 export type EvidencePolicy = 'required' | 'optional' | 'none';
 
@@ -13,6 +13,21 @@ export interface CriterionRecord {
   evidencePolicy: EvidencePolicy;
   allowedMediaTypes: string[];
   maxFileMb: number;
+  /** Passes on a measured value (R1-05); null: Pass or Fail is the preparer's judgement. */
+  threshold: Threshold | null;
+}
+
+export type Threshold = Omit<Extract<PassRule, { kind: 'threshold' }>, 'kind'>;
+
+/** The threshold of a pass rule, or null for a manual one. */
+export function thresholdOf(rule: PassRule): Threshold | null {
+  if (rule.kind !== 'threshold') return null;
+  return { operator: rule.operator, value: rule.value, unit: rule.unit };
+}
+
+/** The pass rule stored for a threshold, or a manual rule without one. */
+export function passRuleOf(threshold: Threshold | null): PassRule {
+  return threshold === null ? { kind: 'manual' } : { kind: 'threshold', ...threshold };
 }
 
 /** Criteria by set: `of` gives a set's criteria in display order (none for an unknown set). */
@@ -45,6 +60,7 @@ export async function loadCriteriaSets(
             'evidence_policy',
             'allowed_media_types',
             'max_file_mb',
+            'pass_rule',
           ])
           .where('criteria_set_id', 'in', unique)
           .orderBy('criteria_set_id')
@@ -61,6 +77,7 @@ export async function loadCriteriaSets(
       evidencePolicy: row.evidence_policy,
       allowedMediaTypes: row.allowed_media_types,
       maxFileMb: row.max_file_mb,
+      threshold: thresholdOf(row.pass_rule),
     });
     sets.set(row.criteria_set_id, list);
   }

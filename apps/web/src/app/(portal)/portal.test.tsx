@@ -347,6 +347,22 @@ describe('HomePage: My increment requests [R1-10, DASH-D1]', () => {
     ).toHaveLength(4);
     expect(screen.getByRole('columnheader', { name: 'Subsidiary' })).toBeInTheDocument();
     expect(listRequests).not.toHaveBeenCalledWith(expect.objectContaining({ status: 'draft' }));
+    // The stage funnel (DASH-D2), its figures readable as a table.
+    const funnel = screen.getByRole('table', { name: 'Review stages' });
+    expect(within(funnel).getByRole('row', { name: 'Criterion 1 2' })).toBeInTheDocument();
+    expect(within(funnel).getByRole('row', { name: 'Decided 4' })).toBeInTheDocument();
+  });
+
+  it('shows no stage funnel while nothing is submitted', async () => {
+    vi.mocked(requireViewer).mockResolvedValue(SIRIUS_READER);
+    vi.mocked(dashboardSummary).mockResolvedValue({
+      kind: 'ok',
+      data: dashboardSummaryFixture({
+        funnel: { criteria: [], decision: 0, withSubsidiary: 0, decided: 0 },
+      }),
+    });
+    render(await page());
+    expect(screen.queryByRole('region', { name: 'Review stages' })).toBeNull();
   });
 
   it('shows a Subsidiary column By employee for Sirius HR too', async () => {

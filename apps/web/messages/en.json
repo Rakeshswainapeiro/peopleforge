@@ -170,6 +170,18 @@
         "one": "{employee} returned by Sirius HR with a question. Update and resubmit.",
         "other": "{employee} returned by Sirius HR with a question. Update and resubmit."
       },
+      "employees_approved": {
+        "one": "Sirius HR approved the remaining {count} employee.",
+        "other": "Sirius HR approved the remaining {count} employees."
+      },
+      "employees_rejected": {
+        "one": "Sirius HR rejected the remaining {count} employee.",
+        "other": "Sirius HR rejected the remaining {count} employees."
+      },
+      "employees_returned": {
+        "one": "Sirius HR returned the remaining {count} employee with a question. Update and resubmit.",
+        "other": "Sirius HR returned the remaining {count} employees with a question. Update and resubmit."
+      },
       "request_decided": {
         "one": "Every employee decided. Final status: {status}.",
         "other": "Every employee decided. Final status: {status}."
@@ -342,7 +354,8 @@
     "missing": {
       "result": "choose Pass or Fail",
       "justification": "add a justification",
-      "evidence": "attach evidence"
+      "evidence": "attach evidence",
+      "value": "enter the measured value"
     },
     "readySection": "3. Ready to submit?",
     "submit": "Submit to Sirius HR",
@@ -392,7 +405,26 @@
     "submitBack": "Go back and edit",
     "submitTableCaption": "Employees to submit",
     "colProposed": "Proposed",
-    "criteriaOf": "{complete} of {total} complete"
+    "criteriaOf": "{complete} of {total} complete",
+    "measuredValue": "Measured value",
+    "measuredHint": "{threshold}. Enter a number, e.g. 3.5.",
+    "threshold": {
+      "gte": "Passes at {value} or more ({unit})",
+      "lte": "Passes at {value} or less ({unit})"
+    },
+    "units": {
+      "rating": "rating",
+      "score": "score",
+      "percent": "percent",
+      "months": "months",
+      "years": "years",
+      "days": "days"
+    },
+    "thresholdOutcome": {
+      "pass": "Pass: meets the threshold.",
+      "fail": "Fail: doesn't meet the threshold.",
+      "none": "The result follows from the value."
+    }
   },
   "evidence": {
     "errors": {
@@ -537,7 +569,17 @@
       "other": "{count} employees returned"
     },
     "respond": "Respond",
-    "showReturned": "Returned ({count})"
+    "showReturned": "Returned ({count})",
+    "funnel": {
+      "title": "Review stages",
+      "intro": "Submitted requests by where they are in Sirius HR's review.",
+      "criterion": "Criterion {number}",
+      "decision": "At decision",
+      "decided": "Decided",
+      "colStage": "Stage",
+      "colRequests": "Requests",
+      "withSubsidiary": "With the subsidiary"
+    }
   },
   "employeeStatus": {
     "current": "Employee status",
@@ -572,7 +614,8 @@
     "colEvidence": "Evidence",
     "notSet": "Not set",
     "none": "None",
-    "download": "Download {name}"
+    "download": "Download {name}",
+    "measured": "Measured value {value} · {threshold}"
   },
   "breadcrumb": {
     "label": "Breadcrumb",
@@ -702,7 +745,29 @@
     },
     "next": "Next employee: {name}",
     "backToQueue": "Back to review queue",
-    "allDone": "Every employee of {reference} is decided."
+    "allDone": "Every employee of {reference} is decided.",
+    "all": {
+      "title": "Decide all remaining",
+      "intro": {
+        "one": "{count} employee is still waiting for a decision. Decide them at once, or one by one from the list.",
+        "other": "{count} employees are still waiting for a decision. Decide them all at once, or one by one from the list."
+      },
+      "approveHint": "Approves the proposed increment for each employee still waiting. To approve a different increment, decide that employee on their own.",
+      "rejectHint": "Rejects the increment for each employee still waiting, with one reason and comment. This can't be undone.",
+      "returnHint": "Sends each employee still waiting back to the subsidiary with your question. Once resubmitted, every criterion is checked again.",
+      "confirmApprove": "Approve all {count}",
+      "confirmReject": "Reject all {count}",
+      "confirmReturn": "Return all {count}",
+      "verifyFirst": {
+        "one": "Verify every criterion of {count} more employee before approving all.",
+        "other": "Verify every criterion of {count} more employees before approving all."
+      },
+      "saved": {
+        "approved": "Every remaining employee approved.",
+        "rejected": "Every remaining employee rejected.",
+        "returned": "Every remaining employee returned to {entity}."
+      }
+    }
   },
   "review": {
     "heading": "Review queue",
@@ -963,10 +1028,32 @@
       }
     },
     "errors": {
-      "invalid": "Check the highlighted values: names and descriptions are required, days are 1 to 30, files 1 to 10 MB.",
+      "invalid": "Check the values: names and descriptions are required, days are 1 to 30, files 1 to 10 MB, thresholds up to 6 digits and 2 decimals, and at most 10 criteria.",
       "stale": "Someone published other criteria meanwhile. Reload the page to see them.",
       "generic": "That didn't work. Try again in a moment."
-    }
+    },
+    "passesOn": "Passes on",
+    "passModes": {
+      "manual": "Pass or Fail, by judgement",
+      "gte": "A measured value, at least",
+      "lte": "A measured value, at most"
+    },
+    "thresholdValue": "Threshold",
+    "thresholdValueHint": "Up to 6 digits and 2 decimals, e.g. 3.5 or 95.",
+    "thresholdUnit": "Measured in",
+    "units": {
+      "rating": "Rating",
+      "score": "Score",
+      "percent": "Percent",
+      "months": "Months",
+      "years": "Years",
+      "days": "Days"
+    },
+    "newCriterion": "New criterion",
+    "addCriterion": "Add a criterion",
+    "removeCriterion": "Remove {code}",
+    "limit": "Up to {max} criteria. A new criterion gets the next code when published; removed codes are never reused.",
+    "removeNew": "Remove this criterion"
   },
   "analytics": {
     "heading": "TAT and back-and-forth",
@@ -985,7 +1072,7 @@
     "cards": {
       "label": "Key figures",
       "averageTat": "Average TAT",
-      "averageTatHint": "{count} decided",
+      "averageTatHint": "Median {median} · {count} decided",
       "openAge": "Open requests",
       "openAgeHint": "Average age: {days}",
       "longest": "Longest open",
@@ -1024,12 +1111,21 @@
       "questions": "Questions",
       "answers": "Answered",
       "averageAnswer": "Average answer",
-      "averageReturn": "Average return"
+      "averageReturn": "Average return",
+      "median": "Median"
     },
     "emptyTitle": "Nothing to measure yet",
     "emptyBody": "No submitted requests match these filters.",
     "emptyCriteria": "No criteria verified yet.",
-    "emptyFlow": "No returns or questions yet."
+    "emptyFlow": "No returns or questions yet.",
+    "allCriteria": "All criteria",
+    "criterion": "Criterion",
+    "trendTitle": "TAT trend, last 12 months",
+    "trendTitleCriterion": "{criterion} TAT trend, last 12 months",
+    "trendIntro": "Average days from submission to decision, by the month decided.",
+    "trendIntroCriterion": "Average days to verify {criterion}, by the month verified.",
+    "colMonth": "Month",
+    "colAverage": "Average"
   },
   "group": {
     "subsidiary": "Subsidiary",

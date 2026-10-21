@@ -15,7 +15,14 @@ import { roleLabel } from '@/lib/viewer-display';
 import type { ApiResult } from '@/server/api-client';
 import { requireViewer } from '@/server/session';
 import { getCriteriaSettings, getReminderRules } from '@/server/settings';
-import { ALWAYS_REQUIRED, FieldTypeSchema, RULE_THRESHOLD_UNIT } from '@peopleforge/contracts';
+import {
+  ALWAYS_REQUIRED,
+  FieldTypeSchema,
+  MAX_CRITERIA,
+  RULE_THRESHOLD_UNIT,
+  THRESHOLD_OPERATORS,
+  THRESHOLD_UNITS,
+} from '@peopleforge/contracts';
 import { RuleForm } from '@/components/group/rule-form';
 import { TemplateEditor } from '@/components/group/template-editor';
 import { GROUP_ERROR_KEYS, ruleDescription, ruleName } from '@/lib/group-view';
@@ -75,6 +82,7 @@ export default async function SettingsPage() {
             version={criteria.version}
             criteria={criteriaFields(criteria)}
             maxFileMb={MAX_EVIDENCE_FILE_MB}
+            maxCriteria={MAX_CRITERIA}
             messages={messages}
             labels={{
               nameEn: t('settings.nameEn'),
@@ -90,6 +98,27 @@ export default async function SettingsPage() {
                 value: policy,
                 label: t(`settings.evidencePolicies.${policy}`),
               })),
+              passesOn: t('settings.passesOn'),
+              passModes: [
+                { value: '', label: t('settings.passModes.manual') },
+                ...THRESHOLD_OPERATORS.map((operator) => ({
+                  value: operator,
+                  label: t(`settings.passModes.${operator}`),
+                })),
+              ],
+              thresholdValue: t('settings.thresholdValue'),
+              thresholdValueHint: t('settings.thresholdValueHint'),
+              thresholdUnit: t('settings.thresholdUnit'),
+              units: THRESHOLD_UNITS.map((unit) => ({
+                value: unit,
+                label: t(`settings.units.${unit}`),
+              })),
+              newCriterion: t('settings.newCriterion'),
+              addCriterion: t('settings.addCriterion'),
+              // The client fills in each criterion's code.
+              removeCriterion: t('settings.removeCriterion', { code: '{code}' }),
+              removeNew: t('settings.removeNew'),
+              limit: t('settings.limit', { max: String(MAX_CRITERIA) }),
               note: t('settings.publishNote', {
                 next: String(next),
                 version: String(criteria.version),

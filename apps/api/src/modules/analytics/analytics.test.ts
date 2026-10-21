@@ -20,7 +20,15 @@ import {
 } from '../../test-support/increment-requests.js';
 import { IncrementRequestService } from '../increment-requests/increment-request.service.js';
 import { AnalyticsService } from './analytics.service.js';
-import { averageDays, days, elapsedDays, incrementAnalytics } from './measures.js';
+import {
+  averageDays,
+  businessMonth,
+  days,
+  elapsedDays,
+  incrementAnalytics,
+  lastTwelveMonths,
+  medianDays,
+} from './measures.js';
 
 // TAT and back-and-forth (R1-11, R1-12, ADR-006) with worked examples, and RP-02 (R1-14).
 const NOW = new Date('2026-10-18T08:00:00Z');
@@ -147,13 +155,72 @@ describe('measures [R1-11, R1-12, ADR-006]', () => {
     ]);
     // C1: 1 day (Aisha) and 0.5 day after Yusuf's resubmission; C2: 2 days.
     expect(tat.byCriterion).toEqual([
-      { code: 'C1', verified: 2, averageDays: '0.8', maxDays: '1.0' },
-      { code: 'C2', verified: 1, averageDays: '2.0', maxDays: '2.0' },
+      { code: 'C1', verified: 2, averageDays: '0.8', medianDays: '0.8', maxDays: '1.0' },
+      { code: 'C2', verified: 1, averageDays: '2.0', medianDays: '2.0', maxDays: '2.0' },
     ]);
+    expect(tat.medianDays).toBe('2.8');
+    expect(tat.criteria).toEqual(['C1', 'C2']);
     expect(tat.byEntity).toEqual([
       { entityCode: 'SUB-A', requests: 2, decided: 2, averageDays: '2.8', openAverageDays: null },
       { entityCode: 'SUB-B', requests: 1, decided: 0, averageDays: null, openAverageDays: '2.0' },
     ]);
+  });
+
+  it('takes the median of an odd and an even count [DASH-D3]', () => {
+    expect(medianDays([])).toBeNull();
+    expect(medianDays([5, 1, 3])).toBe('3.0');
+    expect(medianDays([4, 1, 10, 2])).toBe('3.0');
+    expect(medianDays([0.5])).toBe('0.5');
+  });
+
+  it('trends decided TAT over the last 12 months in Dubai time [DASH-D3]', () => {
+    expect(lastTwelveMonths(NOW)).toEqual([
+      '2025-11',
+      '2025-12',
+      '2026-01',
+      '2026-02',
+      '2026-03',
+      '2026-04',
+      '2026-05',
+      '2026-06',
+      '2026-07',
+      '2026-08',
+      '2026-09',
+      '2026-10',
+    ]);
+    // 31 Oct 21:00 UTC is already 1 November in Dubai (UTC+4).
+    expect(businessMonth(at('2026-10-31T19:59:59Z'))).toBe('2026-10');
+    expect(businessMonth(at('2026-10-31T20:00:00Z'))).toBe('2026-11');
+    const { tat } = incrementAnalytics(facts(), NOW);
+    expect(tat.trend).toHaveLength(12);
+    expect(tat.trend.at(-1)).toEqual({
+      month: '2026-10',
+      count: 2,
+      averageDays: '2.8',
+      medianDays: '2.8',
+    });
+    expect(tat.trend.at(0)).toEqual({
+      month: '2025-11',
+      count: 0,
+      averageDays: null,
+      medianDays: null,
+    });
+  });
+
+  it('narrows criterion TAT and the trend to one criterion, keeping the choices [DASH-D3]', () => {
+    const { tat } = incrementAnalytics(facts(), NOW, 'C1');
+    expect(tat.byCriterion.map((row) => row.code)).toEqual(['C1']);
+    expect(tat.criteria).toEqual(['C1', 'C2']);
+    // C1 verified twice in October: 1 day and 0.5 day.
+    expect(tat.trend.at(-1)).toEqual({
+      month: '2026-10',
+      count: 2,
+      averageDays: '0.8',
+      medianDays: '0.8',
+    });
+    // Requests and back-and-forth are not narrowed by a criterion.
+    expect(tat.requests).toBe(3);
+    expect(incrementAnalytics(facts(), NOW, 'C9').tat.byCriterion).toEqual([]);
   });
 
   it('measures time with the subsidiary and answers to questions', () => {
@@ -266,7 +333,11 @@ describe('AnalyticsService and routes [R1-11, R1-12, R1-14, NFR-SEC-01]', () => 
 
   it('serves Sirius HR the measures for its filters', async () => {
     const repository = fake();
-    const result = await service(repository).increments(reviewer, { cycleId: CYCLE_ID });
+    const result = await service(repository).increments(reviewer, {
+      cycleId: CYCLE_ID,
+      criterion: 'C1',
+    });
+    expect(result.tat.byCriterion.map((row) => row.code)).toEqual(['C1']);
     expect(IncrementAnalyticsSchema.parse(result).generatedAt).toBe(NOW.toISOString());
     expect(repository.facts).toHaveBeenCalledWith(
       { userId: 'reviewer', userName: 'Reviewer', kind: 'group' },
@@ -293,6 +364,7 @@ describe('AnalyticsService and routes [R1-11, R1-12, R1-14, NFR-SEC-01]', () => 
       'Summary',
       'TAT by request',
       'TAT by criterion',
+      'TAT trend',
       'TAT by subsidiary',
       'Back-and-forth',
       'Back-and-forth by subsidiary',
@@ -319,7 +391,16 @@ describe('AnalyticsService and routes [R1-11, R1-12, R1-14, NFR-SEC-01]', () => 
       'C1',
       2,
       0.8,
+      0.8,
       1,
+    ]);
+    expect(summary?.getCell('B8').value).toBe(2.8);
+    expect(workbook.getWorksheet('TAT trend')?.getRow(13).values).toEqual([
+      undefined,
+      '2026-10',
+      2,
+      2.8,
+      2.8,
     ]);
     // Open requests: "Yes", no decision date.
     expect(workbook.getWorksheet('TAT by request')?.getRow(3).getCell(8).value).toBe('Yes');
@@ -344,6 +425,16 @@ describe('AnalyticsService and routes [R1-11, R1-12, R1-14, NFR-SEC-01]', () => 
     expect(workbook.getWorksheet('Summary')?.getCell('A3').value).toBe(
       'Filters: Period: 11111111-1111-4111-8111-111111111112 · Subsidiary: —',
     );
+    const one = await service(repository).tatReport(reviewer, {
+      format: 'xlsx',
+      locale: 'en',
+      criterion: 'C3',
+    });
+    workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(one.body as unknown as ArrayBuffer);
+    expect(workbook.getWorksheet('Summary')?.getCell('A3').value).toBe('Filters: criterion C3');
+    // The criterion narrows the measures, not the facts read.
+    expect(repository.facts.mock.calls.at(-1)?.[1]).toEqual({});
     const all = await service(repository).tatReport(reviewer, { format: 'xlsx', locale: 'en' });
     workbook = new ExcelJS.Workbook();
     await workbook.xlsx.load(all.body as unknown as ArrayBuffer);
@@ -396,6 +487,8 @@ describe('AnalyticsService and routes [R1-11, R1-12, R1-14, NFR-SEC-01]', () => 
       .expect(200);
     expect(IncrementAnalyticsSchema.parse(res.body).tat.requests).toBe(3);
     await request(http).get('/api/v1/analytics/increments?cycleId=q3').expect(400);
+    await request(http).get('/api/v1/analytics/increments?criterion=C1').expect(200);
+    await request(http).get('/api/v1/analytics/increments?criterion=1%3D1').expect(400);
     const file = await request(http)
       .get('/api/v1/reports/tat-back-and-forth?format=xlsx&locale=en')
       .buffer(true)

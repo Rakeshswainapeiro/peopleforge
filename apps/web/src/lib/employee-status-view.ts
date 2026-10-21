@@ -2,6 +2,7 @@ import type { IncrementRequest, RequestLine } from '@peopleforge/contracts';
 import type { BadgeTone, IconName, StatCardProps } from '@peopleforge/ui';
 import type { Locale } from '@sirius/shared-types';
 import type { Translate } from '@/i18n/translator';
+import { thresholdText } from './threshold-view';
 import { formatMoney, formatPercent } from './format';
 import { pluralForm } from '@peopleforge/i18n';
 import { localised } from './viewer-display';
@@ -64,6 +65,8 @@ export interface CriterionRowView {
   code: string;
   name: string;
   result: { tone: BadgeTone; icon: IconName | undefined; label: string };
+  /** "Measured value 4.2 · Passes at 3.5 or more (rating)" (R1-05); null without a threshold. */
+  measured: string | null;
   justification: string;
   evidence: { id: string; name: string; href: string; label: string }[];
 }
@@ -89,6 +92,18 @@ export function criterionRows(
             : assessment.result === 'fail'
               ? { tone: 'danger', icon: 'x', label: t('request.fail') }
               : { tone: 'outline', icon: undefined, label: t('employeeStatus.notSet') },
+        measured:
+          criterion.threshold === null
+            ? null
+            : t('employeeStatus.measured', {
+                value:
+                  assessment.measuredValue === null
+                    ? t('employeeStatus.notSet')
+                    : new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }).format(
+                        assessment.measuredValue as `${number}`,
+                      ),
+                threshold: thresholdText(criterion.threshold, locale, t),
+              }),
         justification:
           assessment.justification.trim() === ''
             ? t('employeeStatus.none')

@@ -8,6 +8,10 @@ export const JUSTIFICATION = {
   table: 'increments.criterion_result',
   column: 'justification',
 } as const;
+export const MEASURED_VALUE = {
+  table: 'increments.criterion_result',
+  column: 'measured_value',
+} as const;
 export const DECISION_COMMENT = { table: 'increments.line_decision', column: 'comment' } as const;
 export const APPROVED_VALUE = {
   table: 'increments.line_decision',

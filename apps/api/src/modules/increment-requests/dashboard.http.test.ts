@@ -66,6 +66,7 @@ describe('dashboard routes [R1-10, NFR-SEC-01]', () => {
       },
       requests: 2,
       employees: 3,
+      funnel: { criteria: [], decision: 0, withSubsidiary: 0, decided: 0 },
     });
     expect(dashboard.summary).toHaveBeenCalledWith(expect.anything(), {
       cycleId: CYCLE_ID,

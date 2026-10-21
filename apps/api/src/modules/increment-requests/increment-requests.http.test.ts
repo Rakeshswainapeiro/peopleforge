@@ -156,7 +156,17 @@ describe('increment request routes [R1-02, NFR-SEC-01]', () => {
     expect(repository.saveDraft).toHaveBeenCalledWith(expect.anything(), REQUEST_ID, {
       version: 3,
       proposals: [],
-      assessment: assessment('Below the minimum rating.'),
+      assessment: {
+        lineId: LINE_1,
+        results: [
+          {
+            criterionId: CRITERION_1,
+            result: 'fail',
+            measuredValue: null,
+            justification: 'Below the minimum rating.',
+          },
+        ],
+      },
     });
     const res = await request(server)
       .put(`${base}/${REQUEST_ID}/draft`)

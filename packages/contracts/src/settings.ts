@@ -4,6 +4,7 @@ import {
   EvidencePolicySchema,
   MAX_EVIDENCE_FILE_MB,
 } from './increment-requests.js';
+import { CriterionThresholdSchema } from './thresholds.js';
 
 /**
  * The increment portal's settings (R1-05, R1-13, NFR-CFG-01): the eligibility criteria and the
@@ -45,6 +46,9 @@ export const UpdateReminderRuleSchema = z.strictObject({
 });
 export type UpdateReminderRule = z.infer<typeof UpdateReminderRuleSchema>;
 
+/** Most criteria a version may have (the database allows positions 1–10). */
+export const MAX_CRITERIA = 10;
+
 const MAX_NAME = 120;
 const MAX_DESCRIPTION = 1000;
 
@@ -71,14 +75,22 @@ const localised = (max: number) =>
       ),
   });
 
-/** One criterion as an admin edits it; its code and order stay (C1…C5). */
+/**
+ * One criterion as an admin edits it (R1-05). An existing criterion keeps its code; a new one
+ * has none and gets the next free code. The list's order is the criteria's order.
+ */
 export const CriterionSettingsInputSchema = z.strictObject({
-  code: z.string().regex(/^C[0-9]{1,2}$/u),
+  code: z
+    .string()
+    .regex(/^C[0-9]{1,2}$/u)
+    .optional(),
   name: localised(MAX_NAME),
   description: localised(MAX_DESCRIPTION),
   justificationRequired: z.boolean(),
   evidencePolicy: EvidencePolicySchema,
   maxFileMb: z.coerce.number().int().min(1).max(MAX_EVIDENCE_FILE_MB),
+  /** Optional: the criterion passes on a measured value (R1-05). */
+  threshold: CriterionThresholdSchema.nullable().default(null),
 });
 export type CriterionSettingsInput = z.infer<typeof CriterionSettingsInputSchema>;
 
@@ -89,7 +101,18 @@ export type CriterionSettingsInput = z.infer<typeof CriterionSettingsInputSchema
  */
 export const PublishCriteriaSchema = z.strictObject({
   version: z.number().int().min(1),
-  criteria: z.array(CriterionSettingsInputSchema).min(1).max(10),
+  /** At least one criterion, at most ten; adding and removing publishes a new version. */
+  criteria: z
+    .array(CriterionSettingsInputSchema)
+    .min(1)
+    .max(MAX_CRITERIA)
+    .refine(
+      (criteria) => {
+        const codes = criteria.flatMap((criterion) => criterion.code ?? []);
+        return new Set(codes).size === codes.length;
+      },
+      { message: 'duplicate_code' },
+    ),
 });
 export type PublishCriteria = z.infer<typeof PublishCriteriaSchema>;
 

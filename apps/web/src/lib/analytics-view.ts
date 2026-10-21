@@ -6,6 +6,8 @@ import type { Translate } from '@/i18n/translator';
 import { ALL_PERIODS, dashboardState, type SearchParams } from './dashboard-view';
 import { formatDate } from './format';
 import { statusBadge } from './request-status';
+import { shortMonth } from './group-dashboards-view';
+import type { ChartPoint } from '@/components/charts/charts';
 
 /**
  * Analytics (R1-11, R1-12; DASH-D3, DASH-D4) for Sirius HR: the page's state in the URL, the
@@ -22,11 +24,18 @@ export interface AnalyticsState {
   /** A cycle ID, ALL_PERIODS, or undefined for the first open cycle. */
   cycle?: string | undefined;
   entity?: string | undefined;
+  /** A criterion code (DASH-D3 filter), or undefined for every criterion. */
+  criterion?: string | undefined;
 }
+
+const Criterion = z.string().regex(/^C[0-9]{1,2}$/u);
 
 export function analyticsState(params: SearchParams): AnalyticsState {
   const { cycle, entity } = dashboardState(params);
-  return { view: params.view === 'flow' ? 'flow' : 'tat', cycle, entity };
+  const criterion = Criterion.safeParse(
+    Array.isArray(params.criterion) ? params.criterion[0] : params.criterion,
+  ).data;
+  return { view: params.view === 'flow' ? 'flow' : 'tat', cycle, entity, criterion };
 }
 
 /** A link to the page; the filters travel with it. */
@@ -36,6 +45,7 @@ export function analyticsHref(state: AnalyticsState, change: Partial<AnalyticsSt
   if (next.view === 'flow') query.set('view', 'flow');
   if (next.cycle !== undefined) query.set('cycle', next.cycle);
   if (next.entity !== undefined) query.set('entity', next.entity);
+  if (next.criterion !== undefined) query.set('criterion', next.criterion);
   const search = query.toString();
   return search === '' ? ANALYTICS_PATH : `${ANALYTICS_PATH}?${search}`;
 }
@@ -44,6 +54,7 @@ export function analyticsHref(state: AnalyticsState, change: Partial<AnalyticsSt
 export function rp02Href(filter: AnalyticsQuery): string {
   const query = new URLSearchParams({ cycle: filter.cycleId ?? ALL_PERIODS });
   if (filter.entityId !== undefined) query.set('entity', filter.entityId);
+  if (filter.criterion !== undefined) query.set('criterion', filter.criterion);
   return `${RP02_PATH}?${query.toString()}`;
 }
 
@@ -53,9 +64,11 @@ const Id = z.uuid();
 export function rp02Query(params: Readonly<Record<string, string>>): AnalyticsQuery {
   const cycle = Id.safeParse(params.cycle);
   const entity = Id.safeParse(params.entity);
+  const criterion = Criterion.safeParse(params.criterion);
   return {
     ...(cycle.success ? { cycleId: cycle.data } : {}),
     ...(entity.success ? { entityId: entity.data } : {}),
+    ...(criterion.success ? { criterion: criterion.data } : {}),
   };
 }
 
@@ -76,7 +89,10 @@ export function tatCards(data: IncrementAnalytics, locale: Locale, t: Translate)
     {
       label: t('analytics.cards.averageTat'),
       value: daysText(data.tat.averageDays, locale, t),
-      hint: t('analytics.cards.averageTatHint', { count: number.format(data.tat.decided) }),
+      hint: t('analytics.cards.averageTatHint', {
+        count: number.format(data.tat.decided),
+        median: daysText(data.tat.medianDays, locale, t),
+      }),
     },
     {
       label: t('analytics.cards.openAge'),
@@ -146,11 +162,18 @@ export function tatTables(
         t('analytics.col.criterion'),
         t('analytics.col.verified'),
         t('analytics.col.average'),
+        t('analytics.col.median'),
         t('analytics.col.longest'),
       ],
       rows: data.tat.byCriterion.map((row) => ({
         id: row.code,
-        cells: [row.code, number.format(row.verified), d(row.averageDays), d(row.maxDays)],
+        cells: [
+          row.code,
+          number.format(row.verified),
+          d(row.averageDays),
+          d(row.medianDays),
+          d(row.maxDays),
+        ],
       })),
     },
     entities: {
@@ -255,4 +278,28 @@ export function flowTables(
       })),
     },
   };
+}
+
+/**
+ * The TAT trend (DASH-D3) as chart points: each month's average, a gap for a month with
+ * nothing decided (or, with a criterion, nothing verified).
+ */
+export function trendPoints(data: IncrementAnalytics, locale: Locale, t: Translate): ChartPoint[] {
+  return data.tat.trend.map((month) => ({
+    id: month.month,
+    label: shortMonth(month.month, locale),
+    value: month.averageDays === null ? null : Number(month.averageDays),
+    display: daysText(month.averageDays, locale, t),
+  }));
+}
+
+/** The criterion filter: every criterion, then each code met in the facts. */
+export function criterionOptions(
+  data: IncrementAnalytics,
+  t: Translate,
+): { value: string; label: string }[] {
+  return [
+    { value: '', label: t('analytics.allCriteria') },
+    ...data.tat.criteria.map((code) => ({ value: code, label: code })),
+  ];
 }

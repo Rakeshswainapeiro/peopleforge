@@ -138,12 +138,13 @@ describe('increment request client', () => {
 
 describe('review client [R1-07 … R1-09]', () => {
   it('calls the review paths', async () => {
-    const { decideEmployee, resubmitRequest, reviewQueue, verifyCriterion } =
+    const { decideEmployee, decideRemaining, resubmitRequest, reviewQueue, verifyCriterion } =
       await import('./increment-requests');
     vi.mocked(callApi).mockClear();
     await verifyCriterion(ID, OTHER, ID, true);
     await verifyCriterion(ID, OTHER, ID, false);
     await decideEmployee(ID, OTHER, { decision: 'approved' }, 'key-12345678');
+    await decideRemaining(ID, { decision: 'approved' }, 'key-12345678');
     await resubmitRequest(ID, 3, 'Fixed.', 'key-12345678');
     await reviewQueue();
     await reviewQueue({
@@ -161,6 +162,10 @@ describe('review client [R1-07 … R1-09]', () => {
       [verify, { method: 'DELETE' }],
       [
         `/api/v1/increment-requests/${ID}/lines/${OTHER}/decision`,
+        { method: 'POST', body: { decision: 'approved' }, idempotencyKey: 'key-12345678' },
+      ],
+      [
+        `/api/v1/increment-requests/${ID}/decision`,
         { method: 'POST', body: { decision: 'approved' }, idempotencyKey: 'key-12345678' },
       ],
       [

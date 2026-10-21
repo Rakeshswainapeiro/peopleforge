@@ -43,6 +43,7 @@ export async function tatWorkbook(
     [t('analytics.figures.requests'), tat.requests],
     [t('analytics.figures.decided'), tat.decided],
     [t('analytics.figures.averageTat'), number(tat.averageDays)],
+    [t('analytics.figures.medianTat'), number(tat.medianDays)],
     [t('analytics.figures.open'), tat.open],
     [t('analytics.figures.openAverage'), number(tat.openAverageDays)],
     [t('analytics.figures.returns'), backAndForth.returns],
@@ -53,6 +54,7 @@ export async function tatWorkbook(
     ['', null],
     [t('analytics.notes.tat'), null],
     [t('analytics.notes.criterion'), null],
+    [t('analytics.notes.trend'), null],
     [t('analytics.notes.backAndForth'), null],
   ];
   for (const [text, value] of lines) summary.addRow([safeText(text), value]);
@@ -90,14 +92,28 @@ export async function tatWorkbook(
       { header: t('analytics.columns.criterion'), width: 12 },
       { header: t('analytics.columns.verified'), width: 10 },
       { header: t('analytics.columns.average'), width: 14, numFmt: DAYS },
+      { header: t('analytics.columns.median'), width: 14, numFmt: DAYS },
       { header: t('analytics.columns.longest'), width: 14, numFmt: DAYS },
     ],
     tat.byCriterion.map((row) => [
       row.code,
       row.verified,
       number(row.averageDays),
+      number(row.medianDays),
       number(row.maxDays),
     ]),
+  );
+
+  sheet(
+    workbook,
+    t('analytics.sheets.trend'),
+    [
+      { header: t('analytics.columns.month'), width: 12 },
+      { header: t('analytics.columns.count'), width: 10 },
+      { header: t('analytics.columns.average'), width: 14, numFmt: DAYS },
+      { header: t('analytics.columns.median'), width: 14, numFmt: DAYS },
+    ],
+    tat.trend.map((row) => [row.month, row.count, number(row.averageDays), number(row.medianDays)]),
   );
 
   sheet(

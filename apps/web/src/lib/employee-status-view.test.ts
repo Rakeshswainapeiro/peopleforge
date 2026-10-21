@@ -63,6 +63,7 @@ describe('criterionRows', () => {
       code: 'C1',
       name: 'C1 · [Placeholder] Criterion 1',
       result: { tone: 'success', icon: 'check', label: 'Pass' },
+      measured: null,
       justification: 'Rated 4 of 5 in the 2026 appraisal.',
       evidence: [
         {
@@ -76,6 +77,34 @@ describe('criterionRows', () => {
     expect(rows[1]?.result).toEqual({ tone: 'danger', icon: 'x', label: 'Fail' });
     expect(rows[2]?.justification).toBe('None');
     expect(rows[3]?.result).toEqual({ tone: 'outline', icon: undefined, label: 'Not set' });
+  });
+
+  it('shows the measured value against the threshold [R1-05]', () => {
+    const rated = {
+      ...request,
+      criteria: request.criteria.map((criterion, index) =>
+        index < 2
+          ? {
+              ...criterion,
+              threshold: {
+                operator: index === 0 ? 'gte' : 'lte',
+                value: '3.5',
+                unit: 'rating',
+              } as const,
+            }
+          : criterion,
+      ),
+    };
+    const measured = {
+      ...omar,
+      criteria: omar.criteria.map((entry, index) =>
+        index === 0 ? { ...entry, measuredValue: '4.25' } : entry,
+      ),
+    };
+    const rows = criterionRows(rated, measured, 'en', t);
+    expect(rows[0]?.measured).toBe('Measured value 4.25 · Passes at 3.5 or more (rating)');
+    expect(rows[1]?.measured).toBe('Measured value Not set · Passes at 3.5 or less (rating)');
+    expect(rows[2]?.measured).toBeNull();
   });
 
   it('leaves out a criterion the API sent no assessment for', () => {

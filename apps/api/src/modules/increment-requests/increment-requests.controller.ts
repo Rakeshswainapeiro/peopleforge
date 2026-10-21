@@ -17,6 +17,7 @@ import {
   CreateIncrementRequestSchema,
   DashboardFilterSchema,
   DecideLineSchema,
+  DecideRemainingSchema,
   ResubmitRequestSchema,
   ReviewQueueQuerySchema,
   type ReviewQueuePage,
@@ -219,6 +220,25 @@ export class ReviewController {
       principal.require(req),
       { requestId: Id.parse(id), lineId: Id.parse(lineId) },
       DecideLineSchema.parse(body),
+      idempotencyKey,
+    );
+  }
+
+  /** "Decide all remaining" (R1-09): every employee still waiting, one decision. */
+  @Post(':id/decision')
+  @HttpCode(200)
+  @RequirePermission('increment_request:decide')
+  decideRemaining(
+    @Req() req: IncomingMessage,
+    @Param('id') id: string,
+    @Body() body: unknown,
+    @Headers('idempotency-key') key: unknown,
+  ): Promise<IncrementRequest> {
+    const idempotencyKey = idempotencyKeyOf(key);
+    return this.review.decideRemaining(
+      principal.require(req),
+      Id.parse(id),
+      DecideRemainingSchema.parse(body),
       idempotencyKey,
     );
   }

@@ -34,8 +34,20 @@ const t = createTranslator('en');
 const C1 = String(CRITERION_IDS[0]);
 const C3 = String(CRITERION_IDS[2]);
 
-function editor() {
+const RATING = { operator: 'gte', value: '3.5', unit: 'rating' } as const;
+
+/** The draft with C2 passing on a measured rating (R1-05). */
+function thresholdDraft() {
   const draft = draftRequest();
+  return {
+    ...draft,
+    criteria: draft.criteria.map((criterion, index) =>
+      index === 1 ? { ...criterion, threshold: RATING } : criterion,
+    ),
+  };
+}
+
+function editor(draft = draftRequest()) {
   const omar = draft.lines[0];
   if (omar === undefined) throw new Error('fixture');
   return render(
@@ -147,13 +159,61 @@ describe('CriteriaEditor [R1-03, R1-06]', () => {
     expect(data.get(`result:${String(CRITERION_IDS[3])}`)).toBeNull();
   });
 
+  it('takes a measured value for a threshold criterion, the result following it [R1-05]', async () => {
+    const user = userEvent.setup();
+    const C2 = String(CRITERION_IDS[1]);
+    const { container } = editor(thresholdDraft());
+    const c2 = screen.getByRole('article', { name: 'C2 · [Placeholder] Criterion 2' });
+    expect(within(c2).queryByRole('radio')).toBeNull();
+    const value = within(c2).getByRole('textbox', { name: /Measured value/u });
+    expect(value).toHaveAccessibleDescription(
+      'Passes at 3.5 or more (rating). Enter a number, e.g. 3.5.',
+    );
+    expect(within(c2).getByText('The result follows from the value.')).toBeInTheDocument();
+    expect(c2).toHaveAccessibleDescription('To complete: enter the measured value.');
+    await user.type(value, '3.4');
+    expect(within(c2).getByText("Fail: doesn't meet the threshold.")).toBeInTheDocument();
+    await user.clear(value);
+    await user.type(value, '3.5');
+    expect(within(c2).getByText('Pass: meets the threshold.')).toBeInTheDocument();
+    const data = draftData(container);
+    expect(data.get(`measured:${C2}`)).toBe('3.5');
+    expect(data.get(`result:${C2}`)).toBeNull();
+  });
+
+  it('brings back a typed measured value after a refused save [R1-05]', async () => {
+    const C2 = String(CRITERION_IDS[1]);
+    vi.mocked(saveDraft).mockResolvedValue({
+      error: 'request.errors.stale',
+      rows: [],
+      criteria: {
+        lineId: LINE_1,
+        results: [{ criterionId: C2, result: '', measuredValue: '2', justification: '' }],
+      },
+    });
+    const { container } = editor(thresholdDraft());
+    container.querySelector<HTMLFormElement>('form#draft-form')?.requestSubmit();
+    const c2 = screen.getByRole('article', { name: 'C2 · [Placeholder] Criterion 2' });
+    await waitFor(() => {
+      expect(within(c2).getByRole('textbox', { name: /Measured value/u })).toHaveValue('2');
+    });
+    expect(within(c2).getByText("Fail: doesn't meet the threshold.")).toBeInTheDocument();
+  });
+
   it('keeps what was typed when a save is refused', async () => {
     vi.mocked(saveDraft).mockResolvedValue({
       error: 'request.errors.stale',
       rows: [],
       criteria: {
         lineId: LINE_1,
-        results: [{ criterionId: C1, result: 'fail', justification: 'Changed my mind.' }],
+        results: [
+          {
+            criterionId: C1,
+            result: 'fail',
+            measuredValue: '',
+            justification: 'Changed my mind.',
+          },
+        ],
       },
     });
     const { container } = editor();
@@ -170,7 +230,10 @@ describe('CriteriaEditor [R1-03, R1-06]', () => {
     vi.mocked(saveDraft).mockResolvedValue({
       error: 'request.errors.stale',
       rows: [],
-      criteria: { lineId: LINE_1, results: [{ criterionId: C1, result: '', justification: '' }] },
+      criteria: {
+        lineId: LINE_1,
+        results: [{ criterionId: C1, result: '', measuredValue: '', justification: '' }],
+      },
     });
     const { container } = editor();
     container.querySelector<HTMLFormElement>('form#draft-form')?.requestSubmit();
@@ -186,7 +249,10 @@ describe('CriteriaEditor [R1-03, R1-06]', () => {
   it('ignores typed values that belong to another employee', async () => {
     vi.mocked(saveDraft).mockResolvedValue({
       rows: [],
-      criteria: { lineId: 'other', results: [{ criterionId: C1, result: '', justification: 'x' }] },
+      criteria: {
+        lineId: 'other',
+        results: [{ criterionId: C1, result: '', measuredValue: '', justification: 'x' }],
+      },
     });
     const { container } = editor();
     container.querySelector<HTMLFormElement>('form#draft-form')?.requestSubmit();

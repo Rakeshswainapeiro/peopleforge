@@ -1,4 +1,5 @@
 import {
+  FINAL_STATUSES,
   type DashboardFilter,
   type DashboardSummary,
   type IncrementRequestPage,
@@ -11,6 +12,7 @@ import type {
   DashboardLineRecord,
   DashboardRepository,
   DashboardRequestRecord,
+  DashboardSummaryRecord,
 } from '@peopleforge/db';
 import { scopeOf, type Principal } from '../../auth/principal.js';
 import { markOf, missingFor, withFacts } from './criteria.js';
@@ -27,6 +29,32 @@ function completeCriteria(record: DashboardRequestRecord): number {
       ).length,
     0,
   );
+}
+
+/**
+ * The stage funnel (DASH-D2): how many submitted requests are at each criterion, at the
+ * decision, and decided, by the same rule as each request's stage (R1-10).
+ */
+export function stageFunnel(stages: DashboardSummaryRecord['stages']): DashboardSummary['funnel'] {
+  // A request still open with nobody waiting for Sirius HR is back with the subsidiary: its
+  // stage would otherwise read "every criterion verified" (vacuously, for no employee).
+  const withSubsidiary = (stage: DashboardSummaryRecord['stages'][number]) =>
+    !FINAL_STATUSES.includes(stage.status) && stage.waiting === 0;
+  const placed = stages
+    .filter((stage) => !withSubsidiary(stage))
+    .map((stage) => stageOf(stage.status, stage.criteria, stage.verified));
+  const longest = Math.max(0, ...stages.map((stage) => stage.criteria));
+  return {
+    criteria: Array.from(
+      { length: longest },
+      (_, index) =>
+        placed.filter((stage) => stage.kind === 'criterion' && stage.criterion === index + 1)
+          .length,
+    ),
+    decision: placed.filter((stage) => stage.kind === 'decision').length,
+    withSubsidiary: stages.filter(withSubsidiary).length,
+    decided: placed.filter((stage) => stage.kind === 'decided').length,
+  };
 }
 
 function toRequestSummary(record: DashboardRequestRecord): IncrementRequestPage['items'][number] {
@@ -100,6 +128,7 @@ export class DashboardService {
       } satisfies Record<RequestStatus, number>,
       requests: record.requests,
       employees: record.employees,
+      funnel: stageFunnel(record.stages),
     };
   }
 

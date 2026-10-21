@@ -4,6 +4,7 @@ import {
   ApprovedPercentSchema,
   ChangeReasonSchema,
   DecideLineSchema,
+  DecideRemainingSchema,
   MAX_COMMENT_LENGTH,
   type DecideLine,
 } from '@peopleforge/contracts';
@@ -11,8 +12,8 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { errorKeyFor, type RequestErrorKey } from '@/lib/request-errors';
-import { employeeStatusHref } from '@/lib/routes';
-import { decideEmployee, verifyCriterion } from '@/server/increment-requests';
+import { employeeStatusHref, requestHref } from '@/lib/routes';
+import { decideEmployee, decideRemaining, verifyCriterion } from '@/server/increment-requests';
 import { refreshPortalShell } from '@/server/portal-shell';
 
 /**
@@ -92,7 +93,8 @@ export async function decideAction(
   formData: FormData,
 ): Promise<DecisionFormState> {
   const requestId = Id.parse(field(formData, 'requestId'));
-  const lineId = Id.parse(field(formData, 'lineId'));
+  // No employee: "Decide all remaining" (R1-09), at the proposed increments.
+  const lineId = formData.has('lineId') ? Id.parse(field(formData, 'lineId')) : null;
   const values = Object.fromEntries(
     ['decision', 'change', 'approvedPercent', 'reasonCode', 'comment'].map((name) => [
       name,
@@ -101,7 +103,8 @@ export async function decideAction(
   );
   const attempt = (previous.attempt ?? 0) + 1;
   const key = Key.safeParse(field(formData, 'decisionKey'));
-  const body = readDecision(formData);
+  const read = readDecision(formData);
+  const body = lineId === null ? (DecideRemainingSchema.safeParse(read).data ?? null) : read;
   if (body === null || !key.success) {
     const percent = field(formData, 'approvedPercent').replace(/[\s%]/gu, '');
     const badPercent =
@@ -114,10 +117,15 @@ export async function decideAction(
       values,
     };
   }
-  const result = await decideEmployee(requestId, lineId, body, key.data);
+  const result =
+    lineId === null
+      ? await decideRemaining(requestId, body, key.data)
+      : await decideEmployee(requestId, lineId, body, key.data);
   if (result.kind === 'ok') {
     refreshPortalShell();
-    redirect(`${employeeStatusHref(requestId, lineId)}?decided=${body.decision}`);
+    redirect(
+      `${lineId === null ? requestHref(requestId) : employeeStatusHref(requestId, lineId)}?decided=${body.decision}`,
+    );
   }
   if (result.kind === 'unauthenticated') redirect('/session-ended');
   return {

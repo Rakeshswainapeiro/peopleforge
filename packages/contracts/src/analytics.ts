@@ -11,6 +11,11 @@ import { LocaleSchema } from '@sirius/shared-types';
 export const AnalyticsQuerySchema = z.strictObject({
   cycleId: z.uuid().optional(),
   entityId: z.uuid().optional(),
+  /** A criterion's code (DASH-D3 "Criterion" filter): narrows criterion TAT and the trend. */
+  criterion: z
+    .string()
+    .regex(/^C[0-9]{1,2}$/u)
+    .optional(),
 });
 export type AnalyticsQuery = z.infer<typeof AnalyticsQuerySchema>;
 
@@ -43,7 +48,17 @@ const CriterionTatSchema = z.object({
   verified: z.number().int().min(0),
   /** From waiting (submission or resubmission) to verification. */
   averageDays: Days.nullable(),
+  medianDays: Days.nullable(),
   maxDays: Days.nullable(),
+});
+
+/** One month of the TAT trend (DASH-D3), in the business time zone. */
+const TatMonthSchema = z.object({
+  month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/u),
+  /** Requests decided (or, with a criterion, verifications) in the month. */
+  count: z.number().int().min(0),
+  averageDays: Days.nullable(),
+  medianDays: Days.nullable(),
 });
 
 const EntityTatSchema = z.object({
@@ -87,10 +102,18 @@ export const IncrementAnalyticsSchema = z.object({
     requests: z.number().int().min(0),
     decided: z.number().int().min(0),
     averageDays: Days.nullable(),
+    medianDays: Days.nullable(),
     open: z.number().int().min(0),
     openAverageDays: Days.nullable(),
     longestOpen: RequestTatSchema.nullable(),
     byCriterion: z.array(CriterionTatSchema),
+    /**
+     * The 12 months up to now: decided requests' TAT by decision month, or with a criterion
+     * filter, that criterion's TAT by verification month.
+     */
+    trend: z.array(TatMonthSchema),
+    /** Every criterion code met in the facts, for the filter (before filtering). */
+    criteria: z.array(z.string()),
     byEntity: z.array(EntityTatSchema),
     /** Longest first. */
     byRequest: z.array(RequestTatSchema),

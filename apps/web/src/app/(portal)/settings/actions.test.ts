@@ -15,6 +15,7 @@ vi.mock('next/navigation', () => ({
 function criteriaForm(nameEn = 'Performance rating', version = '1'): FormData {
   const data = new FormData();
   data.set('version', version);
+  data.append('rowKey', 'C1');
   data.append('code', 'C1');
   data.append('nameEn', nameEn);
   data.append('nameAr', '');
@@ -22,6 +23,9 @@ function criteriaForm(nameEn = 'Performance rating', version = '1'): FormData {
   data.append('descriptionAr', '');
   data.append('evidencePolicy', 'required');
   data.append('maxFileMb', '5');
+  data.append('thresholdOperator', '');
+  data.append('thresholdValue', '');
+  data.append('thresholdUnit', 'rating');
   data.append('justification-C1', 'on');
   return data;
 }
@@ -67,6 +71,7 @@ describe('publishCriteriaAction [R1-05]', () => {
           justificationRequired: true,
           evidencePolicy: 'required',
           maxFileMb: 5,
+          threshold: null,
         },
       ],
     });

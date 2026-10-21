@@ -4,6 +4,20 @@ All notable changes are recorded here. Format: [Keep a Changelog](https://keepac
 
 ## [Unreleased]
 
+### Added — slice S11a: Increment Portal gaps against the BRD (R1-05, R1-09, R1-10, R1-11)
+
+- **Criteria: add, remove, thresholds** (Settings, R1-05, ADR-016): admins can add a criterion (it gets the next unused code, e.g. C6), remove one and reorder them, publishing a new version as before. Any criterion can pass on a **measured value** — at least or at most a threshold, in a rating, score, percent, months, years or days. On the request page such a criterion asks for the employee's value instead of Pass/Fail and shows the outcome as it is typed; the API decides Pass or Fail from the value by the same rule. Values are stored encrypted; reviewers see them against the threshold. Requests already created keep their criteria.
+- **Decide all remaining** (R1-09): on a request in review, Sirius HR can approve (as proposed), reject or return every employee still waiting at once, with one reason and comment. Approving all needs every criterion verified. The subsidiary gets one notification and email ("Sirius HR returned the remaining 3 employees…").
+- **Review stages** (DASH-D2, R1-10): the Request Tracker shows how many submitted requests are at each criterion, at the decision, back with the subsidiary (every remaining employee returned) and decided.
+- **TAT** (DASH-D3, R1-11): median alongside the average, a 12-month trend (by month decided, Asia/Dubai), and a **criterion filter** that narrows criterion TAT and the trend; RP-02 gains the median and a "TAT trend" sheet and names the criterion filter.
+- Migration `0015_criteria_thresholds`; ADR-016 (amends ADR-014 §1); OpenAPI 0.15.0 (`POST /increment-requests/{id}/decision`, `criterion` analytics filter, thresholds and measured values, the funnel).
+
+### Fixed — slice S11a
+
+- On a short window (laptop at 720 px or less), Sirius HR's longer menu pushed **Sign out** and the language switch off screen with no way to scroll to them. The menu now scrolls on its own and the account footer always stays visible.
+- Chart bars (group dashboards, Review stages) had stretched, egg-shaped ends at wide sizes; the bars are now clipped to a rounded track.
+- End-to-end helpers: signing in as another person within one test drops the previous session first.
+
 ### Added — slice S10: group dashboards (R2-05, R2-07, DASH-D5, D6, D8)
 
 - **Group overview** (`/group/overview`, DASH-D5): headcount with last month, joiners, leavers and turnover, female share, the 12-month headcount trend, and headcount by subsidiary, department, gender, age band and grade, for a month with subsidiary and department filters. Subsidiary HR see their own subsidiary only.
